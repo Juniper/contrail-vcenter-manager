@@ -1,0 +1,15 @@
+esxi:
+  host:
+  port: 443
+  username:
+  password:
+  preferred_api_versions:
+    - vim.version.version10
+vnc:
+  api_server_host:
+  api_server_port: 8082
+  auth_host:
+  auth_port: 5000
+  username:
+  password:
+  tenant_name:
