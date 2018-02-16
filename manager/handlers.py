@@ -26,16 +26,11 @@ class EventHandler(object):
 class VCenterEventHandler(EventHandler):
     def handle_update(self, update_set):
         logger.info('Handling ESXi update.')
-        filter_set = getattr(update_set, 'filterSet')
-        if filter_set:
-            for property_filter_update in filter_set:
-                object_set = getattr(property_filter_update, 'objectSet')
-                if object_set:
-                    for object_update in object_set:
-                        change_set = getattr(object_update, 'changeSet')
-                        if change_set:
-                            for property_change in change_set:
-                                self._handle_change(property_change)
+
+        for property_filter_update in update_set.filterSet:
+            for object_update in property_filter_update.objectSet:
+                for property_change in object_update.changeSet:
+                    self._handle_change(property_change)
 
     def _handle_change(self, property_change):
         name = getattr(property_change, 'name', None)
