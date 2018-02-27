@@ -34,10 +34,10 @@ def main():
 
     vcenter_monitor = VCenterMonitor(vcenter_api_client)
     event_history_collector = vcenter_monitor.create_event_history_collector(const.EVENTS_TO_OBSERVE)
-    vcenter_monitor.configure_property_collector([(event_history_collector, ['latestPage'])])
+    vcenter_monitor.add_filter((event_history_collector, ['latestPage']))
     vcenter_monitor.make_wait_options(120)
 
-    vcenter_event_handler = VCenterEventHandler(vnc_api_client)
+    vcenter_event_handler = VCenterEventHandler(vnc_api_client, vcenter_api_client, vcenter_monitor)
 
     vcenter_manager = Manager(monitor=vcenter_monitor, handler=vcenter_event_handler)
 
