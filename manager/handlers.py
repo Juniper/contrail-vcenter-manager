@@ -1,9 +1,10 @@
 import abc
 import logging
 import ipaddress
+import uuid
 
 from pyVmomi import vim, vmodl
-from vnc_api.vnc_api import VirtualMachine
+from vnc_api.vnc_api import VirtualMachine, VirtualMachineInterface, MacAddressesType, VirtualNetwork
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,6 +33,23 @@ def find_vrouter_ip_address(host):
             continue
         return find_virtual_machine_ip_address(vmware_vm, 'VM Network')  # TODO: Change this
     return None
+
+
+def find_virtual_machine_mac_address(vmware_vm, portgroup):
+    # TODO: Unit test this and remove unnecessary getattrs
+    portgroup_key = getattr(portgroup, 'key', None)
+    config = getattr(vmware_vm, 'config', None)
+    hardware = getattr(config, 'hardware', None)
+    for device in getattr(hardware, 'device', []):
+        if isinstance(device, vim.vm.device.VirtualEthernetCard):
+            port = getattr(device.backing, 'port', None)
+            if getattr(port, 'portgroupKey', None) == portgroup_key:
+                return device.macAddress
+    return None
+
+
+def read_virtual_machine_interfaces(vmware_vm):
+    pass
 
 
 class EventHandler(object):
@@ -116,6 +134,8 @@ class VCenterEventHandler(EventHandler):
             vm.set_uuid(uuid)
             vm.set_display_name(vrouter_ip_address)
             # self.api_client.create_vm(vm)
+
+            self._create_virtual_machine_interface(vmware_vm, vmware_vm.network[0])
         except vmodl.fault.ManagedObjectNotFound:
             logger.error('Virtual Machine not found: {}'.format(event.vm.name))
 
@@ -133,19 +153,47 @@ class VCenterEventHandler(EventHandler):
             uuid = vmware_vm.config.instanceUuid
             power_state = vmware_vm.runtime.powerState
             tools_running_status = vmware_vm.guest.toolsRunningStatus
-            # logger.info(vmware_vm.guest.__dict__)
+            logger.info(find_virtual_machine_mac_address(vmware_vm, vmware_vm.network[0]))
             # _set_contrail_vm_active_state
             # _read_virtual_machine_interfaces
-
             vm = VirtualMachine(uuid)
             vm.set_uuid(uuid)
             vm.set_display_name(vrouter_ip_address)
+            self._create_virtual_machine_interface(vmware_vm, vmware_vm.network[0])
+
         except vmodl.fault.ManagedObjectNotFound:
             logger.error('Virtual Machine not found: {}'.format(event.vm.name))
         logger.info('Virtual Machine configuration changed: {}'.format(event.vm.name))
 
     def _handle_vm_removed_event(self, event):
         self.vnc_api_client.delete_vm(event.vm.name)
+
+    def _create_virtual_machine_interface(self, vmware_vm, vmware_network):
+
+        vm_interface_name = 'vmi-{}-{}'.format(vmware_network.name, vmware_vm.name)
+        id = str(uuid.uuid4())
+
+        vm = self.vnc_api_client.read_vm(vmware_vm.name)
+        if not vm:
+            return
+
+        # network = self.vnc_api_client.read_vn(vmware_network.name)
+        network = self.vnc_api_client.read_vn([u'default-domain', u'demo', u'test123'])
+        vm_interface = VirtualMachineInterface(id, vm)
+        vm_interface.display_name = vm_interface_name
+        vm_interface.uuid = id
+        # vm_interface.setParent(vCenterProject)
+        # vm_interface.setSecurityGroup(vCenterDefSecGrp);
+        # vm_interface.setPortSecurityEnabled(vmiInfo.getPortSecurityEnabled());
+        vm_interface.set_virtual_network(network)
+        vm_interface.add_virtual_machine(vm)
+        mac_address = find_virtual_machine_mac_address(vmware_vm, vmware_network)
+        mac_addresses = MacAddressesType([mac_address])
+        vm_interface.virtual_machine_interface_mac_addresses = mac_addresses
+        # vm_interface.setIdPerms(vCenterIdPerms)
+        self.vnc_api_client.create_vmi(vm_interface)
+        vmi = self.vnc_api_client.read_vmi(vmware_vm.name, id)
+        logger.info("Created " + str(vmi.fq_name))
 
 
 class VNCEventHandler(EventHandler):

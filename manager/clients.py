@@ -50,3 +50,31 @@ class VNCAPIClient(object):
             logger.info('Virtual Machine removed: {}'.format(name))
         except NoIdError:
             logger.error('Virtual Machine not found: {}'.format(name))
+
+    def read_vm(self, name):
+        try:
+            return self.vnc_lib.virtual_machine_read([name])
+        except NoIdError:
+            logger.error('Virtual Machine not found: {}'.format(name))
+            return None
+
+    def create_vmi(self, vmi):
+        try:
+            self.vnc_lib.virtual_machine_interface_create(vmi)
+            logger.info('Virtual Machine Interface created: {}'.format(vmi.display_name))
+        except RefsExistError:
+            logger.error('Virtual Machine Interface already exists: {}')
+
+    def read_vmi(self, name, uuid):
+        try:
+            return self.vnc_lib.virtual_machine_interface_read([name, uuid])
+        except NoIdError:
+            logger.error('Virtual Machine not found: {}'.format(name))
+            return None
+
+    def read_vn(self, fq_name):
+        try:
+            return self.vnc_lib.virtual_network_read(fq_name)
+        except NoIdError:
+            logger.error('Virtual Machine not found: {}'.format(fq_name))
+            return None
