@@ -12,3 +12,7 @@ EVENTS_TO_OBSERVE = [
     'VmMigratedEvent',
     'VmRemovedEvent',
 ]
+
+
+VNC_ROOT_DOMAIN = 'default-domain'
+VNC_VCENTER_PROJECT = 'vCenter'

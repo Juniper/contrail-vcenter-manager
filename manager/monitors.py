@@ -13,6 +13,21 @@ class Monitor(object):
         pass
 
 
+def make_object_set(object_to_observe):
+    object_set = [vmodl.query.PropertyCollector.ObjectSpec(obj=object_to_observe[0])]
+    return object_set
+
+
+def make_prop_set(object_to_observe):
+    prop_set = []
+    property_spec = vmodl.query.PropertyCollector.PropertySpec(
+        type=type(object_to_observe[0]),
+        all=False)
+    property_spec.pathSet.extend(object_to_observe[1])
+    prop_set.append(property_spec)
+    return prop_set
+
+
 class VCenterMonitor(Monitor):
     _version = ''
 
@@ -44,8 +59,8 @@ class VCenterMonitor(Monitor):
 
     def add_filter(self, object_to_observe):
         filter_spec = vmodl.query.PropertyCollector.FilterSpec()
-        filter_spec.objectSet = self._make_object_set(object_to_observe)
-        filter_spec.propSet = self._make_prop_set(object_to_observe)
+        filter_spec.objectSet = make_object_set(object_to_observe)
+        filter_spec.propSet = make_prop_set(object_to_observe)
         self._property_collector.CreateFilter(filter_spec, True)
 
     def make_wait_options(self, max_wait_seconds=None, max_object_updates=None):
@@ -53,18 +68,3 @@ class VCenterMonitor(Monitor):
             self._wait_options.maxObjectUpdates = max_object_updates
         if max_wait_seconds is not None:
             self._wait_options.maxWaitSeconds = max_wait_seconds
-
-    @staticmethod
-    def _make_object_set(object_to_observe):
-        object_set = [vmodl.query.PropertyCollector.ObjectSpec(obj=object_to_observe[0])]
-        return object_set
-
-    @staticmethod
-    def _make_prop_set(object_to_observe):
-        prop_set = []
-        property_spec = vmodl.query.PropertyCollector.PropertySpec(
-            type=type(object_to_observe[0]),
-            all=False)
-        property_spec.pathSet.extend(object_to_observe[1])
-        prop_set.append(property_spec)
-        return prop_set
