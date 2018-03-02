@@ -5,12 +5,13 @@ from pyVim.connect import SmartConnectNoSSL, Disconnect
 from vnc_api import vnc_api
 from vnc_api.exceptions import RefsExistError, NoIdError
 from constants import VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT
+from pyVmomi import vim, vmodl
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class VCenterAPIClient(object):
+class VmwareAPIClient(object):
     """A connector for interacting with vCenter API."""
     _version = ''
 
@@ -21,6 +22,51 @@ class VCenterAPIClient(object):
                                     port=esxi_cfg['port'],
                                     preferredApiVersions=esxi_cfg['preferred_api_versions'])
         atexit.register(Disconnect, self.si)
+        self._property_collector = self.si.content.propertyCollector
+        self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
+
+    def create_event_history_collector(self, events_to_observe):
+        event_manager = self.si.content.eventManager
+        event_filter_spec = vim.event.EventFilterSpec()
+        event_types = [getattr(vim.event, et) for et in events_to_observe]
+        event_filter_spec.type = event_types
+        entity_spec = vim.event.EventFilterSpec.ByEntity()
+        # TODO: find a way to search for this entity
+        entity_spec.entity = self.si.content.rootFolder.childEntity[0]
+        entity_spec.recursion = vim.event.EventFilterSpec.RecursionOption.children
+        event_filter_spec.entity = entity_spec
+        return event_manager.CreateCollectorForEvents(filter=event_filter_spec)
+
+    def add_filter(self, object_to_observe):
+        filter_spec = vmodl.query.PropertyCollector.FilterSpec()
+        filter_spec.objectSet = self.make_object_set(object_to_observe)
+        filter_spec.propSet = self.make_prop_set(object_to_observe)
+        self._property_collector.CreateFilter(filter_spec, True)
+
+    def make_wait_options(self, max_wait_seconds=None, max_object_updates=None):
+        if max_object_updates is not None:
+            self._wait_options.maxObjectUpdates = max_object_updates
+        if max_wait_seconds is not None:
+            self._wait_options.maxWaitSeconds = max_wait_seconds
+
+    def make_object_set(self, object_to_observe):
+        object_set = [vmodl.query.PropertyCollector.ObjectSpec(obj=object_to_observe[0])]
+        return object_set
+
+    def make_prop_set(self, object_to_observe):
+        prop_set = []
+        property_spec = vmodl.query.PropertyCollector.PropertySpec(
+            type=type(object_to_observe[0]),
+            all=False)
+        property_spec.pathSet.extend(object_to_observe[1])
+        prop_set.append(property_spec)
+        return prop_set
+
+    def wait_for_updates(self):
+        update_set = self._property_collector.WaitForUpdatesEx(self._version, self._wait_options)
+        if update_set:
+            self._version = update_set.version
+        return update_set
 
 
 class VNCAPIClient(object):
@@ -35,15 +81,12 @@ class VNCAPIClient(object):
                                       auth_host=vnc_cfg['auth_host'],
                                       auth_port=vnc_cfg['auth_port'])
         self.id_perms = vnc_api.IdPermsType()
-        self.id_perms.set_creator('vcenter-manager')
+        self.id_perms.set_creator('vcenter-cvm')
         self.id_perms.set_enable(True)
         self.vcenter_project = self.read_project([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT])
         if not self.vcenter_project:
             project = vnc_api.Project(VNC_VCENTER_PROJECT)
             self.create_project(project)
-
-    def wait_for_changes(self):
-        return None
 
     def create_vm(self, vm_model):
         try:

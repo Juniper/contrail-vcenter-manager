@@ -54,7 +54,7 @@ class VirtualMachineModel:
             self.networks = vmware_vm.network
             self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
         self.id_perms = IdPermsType()
-        self.id_perms.set_creator('vcenter-manager')
+        self.id_perms.set_creator('vcenter-cvm')
         self.id_perms.set_enable(True)
         self.vnc_vm = None
 
@@ -94,7 +94,7 @@ class VirtualMachineInterfaceModel:
         # network = self.vnc_api_client.read_vn(vmware_network.name)
         self.network = vn_model.vnc_network  # self.vnc_api_client.read_vn([u'default-domain', u'demo', u'test123'])
         self.id_perms = IdPermsType()
-        self.id_perms.set_creator('vcenter-manager')
+        self.id_perms.set_creator('vcenter-cvm')
         self.id_perms.set_enable(True)
         self.vnc_vmi = None
 
