@@ -1,7 +1,11 @@
-import ipaddress
+import logging
 import uuid
+import ipaddress
 from vnc_api.vnc_api import VirtualMachine, IdPermsType, VirtualMachineInterface, MacAddressesType, VirtualNetwork
 from pyVmomi import vim
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def find_virtual_machine_ip_address(vmware_vm, port_group_name):
@@ -42,7 +46,7 @@ def find_virtual_machine_mac_address(vmware_vm, portgroup):
     return None
 
 
-class VirtualMachineModel:
+class VirtualMachineModel(object):
     def __init__(self, vmware_vm=None):
         self.vmware_vm = vmware_vm
         if vmware_vm:
@@ -54,7 +58,7 @@ class VirtualMachineModel:
             self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
         self.networks = []
         self.id_perms = IdPermsType()
-        self.id_perms.set_creator('vcenter-cvm')
+        self.id_perms.set_creator('vcenter-manager')
         self.id_perms.set_enable(True)
         self.vnc_vm = None
 
@@ -73,7 +77,7 @@ class VirtualMachineModel:
         return self.vnc_vm
 
 
-class VirtualNetworkModel:
+class VirtualNetworkModel(object):
     def __init__(self, vmware_vn, parent):
         self.vmware_vn = vmware_vn
         self.parent = parent
@@ -83,11 +87,57 @@ class VirtualNetworkModel:
 
     def to_vnc_vn(self):
         if not self.vnc_vn:
-            self.vnc_vn = VirtualNetwork(self.name, self.parent)
+            vnc_vn = VirtualNetwork(self.name, self.parent)
+            vnc_vn.set_uuid(self.uuid)
+            self.vnc_vn = vnc_vn
         return self.vnc_vn
 
+    # Can't implement this, because ipPools are inavailable from ESXi level (must be connected to vCenter machine)
+    # def getSubnet(self):
+    #     if not (self.subnet_address and self.subnet_mask):
+    #         return None
+    #     subnetUtils = SubnetUtils(self.subnet_address, self.subnet_mask)
+    #     cidr = subnetUtils.getInfo().getCidrSignature()
+    #     addr_pair = cidr.split("/")
+    #
+    #     allocation_pools = None
+    #     if self.ip_pool_enabled and not self.range.isEmpty():
+    #         pools = self.range.split("#")
+    #         if len(pools) == 2:
+    #             allocation_pools = []  # new ArrayList<AllocationPoolType>();
+    #             start = (pools[0]).replace(" ", "")
+    #             num = (pools[1]).replace(" ", "")
+    #             start_ip = InetAddresses.coerceToInteger(InetAddresses.forString(start))
+    #             end_ip = start_ip + int(num) - 1
+    #             end = InetAddresses.toAddrString(InetAddresses.fromInteger(end_ip))
+    #             logger.debug("Subnet IP Range :  Start:" + start + " End:" + end)
+    #             pool1 = AllocationPoolType(start, end)
+    #         allocation_pools.append(pool1)
+    #
+    #     # if gateway address is empty string, don't pass empty string to
+    #     # api - server.INstead set it to null so that java binding will
+    #     # drop gateway address from json content for virtual - network create
+    #     if self.gateway_address:
+    #         if self.gateway_address.trim().isEmpty():
+    #             self.gateway_address = None
+    #
+    #     subnet = VnSubnetsType()
+    #     subnet.add_ipam_subnets(IpamSubnetType(subnet=SubnetType(addr_pair[0], int(addr_pair[1])),
+    #                                            default_gateway=self.gateway_address,
+    #                                            dns_server_address=None,
+    #                                            subnet_uuid=str(uuid.uuid4()),
+    #                                            enable_dhcp=True,
+    #                                            dns_nameservers=None,
+    #                                            allocation_pools=allocation_pools,
+    #                                            addr_from_start=True,
+    #                                            dhcp_option_list=None,
+    #                                            host_routes=None,
+    #                                            subnet_name="{}-subnet".format(self.name),
+    #                                            alloc_unit=1))
+    #     return subnet
 
-class VirtualMachineInterfaceModel:
+
+class VirtualMachineInterfaceModel(object):
     def __init__(self, vm_model=None, vn_model=None, parent=None):
         if parent:
             self.parent = parent
@@ -96,24 +146,23 @@ class VirtualMachineInterfaceModel:
             self.vn_model = vn_model
             self.name = 'vmi-{}-{}'.format(vn_model.name, vm_model.name)
         self.uuid = str(uuid.uuid3(uuid.NAMESPACE_DNS, vm_model.uuid + vn_model.uuid))
+        self.mac_address = find_virtual_machine_mac_address(self.vm_model.vmware_vm, self.vn_model.vmware_vn)
         self.id_perms = IdPermsType()
-        self.id_perms.set_creator('vcenter-cvm')
+        self.id_perms.set_creator('vcenter-manager')
         self.id_perms.set_enable(True)
         self.vnc_vmi = None
 
     def to_vnc_vmi(self):
         if not self.vnc_vmi:
             vnc_vmi = VirtualMachineInterface(self.uuid, self.parent)
-            vnc_vmi.display_name = self.name
-            vnc_vmi.uuid = self.uuid
-            # vnc_vmi.setSecurityGroup(vCenterDefSecGrp);
-            # vnc_vmi.setPortSecurityEnabled(vmiInfo.getPortSecurityEnabled());
-            vnc_vmi.set_virtual_network(self.vn_model.to_vnc_vn())
+            vnc_vmi.set_display_name(self.name)
+            vnc_vmi.set_uuid(self.uuid)
             vnc_vmi.add_virtual_machine(self.vm_model.to_vnc_vm())
-            mac_address = find_virtual_machine_mac_address(self.vm_model.vmware_vm, self.vn_model.vmware_vn)
-            macAddressesType = MacAddressesType([mac_address])
-            vnc_vmi.virtual_machine_interface_mac_addresses = macAddressesType
+            vnc_vmi.set_virtual_network(self.vn_model.to_vnc_vn())
+            vnc_vmi.set_virtual_machine_interface_mac_addresses(MacAddressesType([self.mac_address]))
             vnc_vmi.set_id_perms(self.id_perms)
+            # vnc_vmi.setPortSecurityEnabled(vmiInfo.getPortSecurityEnabled());
+            # vnc_vmi.setSecurityGroup(vCenterDefSecGrp);
             self.vnc_vmi = vnc_vmi
         return self.vnc_vmi
 
@@ -121,6 +170,6 @@ class VirtualMachineInterfaceModel:
     def from_vnc_vmi(cls, vnc_vmi, vm_model, vn_model, parent):
         vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, parent)
         vmi_model.vnc_vmi = vnc_vmi
-        vmi_model.name = vnc_vmi.display_name
-        vmi_model.uuid = vnc_vmi.uuid
+        vmi_model.name = vnc_vmi.get_display_name()
+        vmi_model.uuid = vnc_vmi.get_uuid()
         return vmi_model

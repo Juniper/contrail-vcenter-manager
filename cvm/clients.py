@@ -11,6 +11,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def make_prop_set(object_to_observe):
+    prop_set = []
+    property_spec = vmodl.query.PropertyCollector.PropertySpec(
+        type=type(object_to_observe[0]),
+        all=False)
+    property_spec.pathSet.extend(object_to_observe[1])
+    prop_set.append(property_spec)
+    return prop_set
+
+
+def make_object_set(object_to_observe):
+    object_set = [vmodl.query.PropertyCollector.ObjectSpec(obj=object_to_observe[0])]
+    return object_set
+
+
 class VmwareAPIClient(object):
     """A connector for interacting with vCenter API."""
     _version = ''
@@ -30,7 +45,8 @@ class VmwareAPIClient(object):
 
     def get_all_dpgs(self):
         all_networks = self.si.content.rootFolder.childEntity[0].network
-        return list(filter(lambda net: isinstance(net, vim.dvs.DistributedVirtualPortgroup), all_networks))
+        return [net for net in all_networks if isinstance(net, vim.dvs.DistributedVirtualPortgroup)]
+        # return list(filter(lambda net: isinstance(net, vim.dvs.DistributedVirtualPortgroup), all_networks))
 
     def create_event_history_collector(self, events_to_observe):
         event_manager = self.si.content.eventManager
@@ -46,8 +62,8 @@ class VmwareAPIClient(object):
 
     def add_filter(self, object_to_observe):
         filter_spec = vmodl.query.PropertyCollector.FilterSpec()
-        filter_spec.objectSet = self.make_object_set(object_to_observe)
-        filter_spec.propSet = self.make_prop_set(object_to_observe)
+        filter_spec.objectSet = make_object_set(object_to_observe)
+        filter_spec.propSet = make_prop_set(object_to_observe)
         self._property_collector.CreateFilter(filter_spec, True)
 
     def make_wait_options(self, max_wait_seconds=None, max_object_updates=None):
@@ -55,19 +71,6 @@ class VmwareAPIClient(object):
             self._wait_options.maxObjectUpdates = max_object_updates
         if max_wait_seconds is not None:
             self._wait_options.maxWaitSeconds = max_wait_seconds
-
-    def make_object_set(self, object_to_observe):
-        object_set = [vmodl.query.PropertyCollector.ObjectSpec(obj=object_to_observe[0])]
-        return object_set
-
-    def make_prop_set(self, object_to_observe):
-        prop_set = []
-        property_spec = vmodl.query.PropertyCollector.PropertySpec(
-            type=type(object_to_observe[0]),
-            all=False)
-        property_spec.pathSet.extend(object_to_observe[1])
-        prop_set.append(property_spec)
-        return prop_set
 
     def wait_for_updates(self):
         update_set = self._property_collector.WaitForUpdatesEx(self._version, self._wait_options)
@@ -88,7 +91,7 @@ class VNCAPIClient(object):
                                       auth_host=vnc_cfg['auth_host'],
                                       auth_port=vnc_cfg['auth_port'])
         self.id_perms = vnc_api.IdPermsType()
-        self.id_perms.set_creator('vcenter-cvm')
+        self.id_perms.set_creator('vcenter-manager')
         self.id_perms.set_enable(True)
         project = vnc_api.Project(VNC_VCENTER_PROJECT)
         self.create_project(project)
@@ -97,31 +100,31 @@ class VNCAPIClient(object):
     def create_vm(self, vm_model):
         try:
             self.vnc_lib.virtual_machine_create(vm_model.to_vnc_vm())
-            logger.info('Virtual Machine created: {}'.format(vm_model.display_name))
+            logger.info('Virtual Machine created: %s', vm_model.display_name)
         except RefsExistError:
-            logger.info('Virtual Machine already exists: {}'.format(vm_model.display_name))
+            logger.info('Virtual Machine already exists: %s', vm_model.display_name)
 
     def delete_vm(self, uuid):
         try:
             self.vnc_lib.virtual_machine_delete(id=uuid)
-            logger.info('Virtual Machine removed: {}'.format(uuid))
+            logger.info('Virtual Machine removed: %s', uuid)
         except NoIdError:
-            logger.error('Virtual Machine not found: {}'.format(uuid))
+            logger.error('Virtual Machine not found: %s', uuid)
 
     def read_vm(self, uuid):
         try:
             return self.vnc_lib.virtual_machine_read(id=uuid)
         except NoIdError:
-            logger.error('Virtual Machine not found: {}'.format(uuid))
+            logger.error('Virtual Machine not found: %s', uuid)
             return None
 
     def update_vm(self, vm_model):
         try:
             self.vnc_lib.virtual_machine_update(vm_model.to_vnc_vm())
-            logger.info('Virtual Machine updated: {}'.format(vm_model.display_name))
+            logger.info('Virtual Machine updated: %s', vm_model.display_name)
         except NoIdError:
             self.create_vm(vm_model)
-            logger.error('Virtual Machine not found: {}'.format(vm_model.uuid))
+            logger.error('Virtual Machine not found: %s', vm_model.uuid)
 
     def get_all_vms(self):
         vms = self.vnc_lib.virtual_machines_list(
@@ -131,23 +134,23 @@ class VNCAPIClient(object):
     def create_vmi(self, vmi):
         try:
             self.vnc_lib.virtual_machine_interface_create(vmi)
-            logger.info('Virtual Machine Interface created: {}'.format(vmi.display_name))
+            logger.info('Virtual Machine Interface created: %s', vmi.display_name)
         except RefsExistError:
-            logger.info('Virtual Machine Interface already exists: {}'.format(vmi.display_name))
+            logger.info('Virtual Machine Interface already exists: %s', vmi.display_name)
 
     def read_vmi(self, name, uuid):
         try:
             return self.vnc_lib.virtual_machine_interface_read([name, uuid])
         except NoIdError:
-            logger.error('Virtual Machine not found: {}'.format(name))
+            logger.error('Virtual Machine not found: %s', name)
             return None
 
     def delete_vmi(self, uuid):
         try:
             self.vnc_lib.virtual_machine_interface_delete(id=uuid)
-            logger.info('Virtual Machine Interface removed: {}'.format(uuid))
+            logger.info('Virtual Machine Interface removed: %s', uuid)
         except NoIdError:
-            logger.error('Virtual Machine Interface not found: {}'.format(uuid))
+            logger.error('Virtual Machine Interface not found: %s', uuid)
 
     def get_all_vmis(self):
         vmis = self.vnc_lib.virtual_machine_interfaces_list(
@@ -157,9 +160,9 @@ class VNCAPIClient(object):
     def create_vn(self, vn):
         try:
             self.vnc_lib.virtual_network_create(vn)
-            logger.info('Virtual Network created: {}'.format(vn.name))
+            logger.info('Virtual Network created: %s', vn.name)
         except RefsExistError:
-            logger.info('Virtual Network already exists: {}'.format(vn.name))
+            logger.info('Virtual Network already exists: %s', vn.name)
         except Exception, e:
             logger.error(e)
 
@@ -167,15 +170,15 @@ class VNCAPIClient(object):
         try:
             return self.vnc_lib.virtual_network_read(fq_name)
         except NoIdError:
-            logger.error('Virtual Machine not found: {}'.format(fq_name))
+            logger.error('Virtual Machine not found: %s', fq_name)
             return None
 
     def delete_vn(self, uuid):
         try:
             self.vnc_lib.virtual_network_delete(id=uuid)
-            logger.info('Virtual Network removed: {}'.format(uuid))
+            logger.info('Virtual Network removed: %s', uuid)
         except NoIdError:
-            logger.error('Virtual Network not found: {}'.format(uuid))
+            logger.error('Virtual Network not found: %s', uuid)
 
     def get_all_vns(self):
         vns = self.vnc_lib.virtual_networks_list(
@@ -186,13 +189,13 @@ class VNCAPIClient(object):
         try:
             project.set_id_perms(self.id_perms)
             self.vnc_lib.project_create(project)
-            logger.info('Project created: {}'.format(project.name))
+            logger.info('Project created: %s', project.name)
         except RefsExistError:
-            logger.info('Project already exists: {}')
+            logger.info('Project already exists: %s', project.name)
 
     def read_project(self, fq_name):
         try:
             return self.vnc_lib.project_read(fq_name)
         except NoIdError:
-            logger.error('Project not found: {}')
+            logger.error('Project not found: %s', fq_name)
             return None
