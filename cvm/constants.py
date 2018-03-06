@@ -13,6 +13,6 @@ EVENTS_TO_OBSERVE = [
     'VmRemovedEvent',
 ]
 
-
 VNC_ROOT_DOMAIN = 'default-domain'
 VNC_VCENTER_PROJECT = 'vCenter'
+VNC_VCENTER_IPAM = 'vCenter-ipam'

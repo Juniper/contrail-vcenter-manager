@@ -1,6 +1,6 @@
 import ipaddress
 import uuid
-from vnc_api.vnc_api import VirtualMachine, IdPermsType, VirtualMachineInterface, MacAddressesType
+from vnc_api.vnc_api import VirtualMachine, IdPermsType, VirtualMachineInterface, MacAddressesType, VirtualNetwork
 from pyVmomi import vim
 
 
@@ -51,8 +51,8 @@ class VirtualMachineModel:
             self.display_name = self.name
             self.power_state = vmware_vm.runtime.powerState
             self.tools_running_status = vmware_vm.guest.toolsRunningStatus
-            self.networks = vmware_vm.network
             self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
+        self.networks = []
         self.id_perms = IdPermsType()
         self.id_perms.set_creator('vcenter-cvm')
         self.id_perms.set_enable(True)
@@ -74,25 +74,28 @@ class VirtualMachineModel:
 
 
 class VirtualNetworkModel:
-    def __init__(self, vmware_vn):
+    def __init__(self, vmware_vn, parent):
         self.vmware_vn = vmware_vn
+        self.parent = parent
         self.name = self.vmware_vn.name
+        self.uuid = str(uuid.uuid3(uuid.NAMESPACE_DNS, vmware_vn.config.key))
         self.vnc_vn = None
 
     def to_vnc_vn(self):
         if not self.vnc_vn:
-            pass
+            self.vnc_vn = VirtualNetwork(self.name, self.parent)
         return self.vnc_vn
 
 
 class VirtualMachineInterfaceModel:
-    def __init__(self, vm_model, vn_model):
-        self.vm_model = vm_model
-        self.vn_model = vn_model
-        self.name = 'vmi-{}-{}'.format(vn_model.name, vm_model.name)
-        self.id = str(uuid.uuid4())
-        # network = self.vnc_api_client.read_vn(vmware_network.name)
-        self.network = vn_model.vnc_network  # self.vnc_api_client.read_vn([u'default-domain', u'demo', u'test123'])
+    def __init__(self, vm_model=None, vn_model=None, parent=None):
+        if parent:
+            self.parent = parent
+        if vn_model and vm_model:
+            self.vm_model = vm_model
+            self.vn_model = vn_model
+            self.name = 'vmi-{}-{}'.format(vn_model.name, vm_model.name)
+        self.uuid = str(uuid.uuid3(uuid.NAMESPACE_DNS, vm_model.uuid + vn_model.uuid))
         self.id_perms = IdPermsType()
         self.id_perms.set_creator('vcenter-cvm')
         self.id_perms.set_enable(True)
@@ -100,16 +103,24 @@ class VirtualMachineInterfaceModel:
 
     def to_vnc_vmi(self):
         if not self.vnc_vmi:
-            vnc_vmi = VirtualMachineInterface(self.id, None)
+            vnc_vmi = VirtualMachineInterface(self.uuid, self.parent)
             vnc_vmi.display_name = self.name
-            vnc_vmi.uuid = self.id
+            vnc_vmi.uuid = self.uuid
             # vnc_vmi.setSecurityGroup(vCenterDefSecGrp);
             # vnc_vmi.setPortSecurityEnabled(vmiInfo.getPortSecurityEnabled());
-            vnc_vmi.set_virtual_network(self.network)
-            vnc_vmi.add_virtual_machine(self.vm_model.vnc_vm)
-            mac_address = find_virtual_machine_mac_address(self.vm_model.vmware_vm, self.vm_model.vmware_network)
+            vnc_vmi.set_virtual_network(self.vn_model.to_vnc_vn())
+            vnc_vmi.add_virtual_machine(self.vm_model.to_vnc_vm())
+            mac_address = find_virtual_machine_mac_address(self.vm_model.vmware_vm, self.vn_model.vmware_vn)
             macAddressesType = MacAddressesType([mac_address])
             vnc_vmi.virtual_machine_interface_mac_addresses = macAddressesType
             vnc_vmi.set_id_perms(self.id_perms)
             self.vnc_vmi = vnc_vmi
         return self.vnc_vmi
+
+    @classmethod
+    def from_vnc_vmi(cls, vnc_vmi, vm_model, vn_model, parent):
+        vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, parent)
+        vmi_model.vnc_vmi = vnc_vmi
+        vmi_model.name = vnc_vmi.display_name
+        vmi_model.uuid = vnc_vmi.uuid
+        return vmi_model

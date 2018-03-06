@@ -25,6 +25,13 @@ class VmwareAPIClient(object):
         self._property_collector = self.si.content.propertyCollector
         self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
 
+    def get_all_vms(self):
+        return self.si.content.rootFolder.childEntity[0].vmFolder.childEntity
+
+    def get_all_dpgs(self):
+        all_networks = self.si.content.rootFolder.childEntity[0].network
+        return list(filter(lambda net: isinstance(net, vim.dvs.DistributedVirtualPortgroup), all_networks))
+
     def create_event_history_collector(self, events_to_observe):
         event_manager = self.si.content.eventManager
         event_filter_spec = vim.event.EventFilterSpec()
@@ -83,17 +90,16 @@ class VNCAPIClient(object):
         self.id_perms = vnc_api.IdPermsType()
         self.id_perms.set_creator('vcenter-cvm')
         self.id_perms.set_enable(True)
+        project = vnc_api.Project(VNC_VCENTER_PROJECT)
+        self.create_project(project)
         self.vcenter_project = self.read_project([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT])
-        if not self.vcenter_project:
-            project = vnc_api.Project(VNC_VCENTER_PROJECT)
-            self.create_project(project)
 
     def create_vm(self, vm_model):
         try:
             self.vnc_lib.virtual_machine_create(vm_model.to_vnc_vm())
             logger.info('Virtual Machine created: {}'.format(vm_model.display_name))
         except RefsExistError:
-            logger.error('Virtual Machine already exists: {}'.format(vm_model.display_name))
+            logger.info('Virtual Machine already exists: {}'.format(vm_model.display_name))
 
     def delete_vm(self, uuid):
         try:
@@ -117,13 +123,17 @@ class VNCAPIClient(object):
             self.create_vm(vm_model)
             logger.error('Virtual Machine not found: {}'.format(vm_model.uuid))
 
+    def get_all_vms(self):
+        vms = self.vnc_lib.virtual_machines_list(
+            parent_id=self.vcenter_project.uuid).get('virtual-machines')
+        return [self.vnc_lib.virtual_machine_read(vm['fq_name']) for vm in vms]
+
     def create_vmi(self, vmi):
         try:
-            vmi.set_parent(self.vcenter_project)
             self.vnc_lib.virtual_machine_interface_create(vmi)
             logger.info('Virtual Machine Interface created: {}'.format(vmi.display_name))
         except RefsExistError:
-            logger.error('Virtual Machine Interface already exists: {}')
+            logger.info('Virtual Machine Interface already exists: {}'.format(vmi.display_name))
 
     def read_vmi(self, name, uuid):
         try:
@@ -132,6 +142,27 @@ class VNCAPIClient(object):
             logger.error('Virtual Machine not found: {}'.format(name))
             return None
 
+    def delete_vmi(self, uuid):
+        try:
+            self.vnc_lib.virtual_machine_interface_delete(id=uuid)
+            logger.info('Virtual Machine Interface removed: {}'.format(uuid))
+        except NoIdError:
+            logger.error('Virtual Machine Interface not found: {}'.format(uuid))
+
+    def get_all_vmis(self):
+        vmis = self.vnc_lib.virtual_machine_interfaces_list(
+            parent_id=self.vcenter_project.uuid).get('virtual-machine-interfaces')
+        return [self.vnc_lib.virtual_machine_interface_read(vmi['fq_name']) for vmi in vmis]
+
+    def create_vn(self, vn):
+        try:
+            self.vnc_lib.virtual_network_create(vn)
+            logger.info('Virtual Network created: {}'.format(vn.name))
+        except RefsExistError:
+            logger.info('Virtual Network already exists: {}'.format(vn.name))
+        except Exception, e:
+            logger.error(e)
+
     def read_vn(self, fq_name):
         try:
             return self.vnc_lib.virtual_network_read(fq_name)
@@ -139,13 +170,25 @@ class VNCAPIClient(object):
             logger.error('Virtual Machine not found: {}'.format(fq_name))
             return None
 
+    def delete_vn(self, uuid):
+        try:
+            self.vnc_lib.virtual_network_delete(id=uuid)
+            logger.info('Virtual Network removed: {}'.format(uuid))
+        except NoIdError:
+            logger.error('Virtual Network not found: {}'.format(uuid))
+
+    def get_all_vns(self):
+        vns = self.vnc_lib.virtual_networks_list(
+            parent_id=self.vcenter_project.uuid).get('virtual-networks')
+        return [self.vnc_lib.virtual_network_read(vn['fq_name']) for vn in vns]
+
     def create_project(self, project):
         try:
             project.set_id_perms(self.id_perms)
             self.vnc_lib.project_create(project)
             logger.info('Project created: {}'.format(project.name))
         except RefsExistError:
-            logger.error('Project already exists: {}')
+            logger.info('Project already exists: {}')
 
     def read_project(self, fq_name):
         try:
