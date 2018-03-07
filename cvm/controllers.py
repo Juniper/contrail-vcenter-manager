@@ -1,12 +1,12 @@
 import logging
 
-from pyVmomi import vim, vmodl
+from pyVmomi import vim
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class VmwareController:
+class VmwareController(object):
     def __init__(self, vmware_service, vnc_service):
         self._vmware_service = vmware_service
         self._vnc_service = vnc_service
@@ -19,7 +19,7 @@ class VmwareController:
         vmware_vms = self._vmware_service.get_all_vms()
         for vmware_vm in vmware_vms:
             vm_model = self._vnc_service.create_vm(vmware_vm)
-            self._vnc_service.create_virtual_machine_interfaces(vm_model)
+            self._vnc_service.create_vmis_for_vm_model(vm_model)
 
         self._vnc_service.sync_vms()
         self._vnc_service.sync_vns()
@@ -47,7 +47,7 @@ class VmwareController:
                 print obj.name, name, value
 
     def _handle_event(self, event):
-        logger.info('Handling event: {}'.format(event.fullFormattedMessage))
+        logger.info('Handling event: %s', event.fullFormattedMessage)
         if isinstance(event, vim.event.VmCreatedEvent):
             self._handle_vm_created_event(event)
         elif isinstance(event, (vim.event.VmPoweredOnEvent,

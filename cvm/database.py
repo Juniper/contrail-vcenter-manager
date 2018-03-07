@@ -1,95 +1,59 @@
-from models import *
 import logging
 import uuid
+from models import VirtualMachineModel, VirtualNetworkModel, VirtualMachineInterfaceModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class Database:
-    vm_models = []
-    vn_models = []
-    vmi_models = []
+class Database(object):
+    vm_models = {}
+    vn_models = {}
+    vmi_models = {}
 
     def __init__(self):
         pass
 
     def save(self, obj):
         if isinstance(obj, VirtualMachineModel):
-            self.vm_models.append(obj)
-            logger.info('Saved Virtual Machine model for ' + obj.name)
+            self.vm_models.update({obj.uuid: obj})
+            logger.info('Saved Virtual Machine model for %s', obj.name)
         if isinstance(obj, VirtualNetworkModel):
-            self.vn_models.append(obj)
-            logger.info('Saved Virtual Network model for ' + obj.name)
+            self.vn_models.update({obj.uuid: obj})
+            logger.info('Saved Virtual Network model for %s', obj.name)
         if isinstance(obj, VirtualMachineInterfaceModel):
-            self.vmi_models.append(obj)
-            logger.info('Saved Virtual Machine Interface model for ' + obj.name)
-
-    def get_vm_model_by_name(self, name):
-        for model in self.vm_models:
-            if model.name == name:
-                return model
-        return None
+            self.vmi_models.update({obj.uuid: obj})
+            logger.info('Saved Virtual Machine Interface model for %s', obj.name)
 
     def get_vm_model_by_uuid(self, uid):
-        for model in self.vm_models:
-            if model.uuid == uid:
-                return model
-        return None
-
-    def get_vn_model(self, name):
-        for model in self.vn_models:
-            if model.name == name:
-                return model
-        return None
+        return self.vm_models.get(uid, None)
 
     def get_vn_model_by_uuid(self, uid):
-        for model in self.vn_models:
-            if model.uuid == uid:
-                return model
-        return None
+        return self.vn_models.get(uid, None)
 
     def get_vn_model_by_key(self, key):
-        for model in self.vn_models:
-            if model.uuid == uuid.uuid3(uuid.NAMESPACE_DNS, key):
-                return model
-        return None
+        return self.get_vm_model_by_uuid(uuid.uuid3(uuid.NAMESPACE_DNS, key))
 
     def get_vmi_model_by_uuid(self, uid):
-        for model in self.vmi_models:
-            if model.uuid == uid:
-                return model
-        return None
+        return self.vmi_models.get(uid, None)
 
-    def get_vmi_model(self, vm_model, vn_model):
-        for model in self.vmi_models:
-            if model.vm_model == vm_model and model.vn_model == vn_model:
-                return model
-        return None
+    def delete_vm_model(self, uid):
+        try:
+            self.vm_models.pop(uid)
+        except KeyError, e:
+            logger.info('Could not find VM with uuid %s. Nothing to delete.', e)
 
-    def update(self, obj):
-        if isinstance(obj, VirtualMachineModel):
-            self.delete_vm_model(obj.name)
-        if isinstance(obj, VirtualNetworkModel):
-            self.delete_vn_model(obj.name)
-        if isinstance(obj, VirtualMachineInterfaceModel):
-            self.delete_vmi_model(obj.uuid)
-        self.save(obj)
+    def delete_vn_model(self, uid):
+        try:
+            self.vn_models.pop(uid)
+        except KeyError, e:
+            logger.info('Could not find VN with uuid %s. Nothing to delete.', e)
 
-    def delete_vm_model(self, name):
-        vm_model = self.get_vm_model_by_name(name)
-        if vm_model:
-            self.vm_models.remove(vm_model)
-
-    def delete_vn_model(self, name):
-        vn_model = self.get_vn_model(name)
-        if vn_model:
-            self.vn_models.remove(vn_model)
-
-    def delete_vmi_model(self, uuid):
-        vmi_model = self.get_vmi_model_by_uuid(uuid)
-        if vmi_model:
-            self.vmi_models.remove(vmi_model)
+    def delete_vmi_model(self, uid):
+        try:
+            self.vmi_models.pop(uid)
+        except KeyError, e:
+            logger.info('Could not find VMI with uuid %s. Nothing to delete.', e)
 
     def print_out(self):
         print self.vm_models
