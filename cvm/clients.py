@@ -4,8 +4,8 @@ import logging
 from pyVim.connect import SmartConnectNoSSL, Disconnect
 from vnc_api import vnc_api
 from vnc_api.exceptions import RefsExistError, NoIdError
-from constants import VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT
 from pyVmomi import vim, vmodl
+from constants import VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -45,8 +45,7 @@ class VmwareAPIClient(object):
 
     def get_all_dpgs(self):
         all_networks = self.si.content.rootFolder.childEntity[0].network
-        return [net for net in all_networks if isinstance(net, vim.dvs.DistributedVirtualPortgroup)]
-        # return list(filter(lambda net: isinstance(net, vim.dvs.DistributedVirtualPortgroup), all_networks))
+        return (net for net in all_networks if isinstance(net, vim.dvs.DistributedVirtualPortgroup))
 
     def create_event_history_collector(self, events_to_observe):
         event_manager = self.si.content.eventManager
@@ -129,7 +128,7 @@ class VNCAPIClient(object):
     def get_all_vms(self):
         vms = self.vnc_lib.virtual_machines_list(
             parent_id=self.vcenter_project.uuid).get('virtual-machines')
-        return [self.vnc_lib.virtual_machine_read(vm['fq_name']) for vm in vms]
+        return (self.vnc_lib.virtual_machine_read(vm['fq_name']) for vm in vms)
 
     def create_vmi(self, vmi):
         try:
@@ -155,7 +154,7 @@ class VNCAPIClient(object):
     def get_all_vmis(self):
         vmis = self.vnc_lib.virtual_machine_interfaces_list(
             parent_id=self.vcenter_project.uuid).get('virtual-machine-interfaces')
-        return [self.vnc_lib.virtual_machine_interface_read(vmi['fq_name']) for vmi in vmis]
+        return (self.vnc_lib.virtual_machine_interface_read(vmi['fq_name']) for vmi in vmis)
 
     def create_vn(self, vn):
         try:
@@ -183,7 +182,7 @@ class VNCAPIClient(object):
     def get_all_vns(self):
         vns = self.vnc_lib.virtual_networks_list(
             parent_id=self.vcenter_project.uuid).get('virtual-networks')
-        return [self.vnc_lib.virtual_network_read(vn['fq_name']) for vn in vns]
+        return (self.vnc_lib.virtual_network_read(vn['fq_name']) for vn in vns)
 
     def create_project(self, project):
         try:
