@@ -5,7 +5,7 @@ import constants as const
 from clients import VmwareAPIClient, VNCAPIClient
 from controllers import VmwareController
 from monitors import VCenterMonitor
-from services import VmwareService, VNCService, VMService
+from services import VmwareService, VNCService, VirtualMachineService
 from database import Database
 
 
@@ -30,7 +30,7 @@ def main():
 
     vnc_service = VNCService(vnc_api_client, database)
     vmware_service = VmwareService(vmware_api_client)
-    vm_service = VMService(vmware_api_client, vnc_api_client, database)
+    vm_service = VirtualMachineService(vmware_api_client, vnc_api_client, database)
     vmware_controller = VmwareController(vmware_service, vnc_service, vm_service)
     vmware_monitor = VCenterMonitor(vmware_api_client, vmware_controller)
 

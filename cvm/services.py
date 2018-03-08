@@ -5,7 +5,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class VMService(object):
+class VirtualMachineService(object):
     def __init__(self, vmware_api_client, vnc_api_client, database):
         self._vmware_api_client = vmware_api_client
         self._vnc_api_client = vnc_api_client
@@ -15,12 +15,11 @@ class VMService(object):
         vm_model = VirtualMachineModel(vmware_vm)
         self._vnc_api_client.create_vm(vm_model)
         self._database.save(vm_model)
-        # TODO: Move to VNService - called by controller
-        # Is it even necessary?
-        # for vmware_vn in vmware_vm.network:
-        #     if isinstance(vmware_vn, vim.dvs.DistributedVirtualPortgroup):
-        #         vn_model = self.create_vn(vmware_vn)
-        #         vm_model.networks.append(vn_model)
+
+        for vmware_vn in vmware_vm.network:
+            vn_model = self._database.get_vn_model_by_key(vmware_vn.key)
+            if vn_model:
+                vm_model.networks.append(vn_model)
         # _set_contrail_vm_active_state
         return vm_model
 
@@ -48,6 +47,19 @@ class VMService(object):
                 # self._vnc_api_clinet.delete_vm(vm.uuid)
 
 
+class VirtualNetworkService(object):
+    def __init__(self, vmware_api_client, vnc_api_client, database):
+        self._vmware_api_client = vmware_api_client
+        self._vnc_api_client = vnc_api_client
+        self._database = database
+        
+    def update(self, vmware_vn):
+        vn_model = VirtualNetworkModel(vmware_vn)
+        self._vnc_api_client.create_vn(vn_model.to_vnc())
+        self._database.save(vn_model)
+        return vn_model
+
+
 class VNCService(object):
     def __init__(self, vnc_api_client, database):
         self._vnc_api_client = vnc_api_client
@@ -55,20 +67,17 @@ class VNCService(object):
         self._project = vnc_api_client.vcenter_project
 
     def create_vn(self, vmware_vn):
-        try:
-            vn_model = VirtualNetworkModel(vmware_vn, self._project)
-            self._vnc_api_client.create_vn(vn_model.to_vnc_vn())
-            self._database.save(vn_model)
-            return vn_model
-        except Exception, e:
-            logger.error(e)
-            raise e
+        vn_model = VirtualNetworkModel(vmware_vn, self._project)
+        self._vnc_api_client.create_vn(vn_model.to_vnc())
+        self._database.save(vn_model)
+        return vn_model
+
 
     def create_vmis_for_vm_model(self, vm_model):
         try:
             for vn_model in vm_model.networks:
                 vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, self._project)
-                self._vnc_api_client.create_vmi(vmi_model.to_vnc_vmi())
+                self._vnc_api_client.create_vmi(vmi_model.to_vnc())
                 self._database.save(vmi_model)
         except Exception, e:
             logger.error(e)

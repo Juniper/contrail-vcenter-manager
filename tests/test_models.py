@@ -9,12 +9,12 @@ class TestVirtualMachineModel(TestCase):
         self.vmware_vm = Mock()
         self.vmware_vm.summary.runtime.host.vm = []
 
-    def test_to_vnc_vm(self):
+    def test_to_vnc(self):
         vm_model = VirtualMachineModel(self.vmware_vm)
         vm_model.uuid = 'd376b6b4-943d-4599-862f-d852fd6ba425'
         vm_model.vrouter_ip_address = '192.168.0.10'
 
-        vnc_vm = vm_model.to_vnc_vm()
+        vnc_vm = vm_model.to_vnc()
 
         self.assertEqual(vnc_vm.name, vm_model.uuid)
         self.assertEqual(vnc_vm.uuid, vm_model.uuid)
@@ -23,7 +23,7 @@ class TestVirtualMachineModel(TestCase):
 
 
 class TestVirtualNetworkModel(TestCase):
-    def test_to_vnc_vn(self):
+    def test_to_vnc(self):
         project = Project()
         vmware_vn = Mock()
         vmware_vn.config.key = '123'
@@ -31,7 +31,7 @@ class TestVirtualNetworkModel(TestCase):
         vn_model.uuid = 'd376b6b4-943d-4599-862f-d852fd6ba425'
         vn_model.name = 'VM Network'
 
-        vnc_vn = vn_model.to_vnc_vn()
+        vnc_vn = vn_model.to_vnc()
 
         self.assertEqual(vnc_vn.uuid, vn_model.uuid)
         self.assertEqual(vnc_vn.name, vn_model.name)
@@ -56,10 +56,10 @@ class TestVirtualMachineInterfaceModel(TestCase):
         self.vn_model.uuid = 'd376b6b4-943d-4599-862f-d852fd6ba425'
         self.vn_model.name = 'VM Network'
 
-    def test_to_vnc_vmi(self):
+    def test_to_vnc(self):
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, self.project)
 
-        vnc_vmi = vmi_model.to_vnc_vmi()
+        vnc_vmi = vmi_model.to_vnc()
 
         self.assertEqual(vnc_vmi.name, vmi_model.uuid)
         self.assertEqual(vnc_vmi.parent_name, self.project.name)

@@ -98,7 +98,7 @@ class VNCAPIClient(object):
 
     def create_vm(self, vm_model):
         try:
-            self.vnc_lib.virtual_machine_create(vm_model.to_vnc_vm())
+            self.vnc_lib.virtual_machine_create(vm_model.to_vnc())
             logger.info('Virtual Machine created: %s', vm_model.name)
         except RefsExistError:
             logger.info('Virtual Machine already exists: %s', vm_model.name)
@@ -119,7 +119,7 @@ class VNCAPIClient(object):
 
     def update_vm(self, vm_model):
         try:
-            self.vnc_lib.virtual_machine_update(vm_model.to_vnc_vm())
+            self.vnc_lib.virtual_machine_update(vm_model.to_vnc())
             logger.info('Virtual Machine updated: %s', vm_model.name)
         except NoIdError:
             self.create_vm(vm_model)
@@ -155,12 +155,12 @@ class VNCAPIClient(object):
             parent_id=self.vcenter_project.uuid).get('virtual-machine-interfaces')
         return (self.vnc_lib.virtual_machine_interface_read(vmi['fq_name']) for vmi in vmis)
 
-    def create_vn(self, vn):
+    def create_vn(self, vnc_vn):
         try:
-            self.vnc_lib.virtual_network_create(vn)
-            logger.info('Virtual Network created: %s', vn.name)
+            self.vnc_lib.virtual_network_create(vnc_vn)
+            logger.info('Virtual Network created: %s', vnc_vn.name)
         except RefsExistError:
-            logger.info('Virtual Network already exists: %s', vn.name)
+            logger.info('Virtual Network already exists: %s', vnc_vn.name)
         except Exception, e:
             logger.error(e)
 
