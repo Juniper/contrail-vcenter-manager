@@ -5,9 +5,8 @@ from cvm.controllers import VmwareController
 
 
 class TestVmwareController(TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.vmware_controller = VmwareController(None, None, None)
+    def setUp(self):
+        self.vmware_controller = VmwareController(None, None, None)
 
     @patch.object(VmwareController, '_handle_change')
     def test_handle_update_no_fltr_set(self, mocked_handle_change):
