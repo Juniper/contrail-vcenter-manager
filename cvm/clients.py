@@ -2,9 +2,9 @@ import atexit
 import logging
 
 from pyVim.connect import SmartConnectNoSSL, Disconnect
+from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 from vnc_api.exceptions import RefsExistError, NoIdError
-from pyVmomi import vim, vmodl
 from constants import VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT
 
 logging.basicConfig(level=logging.INFO)
@@ -99,9 +99,9 @@ class VNCAPIClient(object):
     def create_vm(self, vm_model):
         try:
             self.vnc_lib.virtual_machine_create(vm_model.to_vnc_vm())
-            logger.info('Virtual Machine created: %s', vm_model.display_name)
+            logger.info('Virtual Machine created: %s', vm_model.name)
         except RefsExistError:
-            logger.info('Virtual Machine already exists: %s', vm_model.display_name)
+            logger.info('Virtual Machine already exists: %s', vm_model.name)
 
     def delete_vm(self, uuid):
         try:
@@ -120,14 +120,13 @@ class VNCAPIClient(object):
     def update_vm(self, vm_model):
         try:
             self.vnc_lib.virtual_machine_update(vm_model.to_vnc_vm())
-            logger.info('Virtual Machine updated: %s', vm_model.display_name)
+            logger.info('Virtual Machine updated: %s', vm_model.name)
         except NoIdError:
             self.create_vm(vm_model)
             logger.error('Virtual Machine not found: %s', vm_model.uuid)
 
     def get_all_vms(self):
-        vms = self.vnc_lib.virtual_machines_list(
-            parent_id=self.vcenter_project.uuid).get('virtual-machines')
+        vms = self.vnc_lib.virtual_machines_list().get('virtual-machines')
         return (self.vnc_lib.virtual_machine_read(vm['fq_name']) for vm in vms)
 
     def create_vmi(self, vmi):

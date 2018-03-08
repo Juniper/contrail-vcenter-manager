@@ -1,9 +1,51 @@
 import logging
 from models import VirtualMachineModel, VirtualMachineInterfaceModel, VirtualNetworkModel
-from pyVmomi import vim
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+class VMService(object):
+    def __init__(self, vmware_api_client, vnc_api_client, database):
+        self._vmware_api_client = vmware_api_client
+        self._vnc_api_client = vnc_api_client
+        self._database = database
+
+    def update(self, vmware_vm):
+        vm_model = VirtualMachineModel(vmware_vm)
+        self._vnc_api_client.create_vm(vm_model)
+        self._database.save(vm_model)
+        # TODO: Move to VNService - called by controller
+        # Is it even necessary?
+        # for vmware_vn in vmware_vm.network:
+        #     if isinstance(vmware_vn, vim.dvs.DistributedVirtualPortgroup):
+        #         vn_model = self.create_vn(vmware_vn)
+        #         vm_model.networks.append(vn_model)
+        # _set_contrail_vm_active_state
+        return vm_model
+
+    def sync_vms(self):
+        self.get_vms_from_vmware()
+        self.delete_unused_vms_in_vnc()
+
+    def get_vms_from_vmware(self):
+        vmware_vms = self._vmware_api_client.get_all_vms()
+        for vmware_vm in vmware_vms:
+            vm_model = self.update(vmware_vm)
+            # perhaps a better idea would be to
+            # put it in a separate method
+            # self._vnc_service.create_vmis_for_vm_model(vm_model)
+
+    def delete_unused_vms_in_vnc(self):
+        vnc_vms = self._vnc_api_client.get_all_vms()
+        for vnc_vm in vnc_vms:
+            vm_model = self._database.get_vm_model_by_uuid(vnc_vm.uuid)
+            if not vm_model:
+                logger.info('Deleting %s from VNC (Not really)', vnc_vm.name)
+                # This will delete all VMs whichare
+                # not present in ESXi from VNC!
+                # TODO: Uncomment once we have our own VNC
+                # self._vnc_api_clinet.delete_vm(vm.uuid)
 
 
 class VNCService(object):
@@ -11,28 +53,6 @@ class VNCService(object):
         self._vnc_api_client = vnc_api_client
         self._database = database
         self._project = vnc_api_client.vcenter_project
-
-    def create_vm(self, vmware_vm):
-        try:
-            vm_model = VirtualMachineModel(vmware_vm)
-            for vmware_vn in vmware_vm.network:
-                if isinstance(vmware_vn, vim.dvs.DistributedVirtualPortgroup):
-                    vn_model = self.create_vn(vmware_vn)
-                    vm_model.networks.append(vn_model)
-            self._vnc_api_client.create_vm(vm_model)
-            self._database.save(vm_model)
-            # _set_contrail_vm_active_state
-            return vm_model
-        except Exception, e:
-            logger.error(e)
-
-    def update_vm(self, vmware_vm):
-        try:
-            vm_model = VirtualMachineModel(vmware_vm)
-            self._vnc_api_client.update_vm(vm_model)
-            self._database.save(vm_model)
-        except Exception, e:
-            logger.error(e)
 
     def create_vn(self, vmware_vn):
         try:
@@ -53,22 +73,10 @@ class VNCService(object):
         except Exception, e:
             logger.error(e)
 
-    def sync_vms(self):
-        vnc_vms = self._vnc_api_client.get_all_vms()
-        for vm in vnc_vms:
-            vm_model = self._database.get_vm_model_by_uuid(vm.uuid)
-            if not vm_model:
-                # A typo in project name could delete all VMs
-                # TODO: Uncomment once we have our own VNC
-                # self._vnc_api_client.delete_vm(vm.uuid)
-                pass
-            else:
-                vm_model.vnc_vm = vm
-
     def sync_vns(self):
-        vnc_vns = self._vnc_api_client.get_all_vms()
+        vnc_vns = self._vnc_api_client.get_all_vns()
         for vn in vnc_vns:
-            vn_model = self._database.get_vn_model_by_name(vn.name)
+            vn_model = self._database.get_vn_model_by_uuid(vn.uuid)
             if not vn_model:
                 # A typo in project name could delete all VNs
                 # TODO: Uncomment once we have our own VNC

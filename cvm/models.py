@@ -2,7 +2,7 @@ import logging
 import uuid
 import ipaddress
 from vnc_api.vnc_api import VirtualMachine, IdPermsType, VirtualMachineInterface, MacAddressesType, VirtualNetwork
-from pyVmomi import vim
+from pyVmomi import vim  # pylint: disable=no-name-in-module
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,15 +34,15 @@ def find_vrouter_ip_address(host):
 
 
 def find_virtual_machine_mac_address(vmware_vm, portgroup):
-    # TODO: Unit test this and remove unnecessary getattrs
-    portgroup_key = getattr(portgroup, 'key', None)
-    config = getattr(vmware_vm, 'config', None)
-    hardware = getattr(config, 'hardware', None)
-    for device in getattr(hardware, 'device', []):
-        if isinstance(device, vim.vm.device.VirtualEthernetCard):
-            port = getattr(device.backing, 'port', None)
-            if getattr(port, 'portgroupKey', None) == portgroup_key:
-                return device.macAddress
+    try:
+        devices = vmware_vm.config.hardware.device
+        for device in devices:
+            if isinstance(device, vim.vm.device.VirtualEthernetCard):
+                portgroupKey = device.backing.port.portgroupKey
+                if portgroupKey == portgroup.key:
+                    return device.macAddress
+    except AttributeError:
+        pass
     return None
 
 
@@ -52,7 +52,6 @@ class VirtualMachineModel(object):
         if vmware_vm:
             self.uuid = vmware_vm.config.instanceUuid
             self.name = vmware_vm.name
-            self.display_name = self.name
             self.power_state = vmware_vm.runtime.powerState
             self.tools_running_status = vmware_vm.guest.toolsRunningStatus
             self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
@@ -60,7 +59,6 @@ class VirtualMachineModel(object):
         self.id_perms = IdPermsType()
         self.id_perms.set_creator('vcenter-manager')
         self.id_perms.set_enable(True)
-        self.vnc_vm = None
 
     @classmethod
     def from_event(cls, event):
@@ -68,13 +66,16 @@ class VirtualMachineModel(object):
         return VirtualMachineModel(vmware_vm)
 
     def to_vnc_vm(self):
-        if not self.vnc_vm:
-            vnc_vm = VirtualMachine(self.uuid)
-            vnc_vm.set_uuid(self.uuid)
-            vnc_vm.set_display_name(self.vrouter_ip_address)
-            vnc_vm.set_id_perms(self.id_perms)
-            self.vnc_vm = vnc_vm
-        return self.vnc_vm
+        """
+        Gets fresh instance of vnc_api.VirtualMachine for this model.
+
+        Since vnc_api.VirtualMachine is only a DTO, it can be created each time we need to use it.
+        """
+        vnc_vm = VirtualMachine(name=self.uuid)
+        vnc_vm.set_uuid(self.uuid)
+        vnc_vm.set_display_name(self.vrouter_ip_address)
+        vnc_vm.set_id_perms(self.id_perms)
+        return vnc_vm
 
 
 class VirtualNetworkModel(object):

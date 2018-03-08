@@ -16,17 +16,20 @@ class Database(object):
 
     def save(self, obj):
         if isinstance(obj, VirtualMachineModel):
-            self.vm_models.update({obj.uuid: obj})
+            self.vm_models[obj.uuid] = obj
             logger.info('Saved Virtual Machine model for %s', obj.name)
         if isinstance(obj, VirtualNetworkModel):
-            self.vn_models.update({obj.uuid: obj})
+            self.vn_models[obj.uuid] = obj
             logger.info('Saved Virtual Network model for %s', obj.name)
         if isinstance(obj, VirtualMachineInterfaceModel):
-            self.vmi_models.update({obj.uuid: obj})
+            self.vmi_models[obj.uuid] = obj
             logger.info('Saved Virtual Machine Interface model for %s', obj.name)
 
     def get_vm_model_by_uuid(self, uid):
-        return self.vm_models.get(uid, None)
+        vm_model = self.vm_models.get(uid, None)
+        if not vm_model:
+            logger.info('Could not find VM with uuid %s.', uid)
+        return vm_model
 
     def get_vn_model_by_uuid(self, uid):
         return self.vn_models.get(uid, None)
@@ -40,20 +43,20 @@ class Database(object):
     def delete_vm_model(self, uid):
         try:
             self.vm_models.pop(uid)
-        except KeyError, e:
-            logger.info('Could not find VM with uuid %s. Nothing to delete.', e)
+        except KeyError:
+            logger.info('Could not delete VM with uuid %s.', uid)
 
     def delete_vn_model(self, uid):
         try:
             self.vn_models.pop(uid)
-        except KeyError, e:
-            logger.info('Could not find VN with uuid %s. Nothing to delete.', e)
+        except KeyError:
+            logger.info('Could not find VN with uuid %s. Nothing to delete.', uid)
 
     def delete_vmi_model(self, uid):
         try:
             self.vmi_models.pop(uid)
-        except KeyError, e:
-            logger.info('Could not find VMI with uuid %s. Nothing to delete.', e)
+        except KeyError:
+            logger.info('Could not find VMI with uuid %s. Nothing to delete.', uid)
 
     def print_out(self):
         print self.vm_models

@@ -1,27 +1,25 @@
 import logging
 
-from pyVmomi import vim
+from pyVmomi import vim  # pylint: disable=no-name-in-module
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 class VmwareController(object):
-    def __init__(self, vmware_service, vnc_service):
+    def __init__(self, vmware_service, vnc_service, vm_service):
         self._vmware_service = vmware_service
         self._vnc_service = vnc_service
+        self._vm_service = vm_service
 
     def initialize_database(self):
+        logger.info('Initializing database...')
+        self._vm_service.sync_vms()
+
         vmware_vns = self._vmware_service.get_all_vns()
         for vmware_vn in vmware_vns:
             self._vnc_service.create_vn(vmware_vn)
 
-        vmware_vms = self._vmware_service.get_all_vms()
-        for vmware_vm in vmware_vms:
-            vm_model = self._vnc_service.create_vm(vmware_vm)
-            self._vnc_service.create_vmis_for_vm_model(vm_model)
-
-        self._vnc_service.sync_vms()
         self._vnc_service.sync_vns()
         self._vnc_service.sync_vmis()
 
@@ -70,13 +68,12 @@ class VmwareController(object):
 
     def _handle_vm_created_event(self, event):
         vmware_vm = event.vm.vm
-        self._vnc_service.create_vm(vmware_vm)
-        # self._vnc_service.create_virtual_machine_interface(vmware_vm)
+        self._vm_service.update(vmware_vm)
         self._vmware_service.add_property_filter_for_vm(event.vm.vm, ['guest.toolsRunningStatus', 'guest.net'])
 
     def _handle_vm_updated_event(self, event):
         vmware_vm = event.vm.vm
-        self._vnc_service.update_vm(vmware_vm)
+        self._vm_service.update(vmware_vm)
 
     def _handle_vm_removed_event(self, event):
         self._vnc_service.delete_vm(event.vm.name)

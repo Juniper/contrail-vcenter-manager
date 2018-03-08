@@ -5,7 +5,7 @@ import constants as const
 from clients import VmwareAPIClient, VNCAPIClient
 from controllers import VmwareController
 from monitors import VCenterMonitor
-from services import VmwareService, VNCService
+from services import VmwareService, VNCService, VMService
 from database import Database
 
 
@@ -26,11 +26,12 @@ def main():
     vmware_api_client.make_wait_options(120)
 
     vnc_api_client = VNCAPIClient(vnc_cfg)
+    database = Database()
 
-    vnc_service = VNCService(vnc_api_client, Database())
+    vnc_service = VNCService(vnc_api_client, database)
     vmware_service = VmwareService(vmware_api_client)
-
-    vmware_controller = VmwareController(vmware_service, vnc_service)
+    vm_service = VMService(vmware_api_client, vnc_api_client, database)
+    vmware_controller = VmwareController(vmware_service, vnc_service, vm_service)
     vmware_monitor = VCenterMonitor(vmware_api_client, vmware_controller)
 
     greenlets = [
