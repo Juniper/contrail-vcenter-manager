@@ -13,21 +13,22 @@ class VirtualMachineService(object):
 
     def update(self, vmware_vm):
         vm_model = VirtualMachineModel(vmware_vm)
-        self._vnc_api_client.create_vm(vm_model)
+        self._vnc_api_client.create_vm(vm_model.to_vnc())
+        vm_model.networks = self._get_vn_models_for_vm(vm_model)
         self._database.save(vm_model)
-
-        for vmware_vn in vmware_vm.network:
-            vn_model = self._database.get_vn_model_by_key(vmware_vn.key)
-            if vn_model:
-                vm_model.networks.append(vn_model)
         # _set_contrail_vm_active_state
         return vm_model
 
     def sync_vms(self):
-        self.get_vms_from_vmware()
-        self.delete_unused_vms_in_vnc()
+        self._get_vms_from_vmware()
+        self._delete_unused_vms_in_vnc()
 
-    def get_vms_from_vmware(self):
+    def _get_vn_models_for_vm(self, vm_model):
+        search_results = [self._database.get_vn_model_by_key(dpg.config.key)
+                          for dpg in vm_model.get_distributed_portgroups()]
+        return [vn_model for vn_model in search_results if vn_model]
+
+    def _get_vms_from_vmware(self):
         vmware_vms = self._vmware_api_client.get_all_vms()
         for vmware_vm in vmware_vms:
             vm_model = self.update(vmware_vm)
@@ -35,7 +36,7 @@ class VirtualMachineService(object):
             # put it in a separate method
             # self._vnc_service.create_vmis_for_vm_model(vm_model)
 
-    def delete_unused_vms_in_vnc(self):
+    def _delete_unused_vms_in_vnc(self):
         vnc_vms = self._vnc_api_client.get_all_vms()
         for vnc_vm in vnc_vms:
             vm_model = self._database.get_vm_model_by_uuid(vnc_vm.uuid)
@@ -52,7 +53,7 @@ class VirtualNetworkService(object):
         self._vmware_api_client = vmware_api_client
         self._vnc_api_client = vnc_api_client
         self._database = database
-        
+
     def update(self, vmware_vn):
         vn_model = VirtualNetworkModel(vmware_vn)
         self._vnc_api_client.create_vn(vn_model.to_vnc())
@@ -71,7 +72,6 @@ class VNCService(object):
         self._vnc_api_client.create_vn(vn_model.to_vnc())
         self._database.save(vn_model)
         return vn_model
-
 
     def create_vmis_for_vm_model(self, vm_model):
         try:

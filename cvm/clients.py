@@ -96,12 +96,12 @@ class VNCAPIClient(object):
         self.create_project(project)
         self.vcenter_project = self.read_project([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT])
 
-    def create_vm(self, vm_model):
+    def create_vm(self, vnc_vm):
         try:
-            self.vnc_lib.virtual_machine_create(vm_model.to_vnc())
-            logger.info('Virtual Machine created: %s', vm_model.name)
+            self.vnc_lib.virtual_machine_create(vnc_vm)
+            logger.info('Virtual Machine created: %s', vnc_vm.name)
         except RefsExistError:
-            logger.info('Virtual Machine already exists: %s', vm_model.name)
+            logger.error('Virtual Machine already exists: %s', vnc_vm.name)
 
     def delete_vm(self, uuid):
         try:
@@ -117,13 +117,13 @@ class VNCAPIClient(object):
             logger.error('Virtual Machine not found: %s', uuid)
             return None
 
-    def update_vm(self, vm_model):
+    def update_vm(self, vnc_vm):
         try:
-            self.vnc_lib.virtual_machine_update(vm_model.to_vnc())
-            logger.info('Virtual Machine updated: %s', vm_model.name)
+            self.vnc_lib.virtual_machine_update(vnc_vm)
+            logger.info('Virtual Machine updated: %s', vnc_vm.name)
         except NoIdError:
-            self.create_vm(vm_model)
-            logger.error('Virtual Machine not found: %s', vm_model.uuid)
+            self.create_vm(vnc_vm)
+            logger.error('Virtual Machine not found: %s', vnc_vm.name)
 
     def get_all_vms(self):
         vms = self.vnc_lib.virtual_machines_list().get('virtual-machines')
@@ -134,7 +134,7 @@ class VNCAPIClient(object):
             self.vnc_lib.virtual_machine_interface_create(vmi)
             logger.info('Virtual Machine Interface created: %s', vmi.display_name)
         except RefsExistError:
-            logger.info('Virtual Machine Interface already exists: %s', vmi.display_name)
+            logger.error('Virtual Machine Interface already exists: %s', vmi.display_name)
 
     def read_vmi(self, name, uuid):
         try:
@@ -160,9 +160,7 @@ class VNCAPIClient(object):
             self.vnc_lib.virtual_network_create(vnc_vn)
             logger.info('Virtual Network created: %s', vnc_vn.name)
         except RefsExistError:
-            logger.info('Virtual Network already exists: %s', vnc_vn.name)
-        except Exception, e:
-            logger.error(e)
+            logger.error('Virtual Network already exists: %s', vnc_vn.name)
 
     def read_vn(self, fq_name):
         try:
@@ -189,7 +187,7 @@ class VNCAPIClient(object):
             self.vnc_lib.project_create(project)
             logger.info('Project created: %s', project.name)
         except RefsExistError:
-            logger.info('Project already exists: %s', project.name)
+            logger.error('Project already exists: %s', project.name)
 
     def read_project(self, fq_name):
         try:

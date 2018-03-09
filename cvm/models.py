@@ -51,7 +51,7 @@ def find_virtual_machine_mac_address(vmware_vm, portgroup):
 
 class VirtualMachineModel(object):
     def __init__(self, vmware_vm):
-        self.vmware_vm = vmware_vm
+        self.vmware_vm = vmware_vm  # TODO: Consider removing this
         self.uuid = vmware_vm.config.instanceUuid
         self.name = vmware_vm.name
         self.power_state = vmware_vm.runtime.powerState
@@ -59,8 +59,8 @@ class VirtualMachineModel(object):
         self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
         self.networks = []
 
-    @classmethod
-    def from_event(cls, event):
+    @staticmethod
+    def from_event(event):
         vmware_vm = event.vm.vm
         return VirtualMachineModel(vmware_vm)
 
@@ -76,18 +76,25 @@ class VirtualMachineModel(object):
         vnc_vm.set_uuid(self.uuid)
         return vnc_vm
 
+    def get_distributed_portgroups(self):
+        return [dpg for dpg in self.vmware_vm.network if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup)]
+
 
 class VirtualNetworkModel(object):
     def __init__(self, vmware_vn, parent):
-        self.vmware_vn = vmware_vn
+        self.vmware_vn = vmware_vn  # TODO: Consider removing this
         self.parent = parent
         self.name = self.vmware_vn.name
-        self.uuid = str(uuid.uuid3(uuid.NAMESPACE_DNS, vmware_vn.config.key))  # TODO: Extract method
+        self.uuid = self.get_uuid(vmware_vn.config.key)
 
     def to_vnc(self):
         vnc_vn = VirtualNetwork(self.name, self.parent)
         vnc_vn.set_uuid(self.uuid)
         return vnc_vn
+
+    @staticmethod
+    def get_uuid(key):
+        return str(uuid.uuid3(uuid.NAMESPACE_DNS, key))
 
 
 class VirtualMachineInterfaceModel(object):
@@ -112,8 +119,8 @@ class VirtualMachineInterfaceModel(object):
         # vnc_vmi.setSecurityGroup(vCenterDefSecGrp);
         return vnc_vmi
 
-    @classmethod
-    def from_vnc(cls, vnc_vmi, vm_model, vn_model, parent):
+    @staticmethod
+    def from_vnc(vnc_vmi, vm_model, vn_model, parent):
         vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, parent)
         vmi_model.vnc_vmi = vnc_vmi
         vmi_model.display_name = vnc_vmi.get_display_name()
