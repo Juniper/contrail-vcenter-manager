@@ -1,16 +1,18 @@
+#!/usr/bin/env python
+
 import sys
 import yaml
 import gevent
-import constants as const
-from clients import VmwareAPIClient, VNCAPIClient
-from controllers import VmwareController
-from monitors import VCenterMonitor
-from services import VmwareService, VNCService, VirtualMachineService
-from database import Database
+import cvm.constants as const
+from cvm.clients import VmwareAPIClient, VNCAPIClient
+from cvm.controllers import VmwareController
+from cvm.monitors import VCenterMonitor
+from cvm.services import VmwareService, VNCService, VirtualMachineService
+from cvm.database import Database
 
 
 def load_config():
-    with open("../config.yaml", 'r') as ymlfile:
+    with open('config.yaml', 'r') as ymlfile:
         cfg = yaml.load(ymlfile)
         esxi_cfg = cfg['esxi']
         vnc_cfg = cfg['vnc']

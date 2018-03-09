@@ -1,7 +1,12 @@
+import logging
 from unittest import TestCase
 from mock import patch
+
 from pyVmomi import vmodl  # pylint: disable=no-name-in-module
+
 from cvm.controllers import VmwareController
+
+logging.disable(logging.CRITICAL)
 
 
 class TestVmwareController(TestCase):

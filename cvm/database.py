@@ -1,5 +1,5 @@
 import logging
-from models import VirtualMachineModel, VirtualNetworkModel, VirtualMachineInterfaceModel
+from cvm.models import VirtualMachineModel, VirtualNetworkModel, VirtualMachineInterfaceModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
