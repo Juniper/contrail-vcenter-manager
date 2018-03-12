@@ -1,8 +1,12 @@
+import ipaddress
 import logging
 import uuid
-import ipaddress
-from vnc_api.vnc_api import VirtualMachine, IdPermsType, VirtualMachineInterface, MacAddressesType, VirtualNetwork
+
 from pyVmomi import vim  # pylint: disable=no-name-in-module
+from vnc_api.vnc_api import (IdPermsType, MacAddressesType, VirtualMachine,
+                             VirtualMachineInterface, VirtualNetwork)
+
+from constants import VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -57,7 +61,7 @@ class VirtualMachineModel(object):
         self.power_state = vmware_vm.runtime.powerState
         self.tools_running_status = vmware_vm.guest.toolsRunningStatus
         self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
-        self.networks = []
+        self.vnc_vnetworks = []
 
     @staticmethod
     def from_event(event):
@@ -95,6 +99,10 @@ class VirtualNetworkModel(object):
     @staticmethod
     def get_uuid(key):
         return str(uuid.uuid3(uuid.NAMESPACE_DNS, key))
+
+    @staticmethod
+    def get_fq_name(name):
+        return [VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, name]
 
 
 class VirtualMachineInterfaceModel(object):

@@ -14,10 +14,13 @@ class VirtualMachineService(object):
     def update(self, vmware_vm):
         vm_model = self._get_or_create_vm_model(vmware_vm)
         self._vnc_api_client.update_vm(vm_model.to_vnc())
-        vm_model.networks = self._get_vn_models_for_vm(vm_model)
+
+        # VNC VNs already exist in VNC, so we have to look them up
+        # each time we update VM, since we don't track VNC VN changes.
+        vm_model.vnc_vnetworks = self._get_vnc_vns_for_vm(vm_model)
         self._database.save(vm_model)
         # TODO: vrouter_client.set_active_state(boolean) -- see VirtualMachineInfo.setContrailVmActiveState
-        # TODO: Ensure that there's no need to create VMIs here. -- see last line of VirtualMachineInfo constructor.
+        # TODO: Create VMIs here. -- see last line of VirtualMachineInfo constructor.
         return vm_model
 
     def sync_vms(self):
@@ -34,10 +37,12 @@ class VirtualMachineService(object):
             self._add_property_filter_for_vm(vmware_vm, ['guest.toolsRunningStatus', 'guest.net'])
         return vm_model
 
-    def _get_vn_models_for_vm(self, vm_model):
-        search_results = [self._database.get_vn_model_by_key(dpg.config.key)
+    def _get_vnc_vns_for_vm(self, vm_model):
+        search_results = [self._vnc_api_client.read_vn(VirtualNetworkModel.get_fq_name(dpg.name))
                           for dpg in vm_model.get_distributed_portgroups()]
-        return [vn_model for vn_model in search_results if vn_model]
+        if None in search_results:
+            logger.fatal("One or more VMware Distributed Portgroups are not synchronized with VNC.")
+        return [vnc_vn for vnc_vn in search_results if vnc_vn]
 
     def _get_vms_from_vmware(self):
         vmware_vms = self._vmware_api_client.get_all_vms()
