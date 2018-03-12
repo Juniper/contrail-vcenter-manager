@@ -45,9 +45,12 @@ def find_virtual_machine_mac_address(vmware_vm, portgroup):
         devices = vmware_vm.config.hardware.device
         for device in devices:
             if isinstance(device, vim.vm.device.VirtualEthernetCard):
-                portgroupKey = device.backing.port.portgroupKey
-                if portgroupKey == portgroup.key:
-                    return device.macAddress
+                try:
+                    portgroupKey = device.backing.port.portgroupKey
+                    if portgroupKey == portgroup.key:
+                        return device.macAddress
+                except AttributeError:
+                    pass
     except AttributeError:
         pass
     return None
@@ -61,7 +64,7 @@ class VirtualMachineModel(object):
         self.power_state = vmware_vm.runtime.powerState
         self.tools_running_status = vmware_vm.guest.toolsRunningStatus
         self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
-        self.vnc_vnetworks = []
+        self.vn_models = []
 
     @staticmethod
     def from_event(event):
@@ -83,26 +86,30 @@ class VirtualMachineModel(object):
     def get_distributed_portgroups(self):
         return [dpg for dpg in self.vmware_vm.network if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup)]
 
+    def get_vmis(self, parent):
+        return [VirtualMachineInterfaceModel(self, vnc_vn, parent) for vnc_vn in self.vn_models]
+
 
 class VirtualNetworkModel(object):
-    def __init__(self, vmware_vn, parent):
+    def __init__(self, vmware_vn, vnc_vn):
         self.vmware_vn = vmware_vn  # TODO: Consider removing this
-        self.parent = parent
-        self.name = self.vmware_vn.name
-        self.uuid = self.get_uuid(vmware_vn.config.key)
+        self.vnc_vn = vnc_vn
 
-    def to_vnc(self):
-        vnc_vn = VirtualNetwork(self.name, self.parent)
-        vnc_vn.set_uuid(self.uuid)
-        return vnc_vn
+    @property
+    def name(self):
+        return self.vnc_vn.name
 
-    @staticmethod
-    def get_uuid(key):
-        return str(uuid.uuid3(uuid.NAMESPACE_DNS, key))
+    @property
+    def uuid(self):
+        return str(self.vnc_vn.uuid)
 
     @staticmethod
     def get_fq_name(name):
         return [VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, name]
+
+    @staticmethod
+    def get_uuid(key):
+        return str(uuid.uuid3(uuid.NAMESPACE_DNS, key))
 
 
 class VirtualMachineInterfaceModel(object):
@@ -121,7 +128,7 @@ class VirtualMachineInterfaceModel(object):
                                           id_perms=ID_PERMS)
         vnc_vmi.set_uuid(self.uuid)
         vnc_vmi.add_virtual_machine(self.vm_model.to_vnc())
-        vnc_vmi.set_virtual_network(self.vn_model.to_vnc())
+        vnc_vmi.set_virtual_network(self.vn_model.vnc_vn)
         vnc_vmi.set_virtual_machine_interface_mac_addresses(MacAddressesType([self.mac_address]))
         # vnc_vmi.setPortSecurityEnabled(vmiInfo.getPortSecurityEnabled());
         # vnc_vmi.setSecurityGroup(vCenterDefSecGrp);

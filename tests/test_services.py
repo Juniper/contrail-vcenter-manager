@@ -25,7 +25,7 @@ class TestVirtualMachineModel(TestCase):
 
         result = self.vm_service._get_vnc_vns_for_vm(self.vm_model)
 
-        self.assertEqual([vnc_vn], result)
+        self.assertEqual([vnc_vn], [vn_model.vnc_vn for vn_model in result])
 
     def test_get_vn_models_for_vm_novn(self):
         """ Non-existing VNC VN. """

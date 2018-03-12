@@ -16,7 +16,6 @@ class VmwareController(object):
         logger.info('Initializing database...')
         self._vm_service.sync_vms()
 
-        self._vnc_service.sync_vns()
         self._vnc_service.sync_vmis()
 
     def handle_update(self, update_set):
@@ -38,6 +37,8 @@ class VmwareController(object):
                     for event in sorted(value, key=lambda e: e.key):
                         self._handle_event(event)
             elif name.startswith('guest.toolsRunningStatus'):
+                print obj.name, name, value
+            elif name.startswith('net'):
                 print obj.name, name, value
 
     def _handle_event(self, event):

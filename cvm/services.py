@@ -17,10 +17,10 @@ class VirtualMachineService(object):
 
         # VNC VNs already exist in VNC, so we have to look them up
         # each time we update VM, since we don't track VNC VN changes.
-        vm_model.vnc_vnetworks = self._get_vnc_vns_for_vm(vm_model)
+        vm_model.vn_models = self._get_vnc_vns_for_vm(vm_model)
         self._database.save(vm_model)
         # TODO: vrouter_client.set_active_state(boolean) -- see VirtualMachineInfo.setContrailVmActiveState
-        # TODO: Create VMIs here. -- see last line of VirtualMachineInfo constructor.
+        self._create_vmis_for_vm_model(vm_model)
         return vm_model
 
     def sync_vms(self):
@@ -38,11 +38,13 @@ class VirtualMachineService(object):
         return vm_model
 
     def _get_vnc_vns_for_vm(self, vm_model):
+        distributed_portgroups = vm_model.get_distributed_portgroups()
         search_results = [self._vnc_api_client.read_vn(VirtualNetworkModel.get_fq_name(dpg.name))
-                          for dpg in vm_model.get_distributed_portgroups()]
+                          for dpg in distributed_portgroups]
         if None in search_results:
             logger.fatal("One or more VMware Distributed Portgroups are not synchronized with VNC.")
-        return [vnc_vn for vnc_vn in search_results if vnc_vn]
+        return [VirtualNetworkModel(vmware_vn, vnc_vn)
+                for vmware_vn, vnc_vn in zip(distributed_portgroups, search_results) if vnc_vn]
 
     def _get_vms_from_vmware(self):
         vmware_vms = self._vmware_api_client.get_all_vms()
@@ -52,13 +54,18 @@ class VirtualMachineService(object):
             # put it in a separate method
             # self._vnc_service.create_vmis_for_vm_model(vm_model)
 
+    def _create_vmis_for_vm_model(self, vm_model):
+        for vmi_model in vm_model.get_vmis(self._vnc_api_client.vcenter_project):
+            self._vnc_api_client.create_vmi(vmi_model.to_vnc())
+            self._database.save(vmi_model)
+
     def _delete_unused_vms_in_vnc(self):
         vnc_vms = self._vnc_api_client.get_all_vms()
         for vnc_vm in vnc_vms:
             vm_model = self._database.get_vm_model_by_uuid(vnc_vm.uuid)
             if not vm_model:
                 logger.info('Deleting %s from VNC (Not really)', vnc_vm.name)
-                # This will delete all VMs whichare
+                # This will delete all VMs which are
                 # not present in ESXi from VNC!
                 # TODO: Uncomment once we have our own VNC
                 # self._vnc_api_clinet.delete_vm(vm.uuid)
@@ -103,14 +110,8 @@ class VNCService(object):
         self._database = database
         self._project = vnc_api_client.vcenter_project
 
-    def create_vmis_for_vm_model(self, vm_model):
-        try:
-            for vn_model in vm_model.networks:
-                vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, self._project)
-                self._vnc_api_client.create_vmi(vmi_model.to_vnc())
-                self._database.save(vmi_model)
-        except Exception, e:
-            logger.error(e)
+
+
 
     def sync_vns(self):
         vnc_vns = self._vnc_api_client.get_all_vns()
