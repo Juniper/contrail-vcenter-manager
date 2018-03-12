@@ -86,13 +86,13 @@ class VirtualMachineModel(object):
     def get_distributed_portgroups(self):
         return [dpg for dpg in self.vmware_vm.network if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup)]
 
-    def get_vmis(self, parent):
-        return [VirtualMachineInterfaceModel(self, vnc_vn, parent) for vnc_vn in self.vn_models]
+    def construct_vmi_models(self, parent):
+        return [VirtualMachineInterfaceModel(self, vn_model, parent) for vn_model in self.vn_models]
 
 
 class VirtualNetworkModel(object):
     def __init__(self, vmware_vn, vnc_vn):
-        self.vmware_vn = vmware_vn  # TODO: Consider removing this
+        self.vmware_vn = vmware_vn
         self.vnc_vn = vnc_vn
 
     @property

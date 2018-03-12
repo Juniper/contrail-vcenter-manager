@@ -20,7 +20,7 @@ class VirtualMachineService(object):
         vm_model.vn_models = self._get_vnc_vns_for_vm(vm_model)
         self._database.save(vm_model)
         # TODO: vrouter_client.set_active_state(boolean) -- see VirtualMachineInfo.setContrailVmActiveState
-        self._create_vmis_for_vm_model(vm_model)
+        self._sync_vmis_for_vm_model(vm_model)
         return vm_model
 
     def sync_vms(self):
@@ -54,10 +54,19 @@ class VirtualMachineService(object):
             # put it in a separate method
             # self._vnc_service.create_vmis_for_vm_model(vm_model)
 
-    def _create_vmis_for_vm_model(self, vm_model):
-        for vmi_model in vm_model.get_vmis(self._vnc_api_client.vcenter_project):
-            self._vnc_api_client.create_vmi(vmi_model.to_vnc())
-            self._database.save(vmi_model)
+    def _sync_vmis_for_vm_model(self, vm_model):
+        """ TODO: Unit test this. """
+        existing_vnc_vmis = {self._get_vn_from_vmi(vnc_vmi)['uuid']: vnc_vmi
+                             for vnc_vmi in self._vnc_api_client.get_vmis_for_vm(vm_model)}
+
+        for vmi_model in vm_model.construct_vmi_models(self._vnc_api_client.vcenter_project):
+            vnc_vmi = existing_vnc_vmis.pop(vmi_model.vn_model.vnc_vn.uuid, None)
+            if vnc_vmi:
+                vmi_model.uuid = vnc_vmi.uuid
+            self._vnc_api_client.update_vmi(vmi_model.to_vnc())
+
+        for vnc_vmi in existing_vnc_vmis.values():
+            self._vnc_api_client.delete_vmi(vnc_vmi.uuid)
 
     def _delete_unused_vms_in_vnc(self):
         vnc_vms = self._vnc_api_client.get_all_vms()
@@ -69,6 +78,10 @@ class VirtualMachineService(object):
                 # not present in ESXi from VNC!
                 # TODO: Uncomment once we have our own VNC
                 # self._vnc_api_clinet.delete_vm(vm.uuid)
+
+    @staticmethod
+    def _get_vn_from_vmi(vnc_vmi):
+        return vnc_vmi.get_virtual_network_refs()[0]
 
 
 class VirtualNetworkService(object):
@@ -109,9 +122,6 @@ class VNCService(object):
         self._vnc_api_client = vnc_api_client
         self._database = database
         self._project = vnc_api_client.vcenter_project
-
-
-
 
     def sync_vns(self):
         vnc_vns = self._vnc_api_client.get_all_vns()
