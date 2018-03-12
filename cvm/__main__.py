@@ -24,7 +24,7 @@ def main():
 
     vmware_api_client = VmwareAPIClient(esxi_cfg)
     event_history_collector = vmware_api_client.create_event_history_collector(const.EVENTS_TO_OBSERVE)
-    vmware_api_client.add_filter((event_history_collector, ['latestPage']))
+    vmware_api_client.add_filter(event_history_collector, ['latestPage'])
     vmware_api_client.make_wait_options(120)
 
     vnc_api_client = VNCAPIClient(vnc_cfg)

@@ -11,18 +11,18 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def make_prop_set(object_to_observe):
+def make_prop_set(obj, filters):
     prop_set = []
     property_spec = vmodl.query.PropertyCollector.PropertySpec(
-        type=type(object_to_observe[0]),
+        type=type(obj),
         all=False)
-    property_spec.pathSet.extend(object_to_observe[1])
+    property_spec.pathSet.extend(filters)
     prop_set.append(property_spec)
     return prop_set
 
 
-def make_object_set(object_to_observe):
-    object_set = [vmodl.query.PropertyCollector.ObjectSpec(obj=object_to_observe[0])]
+def make_object_set(obj):
+    object_set = [vmodl.query.PropertyCollector.ObjectSpec(obj=obj)]
     return object_set
 
 
@@ -59,10 +59,10 @@ class VmwareAPIClient(object):
         event_filter_spec.entity = entity_spec
         return event_manager.CreateCollectorForEvents(filter=event_filter_spec)
 
-    def add_filter(self, object_to_observe):
+    def add_filter(self, obj, filters):
         filter_spec = vmodl.query.PropertyCollector.FilterSpec()
-        filter_spec.objectSet = make_object_set(object_to_observe)
-        filter_spec.propSet = make_prop_set(object_to_observe)
+        filter_spec.objectSet = make_object_set(obj)
+        filter_spec.propSet = make_prop_set(obj, filters)
         self._property_collector.CreateFilter(filter_spec, True)
 
     def make_wait_options(self, max_wait_seconds=None, max_object_updates=None):
@@ -122,8 +122,8 @@ class VNCAPIClient(object):
             self.vnc_lib.virtual_machine_update(vnc_vm)
             logger.info('Virtual Machine updated: %s', vnc_vm.name)
         except NoIdError:
+            logger.info('Virtual Machine not found - creating: %s', vnc_vm.name)
             self.create_vm(vnc_vm)
-            logger.error('Virtual Machine not found: %s', vnc_vm.name)
 
     def get_all_vms(self):
         vms = self.vnc_lib.virtual_machines_list().get('virtual-machines')

@@ -16,10 +16,6 @@ class VmwareController(object):
         logger.info('Initializing database...')
         self._vm_service.sync_vms()
 
-        vmware_vns = self._vmware_service.get_all_vns()
-        for vmware_vn in vmware_vns:
-            self._vnc_service.create_vn(vmware_vn)
-
         self._vnc_service.sync_vns()
         self._vnc_service.sync_vmis()
 
@@ -69,7 +65,6 @@ class VmwareController(object):
     def _handle_vm_created_event(self, event):
         vmware_vm = event.vm.vm
         self._vm_service.update(vmware_vm)
-        self._vmware_service.add_property_filter_for_vm(event.vm.vm, ['guest.toolsRunningStatus', 'guest.net'])
 
     def _handle_vm_updated_event(self, event):
         vmware_vm = event.vm.vm

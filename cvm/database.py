@@ -26,12 +26,14 @@ class Database(object):
     def get_vm_model_by_uuid(self, uid):
         vm_model = self.vm_models.get(uid, None)
         if not vm_model:
+            # TODO: Database should not log anything (?)
             logger.error('Could not find VM with uuid %s.', uid)
         return vm_model
 
     def get_vn_model_by_uuid(self, uid):
         vn_model = self.vn_models.get(uid, None)
         if not vn_model:
+            # TODO: Database should not log anything (?)
             logger.error('Could not find VN with uuid %s.', uid)
         return vn_model
 
