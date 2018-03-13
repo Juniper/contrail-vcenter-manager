@@ -4,7 +4,7 @@ import uuid
 
 from pyVmomi import vim  # pylint: disable=no-name-in-module
 from vnc_api.vnc_api import (IdPermsType, MacAddressesType, VirtualMachine,
-                             VirtualMachineInterface, VirtualNetwork)
+                             VirtualMachineInterface)
 
 from cvm.constants import VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT
 
@@ -134,11 +134,3 @@ class VirtualMachineInterfaceModel(object):
         vnc_vmi.set_port_security_enabled(True)
         vnc_vmi.set_security_group(self.security_group)
         return vnc_vmi
-
-    @staticmethod
-    def from_vnc(vnc_vmi, vm_model, vn_model, parent):
-        vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, parent)
-        vmi_model.vnc_vmi = vnc_vmi
-        vmi_model.display_name = vnc_vmi.get_display_name()
-        vmi_model.uuid = vnc_vmi.get_uuid()
-        return vmi_model
