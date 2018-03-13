@@ -2,7 +2,7 @@ from unittest import TestCase
 from mock import Mock
 from pyVmomi import vim  # pylint: disable=no-name-in-module
 from vnc_api.vnc_api import VirtualNetwork
-from cvm.models import VirtualNetworkModel, VirtualMachineModel
+from cvm.models import VirtualMachineModel
 from cvm.services import VirtualMachineService
 
 
@@ -17,6 +17,7 @@ class TestVirtualMachineModel(TestCase):
         self.vm_model = VirtualMachineModel(vmware_vm)
         self.vnc_client = Mock()
         self.vnc_client.read_vn = lambda fq_name: self.vn_lookup.get(fq_name[2])
+        self.vnc_client.construct_security_group.return_value = None
         self.vm_service = VirtualMachineService(None, self.vnc_client, None)
 
     def test_get_vn_models_for_vm(self):
