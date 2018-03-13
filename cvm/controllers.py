@@ -7,16 +7,12 @@ logger = logging.getLogger(__name__)
 
 
 class VmwareController(object):
-    def __init__(self, vmware_service, vnc_service, vm_service):
-        self._vmware_service = vmware_service
-        self._vnc_service = vnc_service
+    def __init__(self, vm_service):
         self._vm_service = vm_service
 
     def initialize_database(self):
         logger.info('Initializing database...')
         self._vm_service.sync_vms()
-
-        self._vnc_service.sync_vmis()
 
     def handle_update(self, update_set):
         logger.info('Handling ESXi update.')
@@ -72,4 +68,4 @@ class VmwareController(object):
         self._vm_service.update(vmware_vm)
 
     def _handle_vm_removed_event(self, event):
-        self._vnc_service.delete_vm(event.vm.name)
+        self._vm_service.delete_vm(event.vm.name)

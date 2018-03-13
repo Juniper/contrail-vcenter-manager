@@ -7,7 +7,7 @@ import cvm.constants as const
 from cvm.clients import VmwareAPIClient, VNCAPIClient
 from cvm.controllers import VmwareController
 from cvm.monitors import VCenterMonitor
-from cvm.services import VmwareService, VNCService, VirtualMachineService
+from cvm.services import VirtualMachineService
 from cvm.database import Database
 
 
@@ -30,10 +30,8 @@ def main():
     vnc_api_client = VNCAPIClient(vnc_cfg)
     database = Database()
 
-    vnc_service = VNCService(vnc_api_client, database)
-    vmware_service = VmwareService(vmware_api_client)
     vm_service = VirtualMachineService(vmware_api_client, vnc_api_client, database)
-    vmware_controller = VmwareController(vmware_service, vnc_service, vm_service)
+    vmware_controller = VmwareController(vm_service)
     vmware_monitor = VCenterMonitor(vmware_api_client, vmware_controller)
 
     greenlets = [
