@@ -1,7 +1,7 @@
 from unittest import TestCase
 from mock import Mock
 from cvm.models import VirtualMachineModel, VirtualNetworkModel, VirtualMachineInterfaceModel, ID_PERMS
-from vnc_api.vnc_api import Project
+from vnc_api.vnc_api import Project, SecurityGroup
 
 
 class TestVirtualMachineModel(TestCase):
@@ -25,6 +25,7 @@ class TestVirtualMachineModel(TestCase):
 class TestVirtualMachineInterfaceModel(TestCase):
     def setUp(self):
         self.project = Project()
+        self.security_group = SecurityGroup()
 
         vmware_vm = Mock()
         vmware_vm.summary.runtime.host.vm = []
@@ -39,7 +40,7 @@ class TestVirtualMachineInterfaceModel(TestCase):
         self.vn_model = VirtualNetworkModel(vmware_vn, vnc_vn)
 
     def test_to_vnc(self):
-        vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, self.project)
+        vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, self.project, self.security_group)
 
         vnc_vmi = vmi_model.to_vnc()
 

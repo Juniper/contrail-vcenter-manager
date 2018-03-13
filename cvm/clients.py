@@ -1,10 +1,14 @@
 import atexit
 import logging
+import uuid
 
-from pyVim.connect import SmartConnectNoSSL, Disconnect
+from pyVim.connect import Disconnect, SmartConnectNoSSL
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
-from vnc_api.exceptions import RefsExistError, NoIdError
+from vnc_api.exceptions import NoIdError, RefsExistError
+
+from cvm.constants import (VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
+                           VNC_VCENTER_PROJECT)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -194,6 +198,10 @@ class VNCAPIClient(object):
             parent_id=self.vcenter_project.uuid).get('virtual-networks')
         return (self.vnc_lib.virtual_network_read(vn['fq_name']) for vn in vns)
 
+    @staticmethod
+    def construct_project():
+        return vnc_api.Project(name=VNC_VCENTER_PROJECT)
+
     def create_project(self, project):
         try:
             project.set_id_perms(self.id_perms)
@@ -208,6 +216,42 @@ class VNCAPIClient(object):
         except NoIdError:
             logger.error('Project not found: %s', fq_name)
             return None
+
+    @staticmethod
+    def construct_security_group(project):
+        security_group = vnc_api.SecurityGroup(name=VNC_VCENTER_DEFAULT_SG,
+                                               parent_obj=project)
+
+        security_group_entry = vnc_api.PolicyEntriesType()
+
+        ingress_rule = vnc_api.PolicyRuleType(
+            rule_uuid=str(uuid.uuid4()),
+            direction='>',
+            protocol='any',
+            src_addresses=[vnc_api.AddressType(
+                security_group=VNC_VCENTER_DEFAULT_SG_FQN)],
+            src_ports=[vnc_api.PortType(0, 65535)],
+            dst_addresses=[vnc_api.AddressType(security_group='local')],
+            dst_ports=[vnc_api.PortType(0, 65535)],
+            ethertype='IPv4',
+        )
+
+        egress_rule = vnc_api.PolicyRuleType(
+            rule_uuid=str(uuid.uuid4()),
+            direction='>',
+            protocol='any',
+            src_addresses=[vnc_api.AddressType(security_group='local')],
+            src_ports=[vnc_api.PortType(0, 65535)],
+            dst_addresses=[vnc_api.AddressType(vnc_api.SubnetType('0.0.0.0', 0))],
+            dst_ports=[vnc_api.PortType(0, 65535)],
+            ethertype='IPv4',
+        )
+
+        security_group_entry.add_policy_rule(ingress_rule)
+        security_group_entry.add_policy_rule(egress_rule)
+
+        security_group.set_security_group_entries(security_group_entry)
+        return security_group
 
     def create_security_group(self, security_group):
         try:

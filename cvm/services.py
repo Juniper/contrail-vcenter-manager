@@ -1,9 +1,8 @@
 import logging
 
-import uuid
-from vnc_api.vnc_api import Project, SecurityGroup, PolicyEntriesType, PolicyRuleType, AddressType, PortType, SubnetType
+from cvm.constants import (VNC_ROOT_DOMAIN, VNC_VCENTER_DEFAULT_SG,
+                           VNC_VCENTER_PROJECT)
 from cvm.models import VirtualMachineModel, VirtualNetworkModel
-from cvm.constants import VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -83,44 +82,12 @@ class VirtualMachineService(object):
                 # self._vnc_api_clinet.delete_vm(vm.uuid)
 
     def _create_or_read_project(self):
-        project = Project(name=VNC_VCENTER_PROJECT)
+        project = self._vnc_api_client.construct_project()
         self._vnc_api_client.create_project(project)
         return self._vnc_api_client.read_project([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT])
 
     def _create_or_read_security_group(self):
-        security_group = SecurityGroup(name=VNC_VCENTER_DEFAULT_SG,
-                                       parent_obj=self._project)
-
-        security_group_entry = PolicyEntriesType()
-
-        ingress_rule = PolicyRuleType(
-            rule_uuid=str(uuid.uuid4()),
-            direction='>',
-            protocol='any',
-            src_addresses=[AddressType(
-                security_group=VNC_VCENTER_DEFAULT_SG_FQN)],
-            src_ports=[PortType(0, 65535)],
-            dst_addresses=[AddressType(security_group='local')],
-            dst_ports=[PortType(0, 65535)],
-            ethertype='IPv4',
-        )
-
-        egress_rule = PolicyRuleType(
-            rule_uuid=str(uuid.uuid4()),
-            direction='>',
-            protocol='any',
-            src_addresses=[AddressType(security_group='local')],
-            src_ports=[PortType(0, 65535)],
-            dst_addresses=[AddressType(SubnetType('0.0.0.0', 0))],
-            dst_ports=[PortType(0, 65535)],
-            ethertype='IPv4',
-        )
-
-        security_group_entry.add_policy_rule(ingress_rule)
-        security_group_entry.add_policy_rule(egress_rule)
-
-        security_group.set_security_group_entries(security_group_entry)
-
+        security_group = self._vnc_api_client.construct_security_group(self._project)
         self._vnc_api_client.create_security_group(security_group)
         return self._vnc_api_client.read_security_group([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_DEFAULT_SG])
 

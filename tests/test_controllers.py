@@ -11,7 +11,7 @@ logging.disable(logging.CRITICAL)
 
 class TestVmwareController(TestCase):
     def setUp(self):
-        self.vmware_controller = VmwareController(None, None, None)
+        self.vmware_controller = VmwareController(None)
 
     @patch.object(VmwareController, '_handle_change')
     def test_handle_update_no_fltr_set(self, mocked_handle_change):
