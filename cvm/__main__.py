@@ -4,7 +4,7 @@ import sys
 import yaml
 import gevent
 import cvm.constants as const
-from cvm.clients import VmwareAPIClient, VNCAPIClient
+from cvm.clients import ESXiAPIClient, VNCAPIClient
 from cvm.controllers import VmwareController
 from cvm.monitors import VCenterMonitor
 from cvm.services import VirtualMachineService
@@ -22,17 +22,17 @@ def load_config():
 def main():
     esxi_cfg, vnc_cfg = load_config()
 
-    vmware_api_client = VmwareAPIClient(esxi_cfg)
-    event_history_collector = vmware_api_client.create_event_history_collector(const.EVENTS_TO_OBSERVE)
-    vmware_api_client.add_filter(event_history_collector, ['latestPage'])
-    vmware_api_client.make_wait_options(120)
+    esxi_api_client = ESXiAPIClient(esxi_cfg)
+    event_history_collector = esxi_api_client.create_event_history_collector(const.EVENTS_TO_OBSERVE)
+    esxi_api_client.add_filter(event_history_collector, ['latestPage'])
+    esxi_api_client.make_wait_options(120)
 
     vnc_api_client = VNCAPIClient(vnc_cfg)
     database = Database()
 
-    vm_service = VirtualMachineService(vmware_api_client, vnc_api_client, database)
+    vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
     vmware_controller = VmwareController(vm_service)
-    vmware_monitor = VCenterMonitor(vmware_api_client, vmware_controller)
+    vmware_monitor = VCenterMonitor(esxi_api_client, vmware_controller)
 
     greenlets = [
         gevent.spawn(vmware_monitor.start()),

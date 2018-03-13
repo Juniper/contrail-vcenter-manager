@@ -25,7 +25,7 @@ def make_object_set(obj):
     return object_set
 
 
-class VmwareAPIClient(object):
+class ESXiAPIClient(object):
     """A connector for interacting with vCenter API."""
     _version = ''
 

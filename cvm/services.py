@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 class VirtualMachineService(object):
-    def __init__(self, vmware_api_client, vnc_api_client, database):
-        self._vmware_api_client = vmware_api_client
+    def __init__(self, esxi_api_client, vnc_api_client, database):
+        self._esxi_api_client = esxi_api_client
         self._vnc_api_client = vnc_api_client
         self._database = database
         self._project = self._create_or_read_project()
@@ -34,7 +34,7 @@ class VirtualMachineService(object):
         self._delete_unused_vms_in_vnc()
 
     def _add_property_filter_for_vm(self, vmware_vm, filters):
-        self._vmware_api_client.add_filter(vmware_vm, filters)
+        self._esxi_api_client.add_filter(vmware_vm, filters)
 
     def _get_or_create_vm_model(self, vmware_vm):
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
@@ -53,7 +53,7 @@ class VirtualMachineService(object):
                 for vmware_vn, vnc_vn in zip(distributed_portgroups, search_results) if vnc_vn]
 
     def _get_vms_from_vmware(self):
-        vmware_vms = self._vmware_api_client.get_all_vms()
+        vmware_vms = self._esxi_api_client.get_all_vms()
         for vmware_vm in vmware_vms:
             self.update(vmware_vm)
 
