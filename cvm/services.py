@@ -1,5 +1,9 @@
 import logging
-from cvm.models import VirtualMachineModel, VirtualMachineInterfaceModel, VirtualNetworkModel
+
+import uuid
+from vnc_api.vnc_api import Project, SecurityGroup, PolicyEntriesType, PolicyRuleType, AddressType, PortType, SubnetType
+from cvm.models import VirtualMachineModel, VirtualNetworkModel
+from cvm.constants import VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -10,6 +14,8 @@ class VirtualMachineService(object):
         self._vmware_api_client = vmware_api_client
         self._vnc_api_client = vnc_api_client
         self._database = database
+        self._project = self._create_or_read_project()
+        self._default_security_group = self._create_or_read_security_group()
 
     def update(self, vmware_vm):
         vm_model = self._get_or_create_vm_model(vmware_vm)
@@ -49,17 +55,14 @@ class VirtualMachineService(object):
     def _get_vms_from_vmware(self):
         vmware_vms = self._vmware_api_client.get_all_vms()
         for vmware_vm in vmware_vms:
-            vm_model = self.update(vmware_vm)
-            # perhaps a better idea would be to
-            # put it in a separate method
-            # self._vnc_service.create_vmis_for_vm_model(vm_model)
+            self.update(vmware_vm)
 
     def _sync_vmis_for_vm_model(self, vm_model):
         """ TODO: Unit test this. """
         existing_vnc_vmis = {self._get_vn_from_vmi(vnc_vmi)['uuid']: vnc_vmi
                              for vnc_vmi in self._vnc_api_client.get_vmis_for_vm(vm_model)}
 
-        for vmi_model in vm_model.construct_vmi_models(self._vnc_api_client.vcenter_project):
+        for vmi_model in vm_model.construct_vmi_models(self._project, self._default_security_group):
             vnc_vmi = existing_vnc_vmis.pop(vmi_model.vn_model.vnc_vn.uuid, None)
             if vnc_vmi:
                 vmi_model.uuid = vnc_vmi.uuid
@@ -78,6 +81,48 @@ class VirtualMachineService(object):
                 # not present in ESXi from VNC!
                 # TODO: Uncomment once we have our own VNC
                 # self._vnc_api_clinet.delete_vm(vm.uuid)
+
+    def _create_or_read_project(self):
+        project = Project(name=VNC_VCENTER_PROJECT)
+        self._vnc_api_client.create_project(project)
+        return self._vnc_api_client.read_project([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT])
+
+    def _create_or_read_security_group(self):
+        security_group = SecurityGroup(name=VNC_VCENTER_DEFAULT_SG,
+                                       parent_obj=self._project)
+
+        security_group_entry = PolicyEntriesType()
+
+        ingress_rule = PolicyRuleType(
+            rule_uuid=str(uuid.uuid4()),
+            direction='>',
+            protocol='any',
+            src_addresses=[AddressType(
+                security_group=VNC_VCENTER_DEFAULT_SG_FQN)],
+            src_ports=[PortType(0, 65535)],
+            dst_addresses=[AddressType(security_group='local')],
+            dst_ports=[PortType(0, 65535)],
+            ethertype='IPv4',
+        )
+
+        egress_rule = PolicyRuleType(
+            rule_uuid=str(uuid.uuid4()),
+            direction='>',
+            protocol='any',
+            src_addresses=[AddressType(security_group='local')],
+            src_ports=[PortType(0, 65535)],
+            dst_addresses=[AddressType(SubnetType('0.0.0.0', 0))],
+            dst_ports=[PortType(0, 65535)],
+            ethertype='IPv4',
+        )
+
+        security_group_entry.add_policy_rule(ingress_rule)
+        security_group_entry.add_policy_rule(egress_rule)
+
+        security_group.set_security_group_entries(security_group_entry)
+
+        self._vnc_api_client.create_security_group(security_group)
+        return self._vnc_api_client.read_security_group([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_DEFAULT_SG])
 
     @staticmethod
     def _get_vn_from_vmi(vnc_vmi):

@@ -5,7 +5,6 @@ from pyVim.connect import SmartConnectNoSSL, Disconnect
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 from vnc_api.exceptions import RefsExistError, NoIdError
-from cvm.constants import VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -92,9 +91,6 @@ class VNCAPIClient(object):
         self.id_perms = vnc_api.IdPermsType()
         self.id_perms.set_creator('vcenter-manager')
         self.id_perms.set_enable(True)
-        project = vnc_api.Project(VNC_VCENTER_PROJECT)
-        self.create_project(project)
-        self.vcenter_project = self.read_project([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT])
 
     def create_vm(self, vnc_vm):
         try:
@@ -211,4 +207,18 @@ class VNCAPIClient(object):
             return self.vnc_lib.project_read(fq_name)
         except NoIdError:
             logger.error('Project not found: %s', fq_name)
+            return None
+
+    def create_security_group(self, security_group):
+        try:
+            self.vnc_lib.security_group_create(security_group)
+            logger.info('Security group created: %s', security_group.name)
+        except RefsExistError:
+            logger.error('Security group already exists: %s', security_group.name)
+
+    def read_security_group(self, fq_name):
+        try:
+            return self.vnc_lib.security_group_read(fq_name)
+        except NoIdError:
+            logger.error('Security group not found: %s', fq_name)
             return None

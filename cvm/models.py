@@ -6,7 +6,7 @@ from pyVmomi import vim  # pylint: disable=no-name-in-module
 from vnc_api.vnc_api import (IdPermsType, MacAddressesType, VirtualMachine,
                              VirtualMachineInterface, VirtualNetwork)
 
-from constants import VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT
+from cvm.constants import VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -86,8 +86,8 @@ class VirtualMachineModel(object):
     def get_distributed_portgroups(self):
         return [dpg for dpg in self.vmware_vm.network if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup)]
 
-    def construct_vmi_models(self, parent):
-        return [VirtualMachineInterfaceModel(self, vn_model, parent) for vn_model in self.vn_models]
+    def construct_vmi_models(self, parent, security_group):
+        return [VirtualMachineInterfaceModel(self, vn_model, parent, security_group) for vn_model in self.vn_models]
 
 
 class VirtualNetworkModel(object):
@@ -113,13 +113,14 @@ class VirtualNetworkModel(object):
 
 
 class VirtualMachineInterfaceModel(object):
-    def __init__(self, vm_model, vn_model, parent):
+    def __init__(self, vm_model, vn_model, parent, security_group):
         self.parent = parent
         self.vm_model = vm_model
         self.vn_model = vn_model
         self.display_name = 'vmi-{}-{}'.format(vn_model.name, vm_model.name)
         self.uuid = str(uuid.uuid3(uuid.NAMESPACE_DNS, vm_model.uuid + vn_model.uuid))
         self.mac_address = find_virtual_machine_mac_address(self.vm_model.vmware_vm, self.vn_model.vmware_vn)
+        self.security_group = security_group
 
     def to_vnc(self):
         vnc_vmi = VirtualMachineInterface(name=self.uuid,
@@ -131,7 +132,7 @@ class VirtualMachineInterfaceModel(object):
         vnc_vmi.set_virtual_network(self.vn_model.vnc_vn)
         vnc_vmi.set_virtual_machine_interface_mac_addresses(MacAddressesType([self.mac_address]))
         vnc_vmi.set_port_security_enabled(True)
-        # vnc_vmi.setSecurityGroup(vCenterDefSecGrp);
+        vnc_vmi.set_security_group(self.security_group)
         return vnc_vmi
 
     @staticmethod
