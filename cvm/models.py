@@ -130,7 +130,7 @@ class VirtualMachineInterfaceModel(object):
         vnc_vmi.add_virtual_machine(self.vm_model.to_vnc())
         vnc_vmi.set_virtual_network(self.vn_model.vnc_vn)
         vnc_vmi.set_virtual_machine_interface_mac_addresses(MacAddressesType([self.mac_address]))
-        # vnc_vmi.setPortSecurityEnabled(vmiInfo.getPortSecurityEnabled());
+        vnc_vmi.set_port_security_enabled(True)
         # vnc_vmi.setSecurityGroup(vCenterDefSecGrp);
         return vnc_vmi
 
