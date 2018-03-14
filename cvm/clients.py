@@ -1,6 +1,6 @@
 import atexit
 import logging
-import uuid
+from uuid import uuid4
 
 from pyVim.connect import Disconnect, SmartConnectNoSSL
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
@@ -30,7 +30,6 @@ def make_object_set(obj):
 
 
 class ESXiAPIClient(object):
-    """A connector for interacting with vCenter API."""
     _version = ''
 
     def __init__(self, esxi_cfg):
@@ -81,9 +80,11 @@ class ESXiAPIClient(object):
         return update_set
 
 
-class VNCAPIClient(object):
-    """A connector for interacting with VNC API."""
+class VCenterAPIClient(object):
+    pass
 
+
+class VNCAPIClient(object):
     def __init__(self, vnc_cfg):
         self.vnc_lib = vnc_api.VncApi(username=vnc_cfg['username'],
                                       password=vnc_cfg['password'],
@@ -225,7 +226,7 @@ class VNCAPIClient(object):
         security_group_entry = vnc_api.PolicyEntriesType()
 
         ingress_rule = vnc_api.PolicyRuleType(
-            rule_uuid=str(uuid.uuid4()),
+            rule_uuid=str(uuid4()),
             direction='>',
             protocol='any',
             src_addresses=[vnc_api.AddressType(
@@ -237,7 +238,7 @@ class VNCAPIClient(object):
         )
 
         egress_rule = vnc_api.PolicyRuleType(
-            rule_uuid=str(uuid.uuid4()),
+            rule_uuid=str(uuid4()),
             direction='>',
             protocol='any',
             src_addresses=[vnc_api.AddressType(security_group='local')],
