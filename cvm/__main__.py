@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 
 import sys
-import yaml
+
 import gevent
+import yaml
+
 import cvm.constants as const
-from cvm.clients import ESXiAPIClient, VNCAPIClient
+from cvm.clients import ESXiAPIClient, VCenterAPIClient, VNCAPIClient
 from cvm.controllers import VmwareController
+from cvm.database import Database
 from cvm.monitors import VCenterMonitor
 from cvm.services import VirtualMachineService
-from cvm.database import Database
 
 
 def load_config():
@@ -28,10 +30,17 @@ def main():
     esxi_api_client.add_filter(event_history_collector, ['latestPage'])
     esxi_api_client.make_wait_options(120)
 
+    vcenter_api_client = VCenterAPIClient(vcenter_cfg)
+
     vnc_api_client = VNCAPIClient(vnc_cfg)
     database = Database()
 
-    vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
+    vm_service = VirtualMachineService(
+        esxi_api_client=esxi_api_client,
+        vcenter_api_client=vcenter_api_client,
+        vnc_api_client=vnc_api_client,
+        database=database
+    )
     vmware_controller = VmwareController(vm_service)
     vmware_monitor = VCenterMonitor(esxi_api_client, vmware_controller)
 
