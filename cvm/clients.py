@@ -100,6 +100,16 @@ class VCenterAPIClient(object):
             if vmware_vm.config.instanceUuid == vm_model.uuid:
                 return [dpg for dpg in vmware_vm.network if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup)]
 
+    def get_ip_pool_for_dpg(self, dpg):
+        dc = self.si.content.rootFolder.childEntity[0]
+        return self._get_ip_pool_by_id(dpg.summary.ipPoolId, dc)
+
+    def _get_ip_pool_by_id(self, pool_id, dc):
+        for ip_pool in self.si.content.ipPoolManager.QueryIpPools(dc):
+            if ip_pool.id == pool_id:
+                return ip_pool
+        return None
+
 
 class VNCAPIClient(object):
     def __init__(self, vnc_cfg):

@@ -44,14 +44,13 @@ class VirtualMachineService(object):
         return vm_model
 
     def _get_vnc_vns_for_vm(self, vm_model):
-        # distributed_portgroups = vm_model.get_distributed_portgroups()
         with self._vcenter_api_client:
             distributed_portgroups = self._vcenter_api_client.get_dpgs_for_vm(vm_model)
             search_results = [self._vnc_api_client.read_vn(VirtualNetworkModel.get_fq_name(dpg.name))
                               for dpg in distributed_portgroups]
             if None in search_results:
                 logger.fatal("One or more VMware Distributed Portgroups are not synchronized with VNC.")
-            return [VirtualNetworkModel(vmware_vn, vnc_vn, self._vcenter_api_client.si.content.ipPoolManager)
+            return [VirtualNetworkModel(vmware_vn, vnc_vn, self._vcenter_api_client.get_ip_pool_for_dpg(vmware_vn))
                     for vmware_vn, vnc_vn in zip(distributed_portgroups, search_results) if vnc_vn]
 
     def _get_vms_from_vmware(self):
