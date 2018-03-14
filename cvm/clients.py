@@ -81,7 +81,24 @@ class ESXiAPIClient(object):
 
 
 class VCenterAPIClient(object):
-    pass
+    def __init__(self, vcenter_cfg):
+        self.vcenter_cfg = vcenter_cfg
+        self.si = None
+
+    def __enter__(self):
+        self.si = SmartConnectNoSSL(host=self.vcenter_cfg['host'],
+                                    user=self.vcenter_cfg['username'],
+                                    pwd=self.vcenter_cfg['password'],
+                                    port=self.vcenter_cfg['port'],
+                                    preferredApiVersions=self.vcenter_cfg['preferred_api_versions'])
+
+    def __exit__(self, *args):
+        Disconnect(self.si)
+
+    def get_dpgs_for_vm(self, vm_model):
+        for vmware_vm in self.si.content.rootFolder.childEntity[0].hostFolder.childEntity[0].host[0].vm:
+            if vmware_vm.config.instanceUuid == vm_model.uuid:
+                return [dpg for dpg in vmware_vm.network if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup)]
 
 
 class VNCAPIClient(object):
