@@ -91,7 +91,7 @@ class VirtualMachineModel(object):
 
 
 class VirtualNetworkModel(object):
-    def __init__(self, vmware_vn, vnc_vn, ip_pool_manager):
+    def __init__(self, vmware_vn, vnc_vn, ip_pool):
         self.vmware_vn = vmware_vn
         self.key = vmware_vn.key
         self.vnc_vn = vnc_vn
@@ -102,11 +102,9 @@ class VirtualNetworkModel(object):
         self.ip_pool_enabled = None
         self.range = None
         self.external_ipam = None
-        self._set_ip_pool(vmware_vn, ip_pool_manager)
+        self._set_ip_pool_info(ip_pool)
 
-    def _set_ip_pool(self, vmware_vn, ip_pool_manager):
-        dc = vmware_vn.parent.parent
-        ip_pool = self._get_ip_pool_by_id(self.ip_pool_id, dc, ip_pool_manager)
+    def _set_ip_pool_info(self, ip_pool):
         if ip_pool:
             ip_config_info = ip_pool.ipv4Config
             self.subnet_address = ip_config_info.subnetAddress
@@ -115,12 +113,6 @@ class VirtualNetworkModel(object):
             self.ip_pool_enabled = ip_config_info.ipPoolEnabled
             self.range = ip_config_info.range
             logger.info('Set ip_pool to %d for %s', self.ip_pool_id, self.key)
-
-    @staticmethod
-    def _get_ip_pool_by_id(pool_id, dc, ip_pool_manager):
-        for ip_pool in ip_pool_manager.QueryIpPools(dc):
-            if ip_pool.id == pool_id:
-                return ip_pool
 
     #    def get_subnet(self):
     #     if not (self.subnet_address and self.subnet_mask):

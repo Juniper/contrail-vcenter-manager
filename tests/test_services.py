@@ -18,7 +18,8 @@ class TestVirtualMachineModel(TestCase):
         self.vnc_client = Mock()
         self.vnc_client.read_vn = lambda fq_name: self.vn_lookup.get(fq_name[2])
         self.vnc_client.construct_security_group.return_value = None
-        self.vm_service = VirtualMachineService(None, self.vnc_client, None)
+        self.vcenter_client = self._create_vcenter_client_mock(self.vmware_dpg)
+        self.vm_service = VirtualMachineService(None, self.vcenter_client, self.vnc_client, None)
 
     def test_get_vn_models_for_vm(self):
         vnc_vn = VirtualNetwork()
@@ -49,3 +50,12 @@ class TestVirtualMachineModel(TestCase):
         for kwarg in kwargs:
             setattr(dpg_mock, kwarg, kwargs[kwarg])
         return dpg_mock
+
+    @staticmethod
+    def _create_vcenter_client_mock(vmware_dpg):
+        vcenter_client = Mock()
+        vcenter_client.get_dpgs_for_vm.return_value = [vmware_dpg]
+        vcenter_client.__enter__ = Mock()
+        vcenter_client.__exit__ = Mock()
+        vcenter_client.get_ip_pool_for_dpg.return_value = None
+        return vcenter_client
