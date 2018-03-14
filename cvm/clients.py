@@ -30,7 +30,6 @@ def make_object_set(obj):
 
 
 class ESXiAPIClient(object):
-    """A connector for interacting with vCenter API."""
     _version = ''
 
     def __init__(self, esxi_cfg):
@@ -81,9 +80,11 @@ class ESXiAPIClient(object):
         return update_set
 
 
-class VNCAPIClient(object):
-    """A connector for interacting with VNC API."""
+class VCenterAPIClient(object):
+    pass
 
+
+class VNCAPIClient(object):
     def __init__(self, vnc_cfg):
         self.vnc_lib = vnc_api.VncApi(username=vnc_cfg['username'],
                                       password=vnc_cfg['password'],

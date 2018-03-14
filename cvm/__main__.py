@@ -15,12 +15,13 @@ def load_config():
     with open('config.yaml', 'r') as ymlfile:
         cfg = yaml.load(ymlfile)
         esxi_cfg = cfg['esxi']
+        vcenter_cfg = cfg['vcenter']
         vnc_cfg = cfg['vnc']
-    return esxi_cfg, vnc_cfg
+    return esxi_cfg, vcenter_cfg, vnc_cfg
 
 
 def main():
-    esxi_cfg, vnc_cfg = load_config()
+    esxi_cfg, vcenter_cfg, vnc_cfg = load_config()
 
     esxi_api_client = ESXiAPIClient(esxi_cfg)
     event_history_collector = esxi_api_client.create_event_history_collector(const.EVENTS_TO_OBSERVE)
