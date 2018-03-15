@@ -95,24 +95,7 @@ class VirtualNetworkModel(object):
         self.vmware_vn = vmware_vn
         self.key = vmware_vn.key
         self.vnc_vn = vnc_vn
-        self.ip_pool_id = vmware_vn.summary.ipPoolId
-        self.subnet_address = None
-        self.subnet_mask = None
-        self.gateway_address = None
-        self.ip_pool_enabled = None
-        self.range = None
-        self.external_ipam = None
-        self._set_ip_pool_info(ip_pool)
-
-    def _set_ip_pool_info(self, ip_pool):
-        if ip_pool:
-            ip_config_info = ip_pool.ipv4Config
-            self.subnet_address = ip_config_info.subnetAddress
-            self.subnet_mask = ip_config_info.netmask
-            self.gateway_address = ip_config_info.gateway
-            self.ip_pool_enabled = ip_config_info.ipPoolEnabled
-            self.range = ip_config_info.range
-            logger.info('Set ip_pool to %d for %s', self.ip_pool_id, self.key)
+        self.ip_pool_info = self._construct_ip_pool_info(vmware_vn.summary.ipPoolId, ip_pool)
 
     @property
     def name(self):
@@ -129,6 +112,12 @@ class VirtualNetworkModel(object):
     @staticmethod
     def get_uuid(key):
         return str(uuid.uuid3(uuid.NAMESPACE_DNS, key))
+
+    @staticmethod
+    def _construct_ip_pool_info(ip_pool_id, ip_pool):
+        if not ip_pool:
+            return None
+        return IpPoolInfo(ip_pool_id, ip_pool)
 
 
 class VirtualMachineInterfaceModel(object):
@@ -153,3 +142,14 @@ class VirtualMachineInterfaceModel(object):
         vnc_vmi.set_port_security_enabled(True)
         vnc_vmi.set_security_group(self.security_group)
         return vnc_vmi
+
+
+class IpPoolInfo(object):
+    def __init__(self, ip_pool_id, ip_pool):
+        self.ip_pool_id = ip_pool_id
+        ip_config_info = ip_pool.ipv4Config
+        self.subnet_address = ip_config_info.subnetAddress
+        self.subnet_mask = ip_config_info.netmask
+        self.gateway_address = ip_config_info.gateway
+        self.ip_pool_enabled = ip_config_info.ipPoolEnabled
+        self.range = ip_config_info.range
