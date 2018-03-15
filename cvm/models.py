@@ -114,49 +114,6 @@ class VirtualNetworkModel(object):
             self.range = ip_config_info.range
             logger.info('Set ip_pool to %d for %s', self.ip_pool_id, self.key)
 
-    #    def get_subnet(self):
-    #     if not (self.subnet_address and self.subnet_mask):
-    #         return None
-    #     subnetUtils = SubnetUtils(self.subnet_address, self.subnet_mask)
-    #     cidr = subnetUtils.getInfo().getCidrSignature()
-    #     addr_pair = cidr.split("/")
-    #
-    #     allocation_pools = None
-    #     if self.ip_pool_enabled and not self.range.isEmpty():
-    #         pools = self.range.split("#")
-    #         if len(pools) == 2:
-    #             allocation_pools = []  # new ArrayList<AllocationPoolType>();
-    #             start = (pools[0]).replace(" ", "")
-    #             num = (pools[1]).replace(" ", "")
-    #             start_ip = InetAddresses.coerceToInteger(InetAddresses.forString(start))
-    #             end_ip = start_ip + int(num) - 1
-    #             end = InetAddresses.toAddrString(InetAddresses.fromInteger(end_ip))
-    #             logger.debug("Subnet IP Range :  Start:" + start + " End:" + end)
-    #             pool1 = AllocationPoolType(start, end)
-    #         allocation_pools.append(pool1)
-    #
-    #     # if gateway address is empty string, don't pass empty string to
-    #     # api - server.INstead set it to null so that java binding will
-    #     # drop gateway address from json content for virtual - network create
-    #     if self.gateway_address:
-    #         if self.gateway_address.trim().isEmpty():
-    #             self.gateway_address = None
-    #
-    #     subnet = VnSubnetsType()
-    #     subnet.add_ipam_subnets(IpamSubnetType(subnet=SubnetType(addr_pair[0], int(addr_pair[1])),
-    #                                            default_gateway=self.gateway_address,
-    #                                            dns_server_address=None,
-    #                                            subnet_uuid=str(uuid.uuid4()),
-    #                                            enable_dhcp=True,
-    #                                            dns_nameservers=None,
-    #                                            allocation_pools=allocation_pools,
-    #                                            addr_from_start=True,
-    #                                            dhcp_option_list=None,
-    #                                            host_routes=None,
-    #                                            subnet_name="{}-subnet".format(self.name),
-    #                                            alloc_unit=1))
-    #     return subnet
-
     @property
     def name(self):
         return self.vnc_vn.name
