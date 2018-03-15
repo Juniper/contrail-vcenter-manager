@@ -1,7 +1,10 @@
 from unittest import TestCase
+
 from mock import Mock
-from cvm.models import VirtualMachineModel, VirtualNetworkModel, VirtualMachineInterfaceModel, ID_PERMS
 from vnc_api.vnc_api import Project, SecurityGroup
+
+from cvm.models import (ID_PERMS, VirtualMachineInterfaceModel,
+                        VirtualMachineModel, VirtualNetworkModel)
 
 
 class TestVirtualMachineModel(TestCase):
@@ -20,6 +23,22 @@ class TestVirtualMachineModel(TestCase):
         self.assertEqual(vnc_vm.uuid, vm_model.uuid)
         self.assertEqual(vnc_vm.display_name, vm_model.vrouter_ip_address)
         self.assertEqual(vnc_vm.fq_name, [vm_model.uuid])
+
+
+class TestVirtualNetworkModel(TestCase):
+    def test_construct_alloc_pool(self):
+        ip_range = '192.168.1.1#20'
+        start_ip = '192.168.1.1'
+        end_ip = '192.168.1.20'
+
+        allocation_pool = VirtualNetworkModel._construct_alloc_pool(ip_range)
+
+        self.assertEqual(allocation_pool.start, start_ip)
+        self.assertEqual(allocation_pool.end, end_ip)
+
+    def test_construct_alloc_pool_list(self):
+        self.assertEqual(VirtualNetworkModel._construct_alloc_pool_list(None), None)
+        self.assertEqual(VirtualNetworkModel._construct_alloc_pool_list(1), [1])
 
 
 class TestVirtualMachineInterfaceModel(TestCase):

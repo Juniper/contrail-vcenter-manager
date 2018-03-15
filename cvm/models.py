@@ -3,8 +3,9 @@ import logging
 import uuid
 
 from pyVmomi import vim  # pylint: disable=no-name-in-module
-from vnc_api.vnc_api import (IdPermsType, MacAddressesType, VirtualMachine,
-                             VirtualMachineInterface)
+from vnc_api.vnc_api import (AllocationPoolType, IdPermsType, IpamSubnetType,
+                             MacAddressesType, SubnetType, VirtualMachine,
+                             VirtualMachineInterface, VnSubnetsType)
 
 from cvm.constants import VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT
 
@@ -102,7 +103,9 @@ class VirtualNetworkModel(object):
         self.ip_pool_enabled = None
         self.range = None
         self.external_ipam = None
+        self.subnet = None
         self._set_ip_pool_info(ip_pool)
+        self._set_subnet()
 
     def _set_ip_pool_info(self, ip_pool):
         if ip_pool:
@@ -114,48 +117,51 @@ class VirtualNetworkModel(object):
             self.range = ip_config_info.range
             logger.info('Set ip_pool to %d for %s', self.ip_pool_id, self.key)
 
-    #    def get_subnet(self):
-    #     if not (self.subnet_address and self.subnet_mask):
-    #         return None
-    #     subnetUtils = SubnetUtils(self.subnet_address, self.subnet_mask)
-    #     cidr = subnetUtils.getInfo().getCidrSignature()
-    #     addr_pair = cidr.split("/")
-    #
-    #     allocation_pools = None
-    #     if self.ip_pool_enabled and not self.range.isEmpty():
-    #         pools = self.range.split("#")
-    #         if len(pools) == 2:
-    #             allocation_pools = []  # new ArrayList<AllocationPoolType>();
-    #             start = (pools[0]).replace(" ", "")
-    #             num = (pools[1]).replace(" ", "")
-    #             start_ip = InetAddresses.coerceToInteger(InetAddresses.forString(start))
-    #             end_ip = start_ip + int(num) - 1
-    #             end = InetAddresses.toAddrString(InetAddresses.fromInteger(end_ip))
-    #             logger.debug("Subnet IP Range :  Start:" + start + " End:" + end)
-    #             pool1 = AllocationPoolType(start, end)
-    #         allocation_pools.append(pool1)
-    #
-    #     # if gateway address is empty string, don't pass empty string to
-    #     # api - server.INstead set it to null so that java binding will
-    #     # drop gateway address from json content for virtual - network create
-    #     if self.gateway_address:
-    #         if self.gateway_address.trim().isEmpty():
-    #             self.gateway_address = None
-    #
-    #     subnet = VnSubnetsType()
-    #     subnet.add_ipam_subnets(IpamSubnetType(subnet=SubnetType(addr_pair[0], int(addr_pair[1])),
-    #                                            default_gateway=self.gateway_address,
-    #                                            dns_server_address=None,
-    #                                            subnet_uuid=str(uuid.uuid4()),
-    #                                            enable_dhcp=True,
-    #                                            dns_nameservers=None,
-    #                                            allocation_pools=allocation_pools,
-    #                                            addr_from_start=True,
-    #                                            dhcp_option_list=None,
-    #                                            host_routes=None,
-    #                                            subnet_name="{}-subnet".format(self.name),
-    #                                            alloc_unit=1))
-    #     return subnet
+    def _set_subnet(self):
+        if not (self.subnet_address and self.subnet_mask):
+            return
+        network = ipaddress.IPv4Network(u'{address}/{mask}'.format(address=self.subnet_address, mask=self.subnet_mask))
+
+        allocation_pools = None
+        if self.ip_pool_enabled and self.range:
+            allocation_pool = self._construct_alloc_pool(self.range)
+            allocation_pools = self._construct_alloc_pool_list(allocation_pool)
+
+        subnet = VnSubnetsType()
+        subnet.add_ipam_subnets(
+            IpamSubnetType(
+                subnet=SubnetType(
+                    ip_prefix=str(network.network_address),
+                    ip_prefix_len=network.prefixlen
+                ),
+                default_gateway=self.gateway_address or None,
+                subnet_uuid=str(uuid.uuid4()),
+                enable_dhcp=True,
+                allocation_pools=allocation_pools,
+                addr_from_start=True,
+                subnet_name='{}-subnet'.format(self.name),
+                alloc_unit=1
+            )
+        )
+        self.subnet = subnet
+
+    @staticmethod
+    def _construct_alloc_pool(ip_range):
+        pools = ip_range.decode('utf-8').split('#')
+        if len(pools) != 2:
+            return None
+
+        start_ip = ipaddress.IPv4Address(pools[0])
+        num = int(pools[1])
+        end_ip = start_ip + num - 1
+        logger.info('Subnet IP Range: Start: %s End: %s', str(start_ip), str(end_ip))
+        return AllocationPoolType(str(start_ip), str(end_ip))
+
+    @staticmethod
+    def _construct_alloc_pool_list(allocation_pool):
+        if allocation_pool:
+            return [allocation_pool]
+        return None
 
     @property
     def name(self):
