@@ -8,7 +8,7 @@ from vnc_api import vnc_api
 from vnc_api.exceptions import NoIdError, RefsExistError
 
 from cvm.constants import (VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
-                           VNC_VCENTER_PROJECT)
+                           VNC_VCENTER_PROJECT, VNC_VCENTER_IPAM)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -294,3 +294,23 @@ class VNCAPIClient(object):
         except NoIdError:
             logger.error('Security group not found: %s', fq_name)
             return None
+
+    @staticmethod
+    def construct_ipam(project):
+        return vnc_api.NetworkIpam(
+            name=VNC_VCENTER_IPAM,
+            parent_obj=project
+        )
+
+    def create_ipam(self, ipam):
+        try:
+            self.vnc_lib.network_ipam_create(ipam)
+            logger.info('Network IPAM created: %s', ipam.name)
+        except RefsExistError:
+            logger.error('Network IPAM already exists: %s', ipam.name)
+
+    def read_ipam(self, fq_name):
+        try:
+            return self.vnc_lib.network_ipam_read(fq_name)
+        except NoIdError:
+            logger.error('Network IPAM not found: %s', fq_name)
