@@ -30,7 +30,6 @@ def make_object_set(obj):
 
 
 class ESXiAPIClient(object):
-    """A connector for interacting with vCenter API."""
     _version = ''
 
     def __init__(self, esxi_cfg):
@@ -81,9 +80,38 @@ class ESXiAPIClient(object):
         return update_set
 
 
-class VNCAPIClient(object):
-    """A connector for interacting with VNC API."""
+class VCenterAPIClient(object):
+    def __init__(self, vcenter_cfg):
+        self.vcenter_cfg = vcenter_cfg
+        self.si = None
 
+    def __enter__(self):
+        self.si = SmartConnectNoSSL(host=self.vcenter_cfg['host'],
+                                    user=self.vcenter_cfg['username'],
+                                    pwd=self.vcenter_cfg['password'],
+                                    port=self.vcenter_cfg['port'],
+                                    preferredApiVersions=self.vcenter_cfg['preferred_api_versions'])
+
+    def __exit__(self, *args):
+        Disconnect(self.si)
+
+    def get_dpgs_for_vm(self, vm_model):
+        for vmware_vm in self.si.content.rootFolder.childEntity[0].hostFolder.childEntity[0].host[0].vm:
+            if vmware_vm.config.instanceUuid == vm_model.uuid:
+                return [dpg for dpg in vmware_vm.network if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup)]
+
+    def get_ip_pool_for_dpg(self, dpg):
+        dc = self.si.content.rootFolder.childEntity[0]
+        return self._get_ip_pool_by_id(dpg.summary.ipPoolId, dc)
+
+    def _get_ip_pool_by_id(self, pool_id, dc):
+        for ip_pool in self.si.content.ipPoolManager.QueryIpPools(dc):
+            if ip_pool.id == pool_id:
+                return ip_pool
+        return None
+
+
+class VNCAPIClient(object):
     def __init__(self, vnc_cfg):
         self.vnc_lib = vnc_api.VncApi(username=vnc_cfg['username'],
                                       password=vnc_cfg['password'],

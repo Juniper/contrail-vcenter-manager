@@ -40,14 +40,14 @@ def find_vrouter_ip_address(host):
     return None
 
 
-def find_virtual_machine_mac_address(vmware_vm, portgroup):
+def find_virtual_machine_mac_address(vmware_vm, portgroup_key):
     try:
         devices = vmware_vm.config.hardware.device
         for device in devices:
             if isinstance(device, vim.vm.device.VirtualEthernetCard):
                 try:
                     portgroupKey = device.backing.port.portgroupKey
-                    if portgroupKey == portgroup.key:
+                    if portgroupKey == portgroup_key:
                         return device.macAddress
                 except AttributeError:
                     pass
@@ -91,9 +91,71 @@ class VirtualMachineModel(object):
 
 
 class VirtualNetworkModel(object):
-    def __init__(self, vmware_vn, vnc_vn):
+    def __init__(self, vmware_vn, vnc_vn, ip_pool):
         self.vmware_vn = vmware_vn
+        self.key = vmware_vn.key
         self.vnc_vn = vnc_vn
+        self.ip_pool_id = vmware_vn.summary.ipPoolId
+        self.subnet_address = None
+        self.subnet_mask = None
+        self.gateway_address = None
+        self.ip_pool_enabled = None
+        self.range = None
+        self.external_ipam = None
+        self._set_ip_pool_info(ip_pool)
+
+    def _set_ip_pool_info(self, ip_pool):
+        if ip_pool:
+            ip_config_info = ip_pool.ipv4Config
+            self.subnet_address = ip_config_info.subnetAddress
+            self.subnet_mask = ip_config_info.netmask
+            self.gateway_address = ip_config_info.gateway
+            self.ip_pool_enabled = ip_config_info.ipPoolEnabled
+            self.range = ip_config_info.range
+            logger.info('Set ip_pool to %d for %s', self.ip_pool_id, self.key)
+
+    #    def get_subnet(self):
+    #     if not (self.subnet_address and self.subnet_mask):
+    #         return None
+    #     subnetUtils = SubnetUtils(self.subnet_address, self.subnet_mask)
+    #     cidr = subnetUtils.getInfo().getCidrSignature()
+    #     addr_pair = cidr.split("/")
+    #
+    #     allocation_pools = None
+    #     if self.ip_pool_enabled and not self.range.isEmpty():
+    #         pools = self.range.split("#")
+    #         if len(pools) == 2:
+    #             allocation_pools = []  # new ArrayList<AllocationPoolType>();
+    #             start = (pools[0]).replace(" ", "")
+    #             num = (pools[1]).replace(" ", "")
+    #             start_ip = InetAddresses.coerceToInteger(InetAddresses.forString(start))
+    #             end_ip = start_ip + int(num) - 1
+    #             end = InetAddresses.toAddrString(InetAddresses.fromInteger(end_ip))
+    #             logger.debug("Subnet IP Range :  Start:" + start + " End:" + end)
+    #             pool1 = AllocationPoolType(start, end)
+    #         allocation_pools.append(pool1)
+    #
+    #     # if gateway address is empty string, don't pass empty string to
+    #     # api - server.INstead set it to null so that java binding will
+    #     # drop gateway address from json content for virtual - network create
+    #     if self.gateway_address:
+    #         if self.gateway_address.trim().isEmpty():
+    #             self.gateway_address = None
+    #
+    #     subnet = VnSubnetsType()
+    #     subnet.add_ipam_subnets(IpamSubnetType(subnet=SubnetType(addr_pair[0], int(addr_pair[1])),
+    #                                            default_gateway=self.gateway_address,
+    #                                            dns_server_address=None,
+    #                                            subnet_uuid=str(uuid.uuid4()),
+    #                                            enable_dhcp=True,
+    #                                            dns_nameservers=None,
+    #                                            allocation_pools=allocation_pools,
+    #                                            addr_from_start=True,
+    #                                            dhcp_option_list=None,
+    #                                            host_routes=None,
+    #                                            subnet_name="{}-subnet".format(self.name),
+    #                                            alloc_unit=1))
+    #     return subnet
 
     @property
     def name(self):
@@ -119,7 +181,7 @@ class VirtualMachineInterfaceModel(object):
         self.vn_model = vn_model
         self.display_name = 'vmi-{}-{}'.format(vn_model.name, vm_model.name)
         self.uuid = str(uuid.uuid3(uuid.NAMESPACE_DNS, vm_model.uuid + vn_model.uuid))
-        self.mac_address = find_virtual_machine_mac_address(self.vm_model.vmware_vm, self.vn_model.vmware_vn)
+        self.mac_address = find_virtual_machine_mac_address(self.vm_model.vmware_vm, self.vn_model.key)
         self.security_group = security_group
 
     def to_vnc(self):

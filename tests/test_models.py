@@ -37,7 +37,7 @@ class TestVirtualMachineInterfaceModel(TestCase):
         vmware_vn = Mock()
         vmware_vn.config.key = '123'
         vnc_vn = Mock(name='VM Network', uuid='d376b6b4-943d-4599-862f-d852fd6ba425')
-        self.vn_model = VirtualNetworkModel(vmware_vn, vnc_vn)
+        self.vn_model = VirtualNetworkModel(vmware_vn, vnc_vn, None)
 
     def test_to_vnc(self):
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, self.project, self.security_group)
