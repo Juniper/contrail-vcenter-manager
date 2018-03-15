@@ -1,7 +1,7 @@
 import logging
 
 from cvm.constants import (VNC_ROOT_DOMAIN, VNC_VCENTER_DEFAULT_SG,
-                           VNC_VCENTER_PROJECT)
+                           VNC_VCENTER_PROJECT, VNC_VCENTER_IPAM)
 from cvm.models import VirtualMachineModel, VirtualNetworkModel
 
 logging.basicConfig(level=logging.INFO)
@@ -16,6 +16,7 @@ class VirtualMachineService(object):
         self._database = database
         self._project = self._create_or_read_project()
         self._default_security_group = self._create_or_read_security_group()
+        self._ipam = self._create_or_read_ipam()
 
     def update(self, vmware_vm):
         vm_model = self._get_or_create_vm_model(vmware_vm)
@@ -92,6 +93,11 @@ class VirtualMachineService(object):
         security_group = self._vnc_api_client.construct_security_group(self._project)
         self._vnc_api_client.create_security_group(security_group)
         return self._vnc_api_client.read_security_group([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_DEFAULT_SG])
+
+    def _create_or_read_ipam(self):
+        ipam = self._vnc_api_client.construct_ipam(self._project)
+        self._vnc_api_client.create_ipam(ipam)
+        return self._vnc_api_client.read_ipam([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_IPAM])
 
     @staticmethod
     def _get_vn_from_vmi(vnc_vmi):
