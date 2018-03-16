@@ -5,7 +5,94 @@ from pyVmomi import vim  # pylint: disable=no-name-in-module
 from vnc_api.vnc_api import Project, SecurityGroup
 
 from cvm.models import (ID_PERMS, VirtualMachineInterfaceModel,
-                        VirtualMachineModel, VirtualNetworkModel)
+                        VirtualMachineModel, VirtualNetworkModel,
+                        find_virtual_machine_ip_address)
+
+
+class TestFindVirtualMachineIpAddress(TestCase):
+    def setUp(self):
+        self.vm = Mock()
+
+    def test_standard_case(self):
+        desired_portgroup, expected_ip = 'second', '10.7.0.60'
+        self.vm.guest.net = [
+            self._create_mock(
+                network='first',
+                ipAddress=['1.1.1.1', 'fe80::257:56ff:fe90:d265'],
+            ),
+            self._create_mock(
+                network=desired_portgroup,
+                ipAddress=['fe80::250:56ff:fe90:d265', expected_ip],
+            ),
+        ]
+
+        result = find_virtual_machine_ip_address(self.vm, desired_portgroup)
+
+        self.assertEqual(result, expected_ip)
+
+    def test_unmatched_portgroup_name(self):
+        desired_portgroup, expected_ip = 'non-existent', None
+        self.vm.guest.net = [
+            self._create_mock(
+                network='first',
+                ipAddress=['1.1.1.1', 'fe80::257:56ff:fe90:d265'],
+            ),
+            self._create_mock(
+                network='second',
+                ipAddress=['fe80::250:56ff:fe90:d265', expected_ip],
+
+            ),
+        ]
+
+        result = find_virtual_machine_ip_address(self.vm, desired_portgroup)
+
+        self.assertEqual(result, expected_ip)
+
+    def test_unmatched_ip_type(self):
+        desired_portgroup, expected_ip = 'second', None
+        self.vm.guest.net = [
+            self._create_mock(
+                network='first',
+                ipAddress=['1.1.1.1', 'fe80::257:56ff:fe90:d265'],
+            ),
+            self._create_mock(
+                network=desired_portgroup,
+                ipAddress=['fe80::250:56ff:fe90:d265'],
+            ),
+        ]
+
+        result = find_virtual_machine_ip_address(self.vm, desired_portgroup)
+
+        self.assertEqual(result, expected_ip)
+
+    def test_missing_field(self):
+        desired_portgroup, expected_ip = 'irrelevant', None
+        self.vm.guest = None
+
+        result = find_virtual_machine_ip_address(self.vm, desired_portgroup)
+
+        self.assertEqual(result, expected_ip)
+
+    def test_missing_field_in_network(self):
+        desired_portgroup, expected_ip = 'second', '10.7.0.60'
+        self.vm.guest.net = [
+            None,
+            self._create_mock(
+                network=desired_portgroup,
+                ipAddress=['fe80::250:56ff:fe90:d265', expected_ip],
+            ),
+        ]
+
+        result = find_virtual_machine_ip_address(self.vm, desired_portgroup)
+
+        self.assertEqual(result, expected_ip)
+
+    @staticmethod
+    def _create_mock(**kwargs):
+        m = Mock()
+        for kwarg in kwargs:
+            setattr(m, kwarg, kwargs[kwarg])
+        return m
 
 
 class TestVirtualMachineModel(TestCase):
