@@ -16,20 +16,24 @@ ID_PERMS = IdPermsType(creator='vcenter-manager',
 
 
 def find_virtual_machine_ip_address(vmware_vm, port_group_name):
-    net = vmware_vm.guest.net
-    ipAddress = None
-    virtual_machine_ip_address = None
-    for nicInfo in net:
-        if nicInfo.network == port_group_name:
-            ipAddress = nicInfo.ipAddress
-            break
-    if ipAddress is not None:
-        for address in ipAddress:
-            ip = ipaddress.ip_address(address.decode('utf-8'))
-            if isinstance(ip, ipaddress.IPv4Address):
-                virtual_machine_ip_address = ip
-                break
-    return str(virtual_machine_ip_address)
+    try:
+        return next(
+            addr for nicInfo in vmware_vm.guest.net
+            if is_nic_info_valid(nicInfo)
+            for addr in nicInfo.ipAddress
+            if (nicInfo.network == port_group_name and
+                is_ipv4(addr.decode('utf-8')))
+        )
+    except (StopIteration, AttributeError):
+        return None
+
+
+def is_ipv4(string):
+    return isinstance(ipaddress.ip_address(string), ipaddress.IPv4Address)
+
+
+def is_nic_info_valid(info):
+    return hasattr(info, 'ipAddress') and hasattr(info, 'network')
 
 
 def find_vrouter_ip_address(host):
