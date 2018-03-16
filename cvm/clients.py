@@ -2,6 +2,7 @@ import atexit
 import logging
 from uuid import uuid4
 
+import requests
 from pyVim.connect import Disconnect, SmartConnectNoSSL
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
@@ -47,7 +48,7 @@ class ESXiAPIClient(object):
 
     def get_all_dpgs(self):
         all_networks = self.si.content.rootFolder.childEntity[0].network
-        return (net for net in all_networks if isinstance(net, vim.dvs.DistributedVirtualPortgroup))
+        return [net for net in all_networks if isinstance(net, vim.dvs.DistributedVirtualPortgroup)]
 
     def create_event_history_collector(self, events_to_observe):
         event_manager = self.si.content.eventManager
@@ -133,6 +134,7 @@ class VNCAPIClient(object):
 
     def delete_vm(self, uuid):
         try:
+
             self.vnc_lib.virtual_machine_delete(id=uuid)
             logger.info('Virtual Machine removed: %s', uuid)
         except NoIdError:
@@ -156,7 +158,7 @@ class VNCAPIClient(object):
 
     def get_all_vms(self):
         vms = self.vnc_lib.virtual_machines_list().get('virtual-machines')
-        return (self.vnc_lib.virtual_machine_read(vm['fq_name']) for vm in vms)
+        return [self.vnc_lib.virtual_machine_read(vm['fq_name']) for vm in vms]
 
     def create_vmi(self, vmi):
         try:
@@ -224,7 +226,7 @@ class VNCAPIClient(object):
     def get_all_vns(self):
         vns = self.vnc_lib.virtual_networks_list(
             parent_id=self.vcenter_project.uuid).get('virtual-networks')
-        return (self.vnc_lib.virtual_network_read(vn['fq_name']) for vn in vns)
+        return [self.vnc_lib.virtual_network_read(vn['fq_name']) for vn in vns]
 
     @staticmethod
     def construct_project():
@@ -314,3 +316,55 @@ class VNCAPIClient(object):
             return self.vnc_lib.network_ipam_read(fq_name)
         except NoIdError:
             logger.error('Network IPAM not found: %s', fq_name)
+
+
+class VRouterAPIClient(object):
+    """
+    A client for Contrail VRouter Agent REST API.
+
+    Based on:
+    - https://github.com/Juniper/contrail-controller/blob/master/src/vnsw/agent/port_ipc/vrouter-port-control
+    - https://github.com/Juniper/contrail-vrouter-java-api/blob/master/src/net/juniper/contrail/contrail_vrouter_api/ContrailVRouterApi.java
+    """
+
+    def __init__(self, config):
+        address = config['address']
+        port = config['port']
+        self.url = 'http://{0}:{1}'.format(address, port)
+
+    def add_port(self, vmi_model):
+        """ Add port to VRouter Agent. """
+        payload = {
+            'uuid': vmi_model.uuid,
+            'name': vmi_model.uuid,
+            'id': vmi_model.uuid,
+            'instance-id': vmi_model.vm_model.uuid,
+            'system-name': vmi_model.uuid,
+            'ip-address': vmi_model.ip_address,
+            'mac-address': vmi_model.mac_address,
+            'vn-id': vmi_model.vn_model.uuid,
+            'display-name': vmi_model.vm_model.name,
+            'vm-project-id': vmi_model.parent.uuid,
+            'tx-vlan-id': vmi_model.vn_model.primary_vlan_id,
+            'rx-vlan-id': vmi_model.vn_model.isolated_vlan_id,
+        }
+
+        url = self.url + '/port'
+
+        r = requests.post(url, json=payload)
+
+        if r.status_code == requests.codes.ok:
+            logger.error('Port created for interface: %s', vmi_model.uuid)
+        else:
+            logger.error('Port not added for interface %s, agent returned: %s', vmi_model.uuid, r.reason)
+
+    def delete_port(self, vmi_uuid):
+        """ Delete port from VRouter Agent. """
+        url = self.url + '/port/{0}'.format(vmi_uuid)
+
+        r = requests.delete(url)
+
+        if r.status_code == requests.codes.ok:
+            logger.error('Port removed for interface: %s', vmi_uuid)
+        else:
+            logger.error('Port not removed for interface %s, agent returned: %s', vmi_uuid, r.reason)
