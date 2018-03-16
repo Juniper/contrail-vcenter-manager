@@ -195,6 +195,10 @@ class VirtualMachineInterfaceModel(object):
         vnc_vmi.set_security_group(self.security_group)
         return vnc_vmi
 
+    @property
+    def ip_address(self):
+        return find_virtual_machine_ip_address(self.vm_model.vmware_vm, self.vn_model.vmware_vn)
+
 
 class IpPoolInfo(object):
     def __init__(self, ip_pool_id, name, ip_pool):
