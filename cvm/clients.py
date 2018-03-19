@@ -96,6 +96,12 @@ class VCenterAPIClient(object):
     def __exit__(self, *args):
         Disconnect(self.si)
 
+    def get_dpg_by_name(self, name):
+        for dpg in self.si.content.rootFolder.childEntity[0].network:
+            if dpg.name == name and isinstance(dpg, vim.dvs.DistributedVirtualPortgroup):
+                return dpg
+        return None
+
     def get_dpgs_for_vm(self, vm_model):
         for vmware_vm in self.si.content.rootFolder.childEntity[0].hostFolder.childEntity[0].host[0].vm:
             if vmware_vm.config.instanceUuid == vm_model.uuid:
@@ -223,9 +229,8 @@ class VNCAPIClient(object):
         except NoIdError:
             logger.error('Virtual Network not found: %s', uuid)
 
-    def get_all_vns(self):
-        vns = self.vnc_lib.virtual_networks_list(
-            parent_id=self.vcenter_project.uuid).get('virtual-networks')
+    def get_vns_by_project(self, project):
+        vns = self.vnc_lib.virtual_networks_list(parent_id=project.uuid).get('virtual-networks')
         return [self.vnc_lib.virtual_network_read(vn['fq_name']) for vn in vns]
 
     @staticmethod
