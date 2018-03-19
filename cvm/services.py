@@ -8,15 +8,35 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class VirtualMachineService(object):
-    def __init__(self, esxi_api_client, vcenter_api_client, vnc_api_client, database):
-        self._esxi_api_client = esxi_api_client
+class Service(object):
+    def __init__(self, vcenter_api_client, vnc_api_client, database):
         self._vcenter_api_client = vcenter_api_client
         self._vnc_api_client = vnc_api_client
         self._database = database
         self._project = self._create_or_read_project()
         self._default_security_group = self._create_or_read_security_group()
         self._ipam = self._create_or_read_ipam()
+
+    def _create_or_read_project(self):
+        project = self._vnc_api_client.construct_project()
+        self._vnc_api_client.create_project(project)
+        return self._vnc_api_client.read_project([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT])
+
+    def _create_or_read_security_group(self):
+        security_group = self._vnc_api_client.construct_security_group(self._project)
+        self._vnc_api_client.create_security_group(security_group)
+        return self._vnc_api_client.read_security_group([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_DEFAULT_SG])
+
+    def _create_or_read_ipam(self):
+        ipam = self._vnc_api_client.construct_ipam(self._project)
+        self._vnc_api_client.create_ipam(ipam)
+        return self._vnc_api_client.read_ipam([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_IPAM])
+
+
+class VirtualMachineService(Service):
+    def __init__(self, esxi_api_client, vcenter_api_client, vnc_api_client, database):
+        super(VirtualMachineService, self).__init__(vcenter_api_client, vnc_api_client, database)
+        self._esxi_api_client = esxi_api_client
 
     def update(self, vmware_vm):
         vm_model = self._get_or_create_vm_model(vmware_vm)
@@ -84,21 +104,16 @@ class VirtualMachineService(object):
                 # TODO: Uncomment once we have our own VNC
                 # self._vnc_api_clinet.delete_vm(vm.uuid)
 
-    def _create_or_read_project(self):
-        project = self._vnc_api_client.construct_project()
-        self._vnc_api_client.create_project(project)
-        return self._vnc_api_client.read_project([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT])
-
-    def _create_or_read_security_group(self):
-        security_group = self._vnc_api_client.construct_security_group(self._project)
-        self._vnc_api_client.create_security_group(security_group)
-        return self._vnc_api_client.read_security_group([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_DEFAULT_SG])
-
-    def _create_or_read_ipam(self):
-        ipam = self._vnc_api_client.construct_ipam(self._project)
-        self._vnc_api_client.create_ipam(ipam)
-        return self._vnc_api_client.read_ipam([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_IPAM])
-
     @staticmethod
     def _get_vn_from_vmi(vnc_vmi):
         return vnc_vmi.get_virtual_network_refs()[0]
+
+
+class VirtualNetworkService(Service):
+    def sync_vns(self):
+        with self._vcenter_api_client:
+            for vn in self._vnc_api_client.get_vns_by_project(self._project):
+                dpg = self._vcenter_api_client.get_dpg_by_name(vn.name)
+                if vn and dpg:
+                    vn_model = VirtualNetworkModel(dpg, vn, self._vcenter_api_client.get_ip_pool_for_dpg(dpg))
+                    self._database.save(vn_model)
