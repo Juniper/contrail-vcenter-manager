@@ -1,7 +1,7 @@
 import logging
 
 from cvm.constants import (VNC_ROOT_DOMAIN, VNC_VCENTER_DEFAULT_SG,
-                           VNC_VCENTER_PROJECT, VNC_VCENTER_IPAM)
+                           VNC_VCENTER_IPAM, VNC_VCENTER_PROJECT)
 from cvm.models import VirtualMachineModel, VirtualNetworkModel
 
 logging.basicConfig(level=logging.INFO)
@@ -44,7 +44,7 @@ class VirtualMachineService(Service):
 
         # VNC VNs already exist in VNC, so we have to look them up
         # each time we update VM, since we don't track VNC VN changes.
-        vm_model.vn_models = self._get_vnc_vns_for_vm(vm_model)
+        vm_model.vn_models = self._get_vn_models_for_vm(vm_model)
         self._database.save(vm_model)
         # TODO: vrouter_client.set_active_state(boolean) -- see VirtualMachineInfo.setContrailVmActiveState
         self._sync_vmis_for_vm_model(vm_model)
@@ -64,15 +64,9 @@ class VirtualMachineService(Service):
             self._add_property_filter_for_vm(vmware_vm, ['guest.toolsRunningStatus', 'guest.net'])
         return vm_model
 
-    def _get_vnc_vns_for_vm(self, vm_model):
-        with self._vcenter_api_client:
-            distributed_portgroups = self._vcenter_api_client.get_dpgs_for_vm(vm_model)
-            search_results = [self._vnc_api_client.read_vn(VirtualNetworkModel.get_fq_name(dpg.name))
-                              for dpg in distributed_portgroups]
-            if None in search_results:
-                logger.fatal("One or more VMware Distributed Portgroups are not synchronized with VNC.")
-            return [VirtualNetworkModel(vmware_vn, vnc_vn, self._vcenter_api_client.get_ip_pool_for_dpg(vmware_vn))
-                    for vmware_vn, vnc_vn in zip(distributed_portgroups, search_results) if vnc_vn]
+    def _get_vn_models_for_vm(self, vm_model):
+        return [self._database.get_vn_model_by_key(dpg.key) for dpg in vm_model.get_distributed_portgroups() if
+                self._database.get_vn_model_by_key(dpg.key)]
 
     def _get_vms_from_vmware(self):
         vmware_vms = self._esxi_api_client.get_all_vms()
