@@ -1,5 +1,7 @@
 import logging
-from cvm.models import VirtualMachineModel, VirtualNetworkModel, VirtualMachineInterfaceModel
+
+from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
+                        VirtualNetworkModel)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -17,7 +19,7 @@ class Database(object):
             self.vm_models[obj.uuid] = obj
             logger.info('Saved Virtual Machine model for %s', obj.name)
         if isinstance(obj, VirtualNetworkModel):
-            self.vn_models[obj.uuid] = obj
+            self.vn_models[obj.key] = obj
             logger.info('Saved Virtual Network model for %s', obj.name)
         if isinstance(obj, VirtualMachineInterfaceModel):
             self.vmi_models[obj.uuid] = obj
@@ -30,15 +32,12 @@ class Database(object):
             logger.error('Could not find VM with uuid %s.', uid)
         return vm_model
 
-    def get_vn_model_by_uuid(self, uid):
-        vn_model = self.vn_models.get(uid, None)
+    def get_vn_model_by_key(self, key):
+        vn_model = self.vn_models.get(key, None)
         if not vn_model:
             # TODO: Database should not log anything (?)
-            logger.error('Could not find VN with uuid %s.', uid)
+            logger.error('Could not find VN with key %s.', key)
         return vn_model
-
-    def get_vn_model_by_key(self, key):
-        return self.get_vn_model_by_uuid(VirtualNetworkModel.get_uuid(key))
 
     def get_vmi_model_by_uuid(self, uid):
         return self.vmi_models.get(uid, None)
@@ -49,11 +48,11 @@ class Database(object):
         except KeyError:
             logger.info('Could not delete VM with uuid %s.', uid)
 
-    def delete_vn_model(self, uid):
+    def delete_vn_model(self, key):
         try:
-            self.vn_models.pop(uid)
+            self.vn_models.pop(key)
         except KeyError:
-            logger.info('Could not find VN with uuid %s. Nothing to delete.', uid)
+            logger.info('Could not find VN with key %s. Nothing to delete.', key)
 
     def delete_vmi_model(self, uid):
         try:
