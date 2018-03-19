@@ -25,6 +25,9 @@ class Database(object):
             self.vmi_models[obj.uuid] = obj
             logger.info('Saved Virtual Machine Interface model for %s', obj.display_name)
 
+    def get_all_vm_models(self):
+        return self.vm_models.values()
+
     def get_vm_model_by_uuid(self, uid):
         vm_model = self.vm_models.get(uid, None)
         if not vm_model:

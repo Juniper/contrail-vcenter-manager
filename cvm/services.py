@@ -9,8 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class Service(object):
-    def __init__(self, vcenter_api_client, vnc_api_client, database):
-        self._vcenter_api_client = vcenter_api_client
+    def __init__(self, vnc_api_client, database):
         self._vnc_api_client = vnc_api_client
         self._database = database
         self._project = self._create_or_read_project()
@@ -34,8 +33,8 @@ class Service(object):
 
 
 class VirtualMachineService(Service):
-    def __init__(self, esxi_api_client, vcenter_api_client, vnc_api_client, database):
-        super(VirtualMachineService, self).__init__(vcenter_api_client, vnc_api_client, database)
+    def __init__(self, esxi_api_client, vnc_api_client, database):
+        super(VirtualMachineService, self).__init__(vnc_api_client, database)
         self._esxi_api_client = esxi_api_client
 
     def update(self, vmware_vm):
@@ -45,12 +44,27 @@ class VirtualMachineService(Service):
         self._vnc_api_client.update_vm(vm_model.to_vnc())
         self._database.save(vm_model)
         # TODO: vrouter_client.set_active_state(boolean) -- see VirtualMachineInfo.setContrailVmActiveState
-        self._sync_vmis_for_vm_model(vm_model)
         return vm_model
 
     def sync_vms(self):
         self._get_vms_from_vmware()
         self._delete_unused_vms_in_vnc()
+
+    def _get_vms_from_vmware(self):
+        vmware_vms = self._esxi_api_client.get_all_vms()
+        for vmware_vm in vmware_vms:
+            self.update(vmware_vm)
+
+    def _delete_unused_vms_in_vnc(self):
+        vnc_vms = self._vnc_api_client.get_all_vms()
+        for vnc_vm in vnc_vms:
+            vm_model = self._database.get_vm_model_by_uuid(vnc_vm.uuid)
+            if not vm_model:
+                logger.info('Deleting %s from VNC (Not really)', vnc_vm.name)
+                # This will delete all VMs which are
+                # not present in ESXi from VNC!
+                # TODO: Uncomment once we have our own VNC
+                # self._vnc_api_clinet.delete_vm(vm.uuid)
 
     def _add_property_filter_for_vm(self, vmware_vm, filters):
         self._esxi_api_client.add_filter(vmware_vm, filters)
@@ -66,10 +80,28 @@ class VirtualMachineService(Service):
         return [self._database.get_vn_model_by_key(dpg.key) for dpg in vm_model.get_distributed_portgroups() if
                 self._database.get_vn_model_by_key(dpg.key)]
 
-    def _get_vms_from_vmware(self):
-        vmware_vms = self._esxi_api_client.get_all_vms()
-        for vmware_vm in vmware_vms:
-            self.update(vmware_vm)
+
+class VirtualNetworkService(Service):
+    def __init__(self, vcenter_api_client, vnc_api_client, database):
+        super(VirtualNetworkService, self).__init__(vnc_api_client, database)
+        self._vcenter_api_client = vcenter_api_client
+
+    def sync_vns(self):
+        with self._vcenter_api_client:
+            for vn in self._vnc_api_client.get_vns_by_project(self._project):
+                dpg = self._vcenter_api_client.get_dpg_by_name(vn.name)
+                if vn and dpg:
+                    vn_model = VirtualNetworkModel(dpg, vn, self._vcenter_api_client.get_ip_pool_for_dpg(dpg))
+                    self._database.save(vn_model)
+
+
+class VirtualMachineInterfaceService(Service):
+    def update(self, vmware_vm):
+        pass
+
+    def sync_vmis(self):
+        for vm_model in self._database.get_all_vm_models():
+            self._sync_vmis_for_vm_model(vm_model)
 
     def _sync_vmis_for_vm_model(self, vm_model):
         """ TODO: Unit test this. """
@@ -81,31 +113,11 @@ class VirtualMachineService(Service):
             if vnc_vmi:
                 vmi_model.uuid = vnc_vmi.uuid
             self._vnc_api_client.update_vmi(vmi_model.to_vnc())
+            self._database.save(vmi_model)
 
         for vnc_vmi in existing_vnc_vmis.values():
             self._vnc_api_client.delete_vmi(vnc_vmi.uuid)
 
-    def _delete_unused_vms_in_vnc(self):
-        vnc_vms = self._vnc_api_client.get_all_vms()
-        for vnc_vm in vnc_vms:
-            vm_model = self._database.get_vm_model_by_uuid(vnc_vm.uuid)
-            if not vm_model:
-                logger.info('Deleting %s from VNC (Not really)', vnc_vm.name)
-                # This will delete all VMs which are
-                # not present in ESXi from VNC!
-                # TODO: Uncomment once we have our own VNC
-                # self._vnc_api_clinet.delete_vm(vm.uuid)
-
     @staticmethod
     def _get_vn_from_vmi(vnc_vmi):
         return vnc_vmi.get_virtual_network_refs()[0]
-
-
-class VirtualNetworkService(Service):
-    def sync_vns(self):
-        with self._vcenter_api_client:
-            for vn in self._vnc_api_client.get_vns_by_project(self._project):
-                dpg = self._vcenter_api_client.get_dpg_by_name(vn.name)
-                if vn and dpg:
-                    vn_model = VirtualNetworkModel(dpg, vn, self._vcenter_api_client.get_ip_pool_for_dpg(dpg))
-                    self._database.save(vn_model)

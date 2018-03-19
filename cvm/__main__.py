@@ -10,7 +10,7 @@ from cvm.clients import ESXiAPIClient, VCenterAPIClient, VNCAPIClient
 from cvm.controllers import VmwareController
 from cvm.database import Database
 from cvm.monitors import VCenterMonitor
-from cvm.services import VirtualMachineService, VirtualNetworkService
+from cvm.services import VirtualMachineService, VirtualNetworkService, VirtualMachineInterfaceService
 
 
 def load_config():
@@ -37,7 +37,6 @@ def main():
 
     vm_service = VirtualMachineService(
         esxi_api_client=esxi_api_client,
-        vcenter_api_client=vcenter_api_client,
         vnc_api_client=vnc_api_client,
         database=database
     )
@@ -48,7 +47,12 @@ def main():
         database=database
     )
 
-    vmware_controller = VmwareController(vm_service, vn_service)
+    vmi_service = VirtualMachineInterfaceService(
+        vnc_api_client=vnc_api_client,
+        database=database
+    )
+
+    vmware_controller = VmwareController(vm_service, vn_service, vmi_service)
     vmware_monitor = VCenterMonitor(esxi_api_client, vmware_controller)
 
     greenlets = [
