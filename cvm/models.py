@@ -37,10 +37,12 @@ def is_nic_info_valid(info):
 
 
 def find_vrouter_ip_address(host):
-    for vmware_vm in host.vm:
-        if vmware_vm.name != 'ContrailVM':
-            continue
-        return find_virtual_machine_ip_address(vmware_vm, 'VM Network')  # TODO: Change this
+    try:
+        for vmware_vm in host.vm:
+            if vmware_vm.name == 'ContrailVM':
+                return find_virtual_machine_ip_address(vmware_vm, 'VM Network')  # TODO: Change this
+    except AttributeError:
+        pass
     return None
 
 
@@ -74,6 +76,14 @@ class VirtualMachineModel(object):
     def from_event(event):
         vmware_vm = event.vm.vm
         return VirtualMachineModel(vmware_vm)
+
+    def set_vmware_vm(self, vmware_vm):
+        self.vmware_vm = vmware_vm  # TODO: Consider removing this
+        self.uuid = vmware_vm.config.instanceUuid
+        self.name = vmware_vm.name
+        self.power_state = vmware_vm.runtime.powerState
+        self.tools_running_status = vmware_vm.guest.toolsRunningStatus
+        self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
 
     def to_vnc(self):
         """

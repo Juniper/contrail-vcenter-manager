@@ -40,11 +40,9 @@ class VirtualMachineService(Service):
 
     def update(self, vmware_vm):
         vm_model = self._get_or_create_vm_model(vmware_vm)
-        self._vnc_api_client.update_vm(vm_model.to_vnc())
-
-        # VNC VNs already exist in VNC, so we have to look them up
-        # each time we update VM, since we don't track VNC VN changes.
+        vm_model.set_vmware_vm(vmware_vm)
         vm_model.vn_models = self._get_vn_models_for_vm(vm_model)
+        self._vnc_api_client.update_vm(vm_model.to_vnc())
         self._database.save(vm_model)
         # TODO: vrouter_client.set_active_state(boolean) -- see VirtualMachineInfo.setContrailVmActiveState
         self._sync_vmis_for_vm_model(vm_model)
