@@ -20,7 +20,7 @@ class TestVirtualMachineModel(TestCase):
         self.vnc_client = Mock()
         self.vcenter_client = self._create_vcenter_client_mock(self.vmware_dpg)
         self.database = Mock()
-        self.vm_service = VirtualMachineService(None, self.vcenter_client, self.vnc_client, self.database)
+        self.vm_service = VirtualMachineService(None, self.vnc_client, self.database)
 
     def test_get_vn_models_for_vm(self):
         vnc_vn = VirtualNetwork()

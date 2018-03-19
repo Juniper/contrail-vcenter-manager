@@ -7,14 +7,16 @@ logger = logging.getLogger(__name__)
 
 
 class VmwareController(object):
-    def __init__(self, vm_service, vn_service):
+    def __init__(self, vm_service, vn_service, vmi_service):
         self._vm_service = vm_service
         self._vn_service = vn_service
+        self._vmi_service = vmi_service
 
     def initialize_database(self):
         logger.info('Initializing database...')
         self._vn_service.sync_vns()
         self._vm_service.sync_vms()
+        self._vmi_service.sync_vmis()
 
     def handle_update(self, update_set):
         logger.info('Handling ESXi update.')
