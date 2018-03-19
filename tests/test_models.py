@@ -89,10 +89,10 @@ class TestFindVirtualMachineIpAddress(TestCase):
 
     @staticmethod
     def _create_mock(**kwargs):
-        m = Mock()
+        mock = Mock()
         for kwarg in kwargs:
-            setattr(m, kwarg, kwargs[kwarg])
-        return m
+            setattr(mock, kwarg, kwargs[kwarg])
+        return mock
 
 
 class TestVirtualMachineModel(TestCase):
@@ -111,6 +111,23 @@ class TestVirtualMachineModel(TestCase):
         self.assertEqual(vnc_vm.uuid, vm_model.uuid)
         self.assertEqual(vnc_vm.display_name, vm_model.vrouter_ip_address)
         self.assertEqual(vnc_vm.fq_name, [vm_model.uuid])
+
+    def test_set_vmware_vm(self):
+        vm_model = VirtualMachineModel(self.vmware_vm)
+        vmware_vm = Mock()
+        vmware_vm.config.instanceUuid = 'd376b6b4-943d-4599-862f-d852fd6ba425'
+        vmware_vm.name = 'VM'
+        vmware_vm.runtime.powerState = 'on'
+        vmware_vm.guest.toolsRunningStatus = 'on'
+        vmware_vm.summary.runtime.host = None
+
+        vm_model.set_vmware_vm(vmware_vm)
+
+        self.assertEqual(vmware_vm, vm_model.vmware_vm)
+        self.assertEqual('d376b6b4-943d-4599-862f-d852fd6ba425', vm_model.uuid)
+        self.assertEqual('VM', vm_model.name)
+        self.assertEqual('on', vm_model.power_state)
+        self.assertEqual('on', vm_model.tools_running_status)
 
 
 class TestVirtualMachineInterfaceModel(TestCase):
