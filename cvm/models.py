@@ -196,6 +196,7 @@ class VirtualMachineInterfaceModel(object):
         self.display_name = 'vmi-{}-{}'.format(vn_model.name, vm_model.name)
         self.uuid = str(uuid.uuid3(uuid.NAMESPACE_DNS, vm_model.uuid + vn_model.uuid))
         self.mac_address = find_virtual_machine_mac_address(self.vm_model.vmware_vm, self.vn_model.key)
+        self.ip_address = None
         self.security_group = security_group
         self.vnc_vmi = None
         self.vnc_instance_ip = self._construct_instance_ip()
@@ -234,10 +235,6 @@ class VirtualMachineInterfaceModel(object):
         instance_ip.set_virtual_network(self.vn_model.vnc_vn)
         instance_ip.set_virtual_machine_interface(self.to_vnc())
         return instance_ip
-
-    @property
-    def ip_address(self):
-        return find_virtual_machine_ip_address(self.vm_model.vmware_vm, self.vn_model.vmware_vn)
 
 
 class IpPoolInfo(object):

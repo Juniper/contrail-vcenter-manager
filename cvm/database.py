@@ -45,6 +45,17 @@ class Database(object):
     def get_vmi_model_by_uuid(self, uid):
         return self.vmi_models.get(uid, None)
 
+    def get_vmi_model_by_mac(self, mac):
+        try:
+            return next(
+                vmi_model for vmi_model in self.vmi_models.values() if vmi_model.mac_address == mac
+            )
+        except StopIteration:
+            return None
+
+    def get_vmi_models_by_vm_uuid(self, uuid):
+        return [vmi_model for vmi_model in self.vmi_models.values() if vmi_model.vm_model.uuid == uuid]
+
     def delete_vm_model(self, uid):
         try:
             self.vm_models.pop(uid)
