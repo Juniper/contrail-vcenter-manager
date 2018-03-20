@@ -9,7 +9,7 @@ from vnc_api import vnc_api
 from vnc_api.exceptions import NoIdError, RefsExistError
 
 from cvm.constants import (VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
-                           VNC_VCENTER_PROJECT, VNC_VCENTER_IPAM)
+                           VNC_VCENTER_IPAM, VNC_VCENTER_PROJECT)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -106,6 +106,7 @@ class VCenterAPIClient(object):
         for vmware_vm in self.si.content.rootFolder.childEntity[0].hostFolder.childEntity[0].host[0].vm:
             if vmware_vm.config.instanceUuid == vm_model.uuid:
                 return [dpg for dpg in vmware_vm.network if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup)]
+        return []
 
     def get_ip_pool_for_dpg(self, dpg):
         dc = self.si.content.rootFolder.childEntity[0]
@@ -322,6 +323,13 @@ class VNCAPIClient(object):
         except NoIdError:
             logger.error('Network IPAM not found: %s', fq_name)
 
+    def create_instance_ip(self, instance_ip):
+        try:
+            self.vnc_lib.instance_ip_create(instance_ip)
+            logger.debug("Created instanceIP: " + instance_ip.name + ": " + instance_ip.address)
+        except RefsExistError:
+            logger.error('Instance IP already exists: %s', instance_ip.name)
+
 
 class VRouterAPIClient(object):
     """
@@ -356,20 +364,20 @@ class VRouterAPIClient(object):
 
         url = self.url + '/port'
 
-        r = requests.post(url, json=payload)
+        response = requests.post(url, json=payload)
 
-        if r.status_code == requests.codes.ok:
+        if response.status_code == requests.codes.ok:
             logger.error('Port created for interface: %s', vmi_model.uuid)
         else:
-            logger.error('Port not added for interface %s, agent returned: %s', vmi_model.uuid, r.reason)
+            logger.error('Port not added for interface %s, agent returned: %s', vmi_model.uuid, response.reason)
 
     def delete_port(self, vmi_uuid):
         """ Delete port from VRouter Agent. """
         url = self.url + '/port/{0}'.format(vmi_uuid)
 
-        r = requests.delete(url)
+        response = requests.delete(url)
 
-        if r.status_code == requests.codes.ok:
+        if response.status_code == requests.codes.ok:
             logger.error('Port removed for interface: %s', vmi_uuid)
         else:
-            logger.error('Port not removed for interface %s, agent returned: %s', vmi_uuid, r.reason)
+            logger.error('Port not removed for interface %s, agent returned: %s', vmi_uuid, response.reason)

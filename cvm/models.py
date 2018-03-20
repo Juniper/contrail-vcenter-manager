@@ -3,8 +3,8 @@ import logging
 import uuid
 
 from pyVmomi import vim  # pylint: disable=no-name-in-module
-from vnc_api.vnc_api import (IdPermsType, MacAddressesType, VirtualMachine,
-                             VirtualMachineInterface)
+from vnc_api.vnc_api import (IdPermsType, InstanceIp, MacAddressesType,
+                             VirtualMachine, VirtualMachineInterface)
 
 from cvm.constants import VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT
 
@@ -181,6 +181,12 @@ class VirtualNetworkModel(object):
             logger.error('Cannot populate vlan, could not find primary vlan for isolated vlan: %d',
                          self.isolated_vlan_id)
 
+    def ip_pool_info_not_set(self):
+        try:
+            return not self.ip_pool_info.subnet_address or not self.ip_pool_info.subnet_mask
+        except AttributeError:
+            return False
+
 
 class VirtualMachineInterfaceModel(object):
     def __init__(self, vm_model, vn_model, parent, security_group):
@@ -191,19 +197,43 @@ class VirtualMachineInterfaceModel(object):
         self.uuid = str(uuid.uuid3(uuid.NAMESPACE_DNS, vm_model.uuid + vn_model.uuid))
         self.mac_address = find_virtual_machine_mac_address(self.vm_model.vmware_vm, self.vn_model.key)
         self.security_group = security_group
+        self.vnc_vmi = None
+        self.vnc_instance_ip = self._construct_instance_ip()
 
     def to_vnc(self):
-        vnc_vmi = VirtualMachineInterface(name=self.uuid,
-                                          display_name=self.display_name,
-                                          parent_obj=self.parent,
-                                          id_perms=ID_PERMS)
-        vnc_vmi.set_uuid(self.uuid)
-        vnc_vmi.add_virtual_machine(self.vm_model.to_vnc())
-        vnc_vmi.set_virtual_network(self.vn_model.vnc_vn)
-        vnc_vmi.set_virtual_machine_interface_mac_addresses(MacAddressesType([self.mac_address]))
-        vnc_vmi.set_port_security_enabled(True)
-        vnc_vmi.set_security_group(self.security_group)
-        return vnc_vmi
+        if not self.vnc_vmi:
+            self.vnc_vmi = VirtualMachineInterface(name=self.uuid,
+                                                   display_name=self.display_name,
+                                                   parent_obj=self.parent,
+                                                   id_perms=ID_PERMS)
+            self.vnc_vmi.set_uuid(self.uuid)
+            self.vnc_vmi.add_virtual_machine(self.vm_model.to_vnc())
+            self.vnc_vmi.set_virtual_network(self.vn_model.vnc_vn)
+            self.vnc_vmi.set_virtual_machine_interface_mac_addresses(MacAddressesType([self.mac_address]))
+            self.vnc_vmi.set_port_security_enabled(True)
+            self.vnc_vmi.set_security_group(self.security_group)
+        return self.vnc_vmi
+
+    def _construct_instance_ip(self):
+        if self.vn_model.ip_pool_info_not_set():
+            return None
+
+        instance_ip_name = "ip-" + self.vn_model.name + "-" + self.vm_model.name
+        instance_ip_uuid = str(uuid.uuid4())
+
+        instance_ip = InstanceIp(
+            name=instance_ip_uuid,
+            display_name=instance_ip_name,
+            id_perms=ID_PERMS,
+        )
+        if self.ip_address:
+            instance_ip.set_address(self.ip_address)
+            # if not self.vn_model.external_ipam:
+            #     logger.error("Internal error address already set for DHCP")
+        instance_ip.set_uuid(instance_ip_uuid)
+        instance_ip.set_virtual_network(self.vn_model.vnc_vn)
+        instance_ip.set_virtual_machine_interface(self.to_vnc())
+        return instance_ip
 
     @property
     def ip_address(self):
