@@ -38,8 +38,8 @@ class VmwareController(object):
                         self._handle_event(event)
             elif name.startswith('guest.toolsRunningStatus'):
                 print obj.name, name, value
-            elif name.startswith('net'):
-                print obj.name, name, value
+            elif name.startswith('guest.net'):
+                self._handle_net_change(value)
 
     def _handle_event(self, event):
         logger.info('Handling event: %s', event.fullFormattedMessage)
@@ -73,3 +73,8 @@ class VmwareController(object):
 
     def _handle_vm_removed_event(self, event):
         self._vm_service.delete_vm(event.vm.name)
+
+    def _handle_net_change(self, nic_infos):
+        logger.info('Handling NicInfo update.')
+        for nic_info in nic_infos:
+            self._vmi_service.update_nic(nic_info)

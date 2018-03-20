@@ -1,3 +1,4 @@
+import ipaddress
 import logging
 
 from cvm.constants import (VNC_ROOT_DOMAIN, VNC_VCENTER_DEFAULT_SG,
@@ -96,8 +97,17 @@ class VirtualNetworkService(Service):
 
 
 class VirtualMachineInterfaceService(Service):
-    def update(self, vmware_vm):
-        pass
+    def update_nic(self, nic_info):
+        vmi_model = self._database.get_vmi_model_by_mac(nic_info.macAddress)
+        try:
+            for ip in nic_info.ipAddress:
+                if isinstance(ipaddress.ip_address(ip.decode('utf-8')), ipaddress.IPv4Address):
+                    vmi_model.ip_address = ip
+                    self._vnc_api_client.update_vmi(vmi_model)
+                    logger.error('IP address of %s updated to %', vmi_model.display_name, ip)
+                    return
+        except AttributeError:
+            return
 
     def sync_vmis(self):
         for vm_model in self._database.get_all_vm_models():
