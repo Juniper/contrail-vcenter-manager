@@ -104,7 +104,7 @@ class VirtualMachineInterfaceService(Service):
                 if isinstance(ipaddress.ip_address(ip.decode('utf-8')), ipaddress.IPv4Address):
                     vmi_model.ip_address = ip
                     self._vnc_api_client.update_vmi(vmi_model)
-                    logger.error('IP address of %s updated to %', vmi_model.display_name, ip)
+                    logger.error('IP address of %s updated to %s', vmi_model.display_name, ip)
                     return
         except AttributeError:
             return
@@ -123,10 +123,22 @@ class VirtualMachineInterfaceService(Service):
             if vnc_vmi:
                 vmi_model.uuid = vnc_vmi.uuid
             self._vnc_api_client.update_vmi(vmi_model.to_vnc())
+            self._add_vrouter_port(vmi_model)
             self._database.save(vmi_model)
 
         for vnc_vmi in existing_vnc_vmis.values():
             self._vnc_api_client.delete_vmi(vnc_vmi.uuid)
+
+    def _add_vrouter_port(self, vmi_model):
+        if not vmi_model.vrouter_port_added:
+            logger.info('Adding new vRouter port for %s', vmi_model.display_name)
+            # TODO: Uncomment once we have working vRouter
+            # vrouter_api = VRouterAPIClient(vmi_model.vm_model.vrouter_ip_address, VROUTER_API_PORT)
+            # vrouter_api.add_port(vmi_model)
+            vmi_model.vrouter_port_added = True
+        else:
+            logger.info('vRouter port for %s already exists.', vmi_model.display_name)
+
 
     @staticmethod
     def _get_vn_from_vmi(vnc_vmi):

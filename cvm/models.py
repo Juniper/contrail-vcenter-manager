@@ -6,7 +6,8 @@ from pyVmomi import vim  # pylint: disable=no-name-in-module
 from vnc_api.vnc_api import (IdPermsType, InstanceIp, MacAddressesType,
                              VirtualMachine, VirtualMachineInterface)
 
-from cvm.constants import VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT
+from cvm.constants import (CONTRAIL_NETWORK, CONTRAIL_VM_NAME, VNC_ROOT_DOMAIN,
+                           VNC_VCENTER_PROJECT)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,8 +40,8 @@ def is_nic_info_valid(info):
 def find_vrouter_ip_address(host):
     try:
         for vmware_vm in host.vm:
-            if vmware_vm.name == 'ContrailVM':
-                return find_virtual_machine_ip_address(vmware_vm, 'VM Network')  # TODO: Change this
+            if vmware_vm.name == CONTRAIL_VM_NAME:
+                return find_virtual_machine_ip_address(vmware_vm, CONTRAIL_NETWORK)
     except AttributeError:
         pass
     return None
@@ -102,6 +103,9 @@ class VirtualMachineModel(object):
 
     def construct_vmi_models(self, parent, security_group):
         return [VirtualMachineInterfaceModel(self, vn_model, parent, security_group) for vn_model in self.vn_models]
+
+    def is_powered_on(self):
+        return self.power_state == 'poweredOn'
 
 
 class VirtualNetworkModel(object):
@@ -200,6 +204,7 @@ class VirtualMachineInterfaceModel(object):
         self.security_group = security_group
         self.vnc_vmi = None
         self.vnc_instance_ip = self._construct_instance_ip()
+        self.vrouter_port_added = False
 
     def to_vnc(self):
         if not self.vnc_vmi:

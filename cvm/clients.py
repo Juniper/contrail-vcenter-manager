@@ -340,9 +340,7 @@ class VRouterAPIClient(object):
     - https://github.com/Juniper/contrail-vrouter-java-api/blob/master/src/net/juniper/contrail/contrail_vrouter_api/ContrailVRouterApi.java
     """
 
-    def __init__(self, config):
-        address = config['address']
-        port = config['port']
+    def __init__(self, address, port):
         self.url = 'http://{0}:{1}'.format(address, port)
 
     def add_port(self, vmi_model):

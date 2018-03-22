@@ -42,6 +42,9 @@ class Database(object):
             logger.error('Could not find VN with key %s.', key)
         return vn_model
 
+    def get_all_vmi_models(self):
+        return self.vmi_models.values()
+
     def get_vmi_model_by_uuid(self, uid):
         return self.vmi_models.get(uid, None)
 

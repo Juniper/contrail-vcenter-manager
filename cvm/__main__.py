@@ -10,7 +10,8 @@ from cvm.clients import ESXiAPIClient, VCenterAPIClient, VNCAPIClient
 from cvm.controllers import VmwareController
 from cvm.database import Database
 from cvm.monitors import VCenterMonitor
-from cvm.services import VirtualMachineService, VirtualNetworkService, VirtualMachineInterfaceService
+from cvm.services import (VirtualMachineInterfaceService,
+                          VirtualMachineService, VirtualNetworkService)
 
 
 def load_config():
