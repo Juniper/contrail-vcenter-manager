@@ -58,8 +58,7 @@ class VmwareController(object):
                 vim.event.VmPoweredOnEvent,
                 vim.event.VmPoweredOffEvent,
                 vim.event.VmSuspendedEvent,
-        )
-                      ):
+        )):
             self._handle_vm_updated_event(event)
         elif isinstance(event, vim.event.VmRemovedEvent):
             self._handle_vm_removed_event(event)
@@ -67,6 +66,7 @@ class VmwareController(object):
     def _handle_vm_updated_event(self, event):
         vmware_vm = event.vm.vm
         vm_model = self._vm_service.update(vmware_vm)
+        self._vmi_service.update_vmis_for_vm_model(vm_model)
 
     def _handle_vm_removed_event(self, event):
         self._vm_service.delete_vm(event.vm.name)
