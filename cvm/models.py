@@ -51,13 +51,12 @@ def find_virtual_machine_mac_address(vmware_vm, portgroup_key):
     try:
         devices = vmware_vm.config.hardware.device
         for device in devices:
-            if isinstance(device, vim.vm.device.VirtualEthernetCard):
-                try:
-                    portgroupKey = device.backing.port.portgroupKey
-                    if portgroupKey == portgroup_key:
-                        return device.macAddress
-                except AttributeError:
-                    pass
+            try:
+                portgroupKey = device.backing.port.portgroupKey
+                if portgroupKey == portgroup_key:
+                    return device.macAddress
+            except AttributeError:
+                pass
     except AttributeError:
         pass
     return None
@@ -198,13 +197,16 @@ class VirtualMachineInterfaceModel(object):
         self.vm_model = vm_model
         self.vn_model = vn_model
         self.display_name = 'vmi-{}-{}'.format(vn_model.name, vm_model.name)
-        self.uuid = str(uuid.uuid3(uuid.NAMESPACE_DNS, vm_model.uuid + vn_model.uuid))
         self.mac_address = find_virtual_machine_mac_address(self.vm_model.vmware_vm, self.vn_model.key)
         self.ip_address = None
         self.security_group = security_group
         self.vnc_vmi = None
         self.vnc_instance_ip = self._construct_instance_ip()
         self.vrouter_port_added = False
+
+    @property
+    def uuid(self):
+        return self.get_uuid(self.mac_address)
 
     def to_vnc(self):
         if not self.vnc_vmi:
@@ -240,6 +242,10 @@ class VirtualMachineInterfaceModel(object):
         instance_ip.set_virtual_network(self.vn_model.vnc_vn)
         instance_ip.set_virtual_machine_interface(self.to_vnc())
         return instance_ip
+
+    @staticmethod
+    def get_uuid(mac_address):
+        return str(uuid.uuid3(uuid.NAMESPACE_DNS, mac_address.encode('utf-8')))
 
 
 class IpPoolInfo(object):
