@@ -197,10 +197,8 @@ class VNCAPIClient(object):
         except NoIdError:
             logger.error('Virtual Machine Interface not found: %s', uuid)
 
-    def get_all_vmis(self):
-        vmis = self.vnc_lib.virtual_machine_interfaces_list(
-            parent_id=self.vcenter_project.uuid
-        ).get('virtual-machine-interfaces')
+    def get_vmis_by_project(self, project):
+        vmis = self.vnc_lib.virtual_machine_interfaces_list(parent_id=project.uuid).get('virtual-machine-interfaces')
         return [self.vnc_lib.virtual_machine_interface_read(vmi['fq_name']) for vmi in vmis]
 
     def get_vmis_for_vm(self, vm_model):
