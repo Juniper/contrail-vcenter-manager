@@ -43,33 +43,30 @@ class VmwareController(object):
 
     def _handle_event(self, event):
         logger.info('Handling event: %s', event.fullFormattedMessage)
-        if isinstance(event, vim.event.VmCreatedEvent):
-            self._handle_vm_created_event(event)
-        elif isinstance(event, (vim.event.VmPoweredOnEvent,
-                                vim.event.VmClonedEvent,
-                                vim.event.VmDeployedEvent,
-                                vim.event.VmReconfiguredEvent,
-                                vim.event.VmRenamedEvent,
-                                vim.event.VmMacChangedEvent,
-                                vim.event.VmMacAssignedEvent,
-                                vim.event.DrsVmMigratedEvent,
-                                vim.event.DrsVmPoweredOnEvent,
-                                vim.event.VmMigratedEvent,
-                                vim.event.VmPoweredOnEvent,
-                                vim.event.VmPoweredOffEvent,
-                                vim.event.VmSuspendedEvent,
-                                )):
+        if isinstance(event, (
+                vim.event.VmCreatedEvent,
+                vim.event.VmPoweredOnEvent,
+                vim.event.VmClonedEvent,
+                vim.event.VmDeployedEvent,
+                vim.event.VmReconfiguredEvent,
+                vim.event.VmRenamedEvent,
+                vim.event.VmMacChangedEvent,
+                vim.event.VmMacAssignedEvent,
+                vim.event.DrsVmMigratedEvent,
+                vim.event.DrsVmPoweredOnEvent,
+                vim.event.VmMigratedEvent,
+                vim.event.VmPoweredOnEvent,
+                vim.event.VmPoweredOffEvent,
+                vim.event.VmSuspendedEvent,
+        )
+                      ):
             self._handle_vm_updated_event(event)
         elif isinstance(event, vim.event.VmRemovedEvent):
             self._handle_vm_removed_event(event)
 
-    def _handle_vm_created_event(self, event):
-        vmware_vm = event.vm.vm
-        self._vm_service.update(vmware_vm)
-
     def _handle_vm_updated_event(self, event):
         vmware_vm = event.vm.vm
-        self._vm_service.update(vmware_vm)
+        vm_model = self._vm_service.update(vmware_vm)
 
     def _handle_vm_removed_event(self, event):
         self._vm_service.delete_vm(event.vm.name)

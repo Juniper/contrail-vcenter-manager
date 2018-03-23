@@ -3,7 +3,7 @@ import logging
 
 from cvm.constants import (VNC_ROOT_DOMAIN, VNC_VCENTER_DEFAULT_SG,
                            VNC_VCENTER_IPAM, VNC_VCENTER_PROJECT)
-from cvm.models import VirtualMachineModel, VirtualNetworkModel
+from cvm.models import VirtualMachineModel, VirtualNetworkModel, VirtualMachineInterfaceModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -97,37 +97,43 @@ class VirtualNetworkService(Service):
 
 
 class VirtualMachineInterfaceService(Service):
-    def update_nic(self, nic_info):
-        vmi_model = self._database.get_vmi_model_by_mac(nic_info.macAddress)
-        try:
-            for ip in nic_info.ipAddress:
-                if isinstance(ipaddress.ip_address(ip.decode('utf-8')), ipaddress.IPv4Address):
-                    vmi_model.ip_address = ip
-                    self._vnc_api_client.update_vmi(vmi_model)
-                    logger.error('IP address of %s updated to %s', vmi_model.display_name, ip)
-                    return
-        except AttributeError:
-            return
-
     def sync_vmis(self):
+        self._get_vmis_from_vnc()
+        self._create_new_vmis()
+        self._delete_unused_vmis()
+
+    def _get_vmis_from_vnc(self):
+        for vmi in self._vnc_api_client.get_vmis_by_project(self._project):
+            vm_model = self._database.get_vm_model_by_uuid(self._get_vm_from_vmi(vmi)['uuid'])
+            vn_model = self._database.get_vn_model_by_uuid(self._get_vn_from_vmi(vmi)['uuid'])
+            if not vm_model or not vn_model:
+                return
+
+            vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, self._project, self._default_security_group)
+            self._create(vmi_model)
+
+    def _create(self, vmi_model):
+        self._vnc_api_client.update_vmi(vmi_model.to_vnc())
+        self._add_vrouter_port(vmi_model)
+        self._database.save(vmi_model)
+
+    def _create_new_vmis(self):
         for vm_model in self._database.get_all_vm_models():
             self._sync_vmis_for_vm_model(vm_model)
 
     def _sync_vmis_for_vm_model(self, vm_model):
-        """ TODO: Unit test this. """
-        existing_vnc_vmis = {self._get_vn_from_vmi(vnc_vmi)['uuid']: vnc_vmi
-                             for vnc_vmi in self._vnc_api_client.get_vmis_for_vm(vm_model)}
-
         for vmi_model in vm_model.construct_vmi_models(self._project, self._default_security_group):
-            vnc_vmi = existing_vnc_vmis.pop(vmi_model.vn_model.vnc_vn.uuid, None)
-            if vnc_vmi:
-                vmi_model.uuid = vnc_vmi.uuid
-            self._vnc_api_client.update_vmi(vmi_model.to_vnc())
-            self._add_vrouter_port(vmi_model)
-            self._database.save(vmi_model)
+            if not self._database.get_vmi_model_by_mac(vmi_model.mac_address):
+                self._create(vmi_model)
 
-        for vnc_vmi in existing_vnc_vmis.values():
-            self._vnc_api_client.delete_vmi(vnc_vmi.uuid)
+    def _delete_unused_vmis(self):
+        for vnc_vmi in self._vnc_api_client.get_vmis_by_project(self._project):
+            vmi_model = self._database.get_vmi_model_by_mac(
+                vnc_vmi.get_virtual_machine_interface_mac_addresses().mac_address[0]
+            )
+            if not vmi_model:
+                logger.info('Deleting %s from VNC.', vnc_vmi.name)
+                self._vnc_api_client.delete_vmi(vmi_model.uuid)
 
     def _add_vrouter_port(self, vmi_model):
         if not vmi_model.vrouter_port_added:
@@ -139,7 +145,21 @@ class VirtualMachineInterfaceService(Service):
         else:
             logger.info('vRouter port for %s already exists.', vmi_model.display_name)
 
+    def update_nic(self, nic_info):
+        vmi_model = self._database.get_vmi_model_by_mac(nic_info.macAddress)
+        try:
+            for ip in nic_info.ipAddress:
+                if isinstance(ipaddress.ip_address(ip.decode('utf-8')), ipaddress.IPv4Address):
+                    vmi_model.ip_address = ip
+                    self._vnc_api_client.update_vmi(vmi_model.to_vnc())
+                    logger.info('IP address of %s updated to %s', vmi_model.display_name, ip)
+        except AttributeError:
+            pass
 
     @staticmethod
     def _get_vn_from_vmi(vnc_vmi):
         return vnc_vmi.get_virtual_network_refs()[0]
+
+    @staticmethod
+    def _get_vm_from_vmi(vnc_vmi):
+        return vnc_vmi.get_virtual_machine_refs()[0]
