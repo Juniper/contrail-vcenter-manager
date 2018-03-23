@@ -138,17 +138,20 @@ class TestVirtualMachineInterfaceModel(TestCase):
         vmware_vm = Mock()
         vmware_vm.name = 'VM'
         vmware_vm.summary.runtime.host.vm = []
-        vmware_vm.config.hardware.device = []
+        device = Mock()
+        device.backing.port.portgroupKey = '123'
+        device.macAddress = 'c8:5b:76:53:0f:f5'
+        vmware_vm.config.hardware.device = [device]
         vmware_vm.guest.net = []
         self.vm_model = VirtualMachineModel(vmware_vm)
         self.vm_model.uuid = 'd376b6b4-943d-4599-862f-d852fd6ba425'
         self.vm_model.vrouter_ip_address = '192.168.0.10'
 
         vmware_vn = Mock()
-        vmware_vn.config.key = '123'
         vnc_vn = Mock(uuid='d376b6b4-943d-4599-862f-d852fd6ba425')
         vnc_vn.name = 'VM Network'
         self.vn_model = VirtualNetworkModel(vmware_vn, vnc_vn, None)
+        self.vn_model.key = '123'
 
     def test_to_vnc(self):
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, self.project, self.security_group)

@@ -22,7 +22,7 @@ class Database(object):
             self.vn_models[obj.key] = obj
             logger.info('Saved Virtual Network model for %s', obj.name)
         if isinstance(obj, VirtualMachineInterfaceModel):
-            self.vmi_models[obj.mac_address] = obj
+            self.vmi_models[obj.uuid] = obj
             logger.info('Saved Virtual Machine Interface model for %s', obj.display_name)
 
     def get_all_vm_models(self):
@@ -52,8 +52,8 @@ class Database(object):
     def get_all_vmi_models(self):
         return self.vmi_models.values()
 
-    def get_vmi_model_by_mac(self, mac):
-        return self.vmi_models.get(mac, None)
+    def get_vmi_model_by_uuid(self, uuid):
+        return self.vmi_models.get(uuid, None)
 
     def get_vmi_models_by_vm_uuid(self, uuid):
         return [vmi_model for vmi_model in self.vmi_models.values() if vmi_model.vm_model.uuid == uuid]
@@ -70,11 +70,11 @@ class Database(object):
         except KeyError:
             logger.info('Could not find VN with key %s. Nothing to delete.', key)
 
-    def delete_vmi_model(self, mac):
+    def delete_vmi_model(self, uuid):
         try:
-            self.vmi_models.pop(mac)
+            self.vmi_models.pop(uuid)
         except KeyError:
-            logger.info('Could not find VMI with mac %s. Nothing to delete.', mac)
+            logger.info('Could not find VMI with uuid %s. Nothing to delete.', uuid)
 
     def print_out(self):
         print self.vm_models

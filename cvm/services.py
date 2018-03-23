@@ -124,17 +124,15 @@ class VirtualMachineInterfaceService(Service):
 
     def _sync_vmis_for_vm_model(self, vm_model):
         for vmi_model in vm_model.construct_vmi_models(self._project, self._default_security_group):
-            if not self._database.get_vmi_model_by_mac(vmi_model.mac_address):
+            if not self._database.get_vmi_model_by_uuid(vmi_model.uuid):
                 self._create(vmi_model)
 
     def _delete_unused_vmis(self):
         for vnc_vmi in self._vnc_api_client.get_vmis_by_project(self._project):
-            vmi_model = self._database.get_vmi_model_by_mac(
-                vnc_vmi.get_virtual_machine_interface_mac_addresses().mac_address[0]
-            )
+            vmi_model = self._database.get_vmi_model_by_uuid(vnc_vmi.get_uuid())
             if not vmi_model:
                 logger.info('Deleting %s from VNC.', vnc_vmi.name)
-                self._vnc_api_client.delete_vmi(vmi_model.uuid)
+                self._vnc_api_client.delete_vmi(vnc_vmi.get_uuid())
 
     def _add_vrouter_port(self, vmi_model):
         if not vmi_model.vrouter_port_added:
@@ -147,7 +145,7 @@ class VirtualMachineInterfaceService(Service):
             logger.info('vRouter port for %s already exists.', vmi_model.display_name)
 
     def update_nic(self, nic_info):
-        vmi_model = self._database.get_vmi_model_by_mac(nic_info.macAddress)
+        vmi_model = self._database.get_vmi_model_by_uuid(VirtualMachineInterfaceModel.get_uuid(nic_info.macAddress))
         try:
             for ip in nic_info.ipAddress:
                 if isinstance(ipaddress.ip_address(ip.decode('utf-8')), ipaddress.IPv4Address):
