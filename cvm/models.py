@@ -70,6 +70,7 @@ class VirtualMachineModel(object):
         self.power_state = vmware_vm.runtime.powerState
         self.tools_running_status = vmware_vm.guest.toolsRunningStatus
         self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
+        self.interfaces = self._read_interfaces()
         self.vn_models = []
 
     @staticmethod
@@ -84,6 +85,16 @@ class VirtualMachineModel(object):
         self.power_state = vmware_vm.runtime.powerState
         self.tools_running_status = vmware_vm.guest.toolsRunningStatus
         self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
+        self.interfaces = self._read_interfaces()
+
+    def _read_interfaces(self):
+        try:
+            return {device.macAddress: device.backing.port.portgroupKey
+                    for device in self.vmware_vm.config.hardware.device
+                    if isinstance(device.backing, vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo)}
+        except AttributeError:
+            logger.error('Could not read Virtual Machine Interfaces for %s.', self.name)
+        return None
 
     def to_vnc(self):
         """
@@ -196,7 +207,6 @@ class VirtualMachineInterfaceModel(object):
         self.parent = parent
         self.vm_model = vm_model
         self.vn_model = vn_model
-        self.display_name = 'vmi-{}-{}'.format(vn_model.name, vm_model.name)
         self.mac_address = find_virtual_machine_mac_address(self.vm_model.vmware_vm, self.vn_model.key)
         self.ip_address = None
         self.security_group = security_group
@@ -207,6 +217,10 @@ class VirtualMachineInterfaceModel(object):
     @property
     def uuid(self):
         return self.get_uuid(self.mac_address)
+
+    @property
+    def display_name(self):
+        return 'vmi-{}-{}'.format(self.vn_model.name, self.vm_model.name)
 
     def to_vnc(self):
         if not self.vnc_vmi:
@@ -223,6 +237,9 @@ class VirtualMachineInterfaceModel(object):
         return self.vnc_vmi
 
     def _construct_instance_ip(self):
+        if not self.mac_address:
+            return None
+
         if self.vn_model.ip_pool_info_not_set():
             return None
 
