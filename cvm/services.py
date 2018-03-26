@@ -111,11 +111,12 @@ class VirtualMachineInterfaceService(Service):
                 return
 
             vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, self._project, self._default_security_group)
-            self._create(vmi_model)
+            if vmi_model.mac_address:
+                self._create_or_update(vmi_model)
 
-    def _create(self, vmi_model):
+    def _create_or_update(self, vmi_model):
         self._vnc_api_client.update_vmi(vmi_model.to_vnc())
-        self._add_vrouter_port(vmi_model)
+        self._add_or_update_vrouter_port(vmi_model)
         self._database.save(vmi_model)
 
     def _create_new_vmis(self):
@@ -125,7 +126,7 @@ class VirtualMachineInterfaceService(Service):
     def _sync_vmis_for_vm_model(self, vm_model):
         for vmi_model in vm_model.construct_vmi_models(self._project, self._default_security_group):
             if not self._database.get_vmi_model_by_uuid(vmi_model.uuid):
-                self._create(vmi_model)
+                self._create_or_update(vmi_model)
 
     def _delete_unused_vmis(self):
         for vnc_vmi in self._vnc_api_client.get_vmis_by_project(self._project):
@@ -134,15 +135,19 @@ class VirtualMachineInterfaceService(Service):
                 logger.info('Deleting %s from VNC.', vnc_vmi.name)
                 self._vnc_api_client.delete_vmi(vnc_vmi.get_uuid())
 
-    def _add_vrouter_port(self, vmi_model):
+    def _add_or_update_vrouter_port(self, vmi_model):
         if not vmi_model.vrouter_port_added:
-            logger.info('Adding new vRouter port for %s...', vmi_model.display_name)
+            logger.info('Adding new vRouter port for %s...', vmi_model.mac_address)
             # TODO: Uncomment once we have working vRouter
             # vrouter_api = VRouterAPIClient(vmi_model.vm_model.vrouter_ip_address, VROUTER_API_PORT)
             # vrouter_api.add_port(vmi_model)
-            vmi_model.vrouter_port_added = True
         else:
-            logger.info('vRouter port for %s already exists.', vmi_model.display_name)
+            logger.info('vRouter port for %s already exists. Updating...', vmi_model.mac_address)
+            # TODO: Uncomment once we have working vRouter
+            # vrouter_api = VRouterAPIClient(vmi_model.vm_model.vrouter_ip_address, VROUTER_API_PORT)
+            # vrouter_api.delete_port(vmi_model)
+            # vrouter_api.add_port(vmi_model)
+        vmi_model.vrouter_port_added = True
 
     def update_nic(self, nic_info):
         vmi_model = self._database.get_vmi_model_by_uuid(VirtualMachineInterfaceModel.get_uuid(nic_info.macAddress))
@@ -156,30 +161,38 @@ class VirtualMachineInterfaceService(Service):
             pass
 
     def update_vmis_for_vm_model(self, vm_model):
-        existing_vmi_models = {vmi_model.vn_model.key: vmi_model
+        existing_vmi_models = {vmi_model.mac_address: vmi_model
                                for vmi_model in self._database.get_vmi_models_by_vm_uuid(vm_model.uuid)}
-        for vn_model in vm_model.vn_models:
-            vmi_model = existing_vmi_models.pop(vn_model.key, None)
-            if not vmi_model:
-                vmi_model = VirtualMachineInterfaceModel(
-                    vm_model,
-                    vn_model,
-                    self._project,
-                    self._default_security_group
-                )
-                self._create(vmi_model)
+        if vm_model.interfaces:
+            for mac_address, portgroup_key in vm_model.interfaces.iteritems():
+                vmi_model = existing_vmi_models.pop(mac_address, None)
+                vn_model = self._database.get_vn_model_by_key(portgroup_key)
+                if not vmi_model:
+                    vmi_model = VirtualMachineInterfaceModel(
+                        vm_model,
+                        vn_model,
+                        self._project,
+                        self._default_security_group
+                    )
+                else:
+                    vmi_model.vn_model = vn_model
+                self._create_or_update(vmi_model)
 
         for unused_vmi_model in existing_vmi_models.values():
             self._delete(unused_vmi_model)
 
     def _delete(self, vmi_model):
         self._vnc_api_client.delete_vmi(vmi_model.uuid)
-        self._database.delete_vmi_model(vmi_model.mac_address)
+        self._database.delete_vmi_model(vmi_model.uuid)
         self._delete_vrouter_port(vmi_model)
 
     def _delete_vrouter_port(self, vmi_model):
         if vmi_model.vrouter_port_added:
             logger.info('Deleting vRouter port for %s...', vmi_model.display_name)
+            # TODO: Uncomment once we have working vRouter
+            # vrouter_api = VRouterAPIClient(vmi_model.vm_model.vrouter_ip_address, VROUTER_API_PORT)
+            # vrouter_api.delete_port(vmi_model)
+            vmi_model.vrouter_port_added = False
 
     @staticmethod
     def _get_vn_from_vmi(vnc_vmi):
