@@ -114,8 +114,13 @@ class VirtualMachineModel(object):
     def construct_vmi_models(self, parent, security_group):
         return [VirtualMachineInterfaceModel(self, vn_model, parent, security_group) for vn_model in self.vn_models]
 
+    @property
     def is_powered_on(self):
         return self.power_state == 'poweredOn'
+
+    @property
+    def tools_running(self):
+        return self.tools_running_status == 'guestToolsRunning'
 
 
 class VirtualNetworkModel(object):
@@ -158,7 +163,6 @@ class VirtualNetworkModel(object):
         return IpPoolInfo(ip_pool_id, name, ip_pool)
 
     def _populate_vlans(self):
-
         pvlan_map = self.dvs.config.pvlanConfig
         if not pvlan_map:
             logger.error('Cannot populate vlan, private vlan not configured on dvSwitch: %s', self.dvs.name)
@@ -195,11 +199,8 @@ class VirtualNetworkModel(object):
             logger.error('Cannot populate vlan, could not find primary vlan for isolated vlan: %d',
                          self.isolated_vlan_id)
 
-    def ip_pool_info_not_set(self):
-        try:
-            return not self.ip_pool_info.subnet_address or not self.ip_pool_info.subnet_mask
-        except AttributeError:
-            return False
+    def ip_pool_info_is_set(self):
+        return self.ip_pool_info.subnet_address and self.ip_pool_info.subnet_mask
 
 
 class VirtualMachineInterfaceModel(object):
@@ -208,7 +209,7 @@ class VirtualMachineInterfaceModel(object):
         self.vm_model = vm_model
         self.vn_model = vn_model
         self.mac_address = find_virtual_machine_mac_address(self.vm_model.vmware_vm, self.vn_model.key)
-        self.ip_address = find_virtual_machine_ip_address(vm_model.vmware_vm, vn_model.name)
+        self.ip_address = self._find_ip_address()
         self.security_group = security_group
         self.vnc_vmi = None
         self.vnc_instance_ip = self._construct_instance_ip()
@@ -236,12 +237,12 @@ class VirtualMachineInterfaceModel(object):
             self.vnc_vmi.set_security_group(self.security_group)
         return self.vnc_vmi
 
-    def _construct_instance_ip(self):
-        if not self.mac_address or not self.ip_address:
-            logger.error('Could not construct Instance IP - MAC: %s, IP: %s', self.mac_address, self.ip_address)
-            return None
+    def _find_ip_address(self):
+        if self.vn_model.vnc_vn.get_external_ipam() and self.vm_model.tools_running:
+            return find_virtual_machine_ip_address(self.vm_model.vmware_vm, self.vn_model.name)
 
-        if self.vn_model.ip_pool_info_not_set():
+    def _construct_instance_ip(self):
+        if not self._should_construct_instance_ip():
             return None
 
         instance_ip_name = "ip-" + self.vn_model.name + "-" + self.vm_model.name
@@ -254,12 +255,16 @@ class VirtualMachineInterfaceModel(object):
         )
 
         instance_ip.set_address(self.ip_address)
-        # if not self.vn_model.external_ipam:
-        #     logger.error("Internal error address already set for DHCP")
         instance_ip.set_uuid(instance_ip_uuid)
         instance_ip.set_virtual_network(self.vn_model.vnc_vn)
         instance_ip.set_virtual_machine_interface(self.to_vnc())
         return instance_ip
+
+    def _should_construct_instance_ip(self):
+        return (self.mac_address
+                and self.ip_address
+                and self.vn_model.ip_pool_info_is_set()
+                and not self.vn_model.vnc_vn.get_external_ipam())
 
     @staticmethod
     def get_uuid(mac_address):
