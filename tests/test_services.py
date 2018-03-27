@@ -16,6 +16,7 @@ class TestVirtualMachineModel(TestCase):
             self.vmware_dpg,
             Mock(spec=vim.Network),
         ])
+        vmware_vm.config.hardware.device = []
         self.vm_model = VirtualMachineModel(vmware_vm)
         self.vnc_client = Mock()
         self.vcenter_client = self._create_vcenter_client_mock(self.vmware_dpg)

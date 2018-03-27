@@ -208,7 +208,7 @@ class VirtualMachineInterfaceModel(object):
         self.vm_model = vm_model
         self.vn_model = vn_model
         self.mac_address = find_virtual_machine_mac_address(self.vm_model.vmware_vm, self.vn_model.key)
-        self.ip_address = None
+        self.ip_address = find_virtual_machine_ip_address(vm_model.vmware_vm, vn_model.name)
         self.security_group = security_group
         self.vnc_vmi = None
         self.vnc_instance_ip = self._construct_instance_ip()
@@ -237,7 +237,8 @@ class VirtualMachineInterfaceModel(object):
         return self.vnc_vmi
 
     def _construct_instance_ip(self):
-        if not self.mac_address:
+        if not self.mac_address or not self.ip_address:
+            logger.error('Could not construct Instance IP - MAC: %s, IP: %s', self.mac_address, self.ip_address)
             return None
 
         if self.vn_model.ip_pool_info_not_set():
@@ -251,10 +252,10 @@ class VirtualMachineInterfaceModel(object):
             display_name=instance_ip_name,
             id_perms=ID_PERMS,
         )
-        if self.ip_address:
-            instance_ip.set_address(self.ip_address)
-            # if not self.vn_model.external_ipam:
-            #     logger.error("Internal error address already set for DHCP")
+
+        instance_ip.set_address(self.ip_address)
+        # if not self.vn_model.external_ipam:
+        #     logger.error("Internal error address already set for DHCP")
         instance_ip.set_uuid(instance_ip_uuid)
         instance_ip.set_virtual_network(self.vn_model.vnc_vn)
         instance_ip.set_virtual_machine_interface(self.to_vnc())

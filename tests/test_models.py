@@ -99,6 +99,7 @@ class TestVirtualMachineModel(TestCase):
     def setUp(self):
         self.vmware_vm = Mock()
         self.vmware_vm.summary.runtime.host.vm = []
+        self.vmware_vm.config.hardware.device = []
 
     def test_to_vnc(self):
         vm_model = VirtualMachineModel(self.vmware_vm)
@@ -120,6 +121,7 @@ class TestVirtualMachineModel(TestCase):
         vmware_vm.runtime.powerState = 'on'
         vmware_vm.guest.toolsRunningStatus = 'on'
         vmware_vm.summary.runtime.host = None
+        vmware_vm.config.hardware.device = []
 
         vm_model.set_vmware_vm(vmware_vm)
 
