@@ -71,7 +71,6 @@ class VirtualMachineModel(object):
         self.tools_running_status = vmware_vm.guest.toolsRunningStatus
         self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
         self.interfaces = self._read_interfaces()
-        self.vn_models = []
 
     @staticmethod
     def from_event(event):
@@ -110,9 +109,6 @@ class VirtualMachineModel(object):
 
     def get_distributed_portgroups(self):
         return [dpg for dpg in self.vmware_vm.network if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup)]
-
-    def construct_vmi_models(self, parent, security_group):
-        return [VirtualMachineInterfaceModel(self, vn_model, parent, security_group) for vn_model in self.vn_models]
 
     @property
     def is_powered_on(self):
@@ -240,6 +236,7 @@ class VirtualMachineInterfaceModel(object):
     def _find_ip_address(self):
         if self.vn_model.vnc_vn.get_external_ipam() and self.vm_model.tools_running:
             return find_virtual_machine_ip_address(self.vm_model.vmware_vm, self.vn_model.name)
+        return None
 
     def _construct_instance_ip(self):
         if not self._should_construct_instance_ip():

@@ -2,9 +2,8 @@ from unittest import TestCase
 
 from mock import Mock
 from pyVmomi import vim  # pylint: disable=no-name-in-module
-from vnc_api.vnc_api import VirtualNetwork
 
-from cvm.models import VirtualMachineModel, VirtualNetworkModel
+from cvm.models import VirtualMachineModel
 from cvm.services import VirtualMachineService
 
 
@@ -22,22 +21,6 @@ class TestVirtualMachineModel(TestCase):
         self.vcenter_client = self._create_vcenter_client_mock(self.vmware_dpg)
         self.database = Mock()
         self.vm_service = VirtualMachineService(None, self.vnc_client, self.database)
-
-    def test_get_vn_models_for_vm(self):
-        vnc_vn = VirtualNetwork()
-        self.database.get_vn_model_by_key.return_value = VirtualNetworkModel(self.vmware_dpg, vnc_vn, None)
-
-        result = self.vm_service._get_vn_models_for_vm(self.vm_model)
-
-        self.assertEqual([vnc_vn], [vn_model.vnc_vn for vn_model in result])
-
-    def test_get_vn_models_for_vm_novn(self):
-        """ Non-existing VNC VN. """
-        self.database.get_vn_model_by_key.return_value = None
-
-        result = self.vm_service._get_vn_models_for_vm(self.vm_model)
-
-        self.assertEqual([], result)
 
     @staticmethod
     def _create_vmware_vm_mock(network):

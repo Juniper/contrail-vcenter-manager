@@ -42,7 +42,6 @@ class VirtualMachineService(Service):
     def update(self, vmware_vm):
         vm_model = self._get_or_create_vm_model(vmware_vm)
         vm_model.set_vmware_vm(vmware_vm)
-        vm_model.vn_models = self._get_vn_models_for_vm(vm_model)
         self._vnc_api_client.update_vm(vm_model.to_vnc())
         self._database.save(vm_model)
         # TODO: vrouter_client.set_active_state(boolean) -- see VirtualMachineInfo.setContrailVmActiveState
@@ -77,10 +76,6 @@ class VirtualMachineService(Service):
             vm_model = VirtualMachineModel(vmware_vm)
             self._add_property_filter_for_vm(vmware_vm, ['guest.toolsRunningStatus', 'guest.net'])
         return vm_model
-
-    def _get_vn_models_for_vm(self, vm_model):
-        return [self._database.get_vn_model_by_key(dpg.key) for dpg in vm_model.get_distributed_portgroups() if
-                self._database.get_vn_model_by_key(dpg.key)]
 
 
 class VirtualNetworkService(Service):
@@ -124,7 +119,9 @@ class VirtualMachineInterfaceService(Service):
             self._sync_vmis_for_vm_model(vm_model)
 
     def _sync_vmis_for_vm_model(self, vm_model):
-        for vmi_model in vm_model.construct_vmi_models(self._project, self._default_security_group):
+        for portgroup_key in vm_model.interfaces.values():
+            vn_model = self._database.get_vn_model_by_key(portgroup_key)
+            vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, self._project, self._default_security_group)
             if not self._database.get_vmi_model_by_uuid(vmi_model.uuid):
                 self._create_or_update(vmi_model)
 
