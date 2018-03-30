@@ -40,12 +40,31 @@ class VirtualMachineService(Service):
         self._esxi_api_client = esxi_api_client
 
     def update(self, vmware_vm):
-        vm_model = self._get_or_create_vm_model(vmware_vm)
-        vm_model.set_vmware_vm(vmware_vm)
-        self._vnc_api_client.update_vm(vm_model.to_vnc())
-        self._database.save(vm_model)
+        vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
+        if vm_model:
+            return self._update(vm_model, vmware_vm)
+        return self._create(vmware_vm)
         # TODO: vrouter_client.set_active_state(boolean) -- see VirtualMachineInfo.setContrailVmActiveState
+
+    def _update(self, vm_model, vmware_vm):
+        vm_model.set_vmware_vm(vmware_vm)
+        if vm_model.interfaces:
+            self._database.save(vm_model)
+        else:
+            self._database.delete_vm_model(vm_model.uuid)
+            self._vnc_api_client.delete_vm(vm_model.uuid)
         return vm_model
+
+    def _create(self, vmware_vm):
+        vm_model = VirtualMachineModel(vmware_vm)
+        if vm_model.interfaces:
+            self._add_property_filter_for_vm(vmware_vm, ['guest.toolsRunningStatus', 'guest.net'])
+            self._vnc_api_client.update_vm(vm_model.vnc_vm)
+            self._database.save(vm_model)
+        return vm_model
+
+    def _add_property_filter_for_vm(self, vmware_vm, filters):
+        self._esxi_api_client.add_filter(vmware_vm, filters)
 
     def sync_vms(self):
         self._get_vms_from_vmware()
@@ -66,16 +85,6 @@ class VirtualMachineService(Service):
                 # not present in ESXi from VNC!
                 # TODO: Uncomment once we have our own VNC
                 # self._vnc_api_clinet.delete_vm(vm.uuid)
-
-    def _add_property_filter_for_vm(self, vmware_vm, filters):
-        self._esxi_api_client.add_filter(vmware_vm, filters)
-
-    def _get_or_create_vm_model(self, vmware_vm):
-        vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
-        if not vm_model:
-            vm_model = VirtualMachineModel(vmware_vm)
-            self._add_property_filter_for_vm(vmware_vm, ['guest.toolsRunningStatus', 'guest.net'])
-        return vm_model
 
 
 class VirtualNetworkService(Service):
@@ -175,6 +184,7 @@ class VirtualMachineInterfaceService(Service):
                     vmi_model.vn_model = vn_model
                 self._create_or_update(vmi_model)
 
+        # TODO: What if interface still exists, but is no longer connected to any network?
         for unused_vmi_model in existing_vmi_models.values():
             self._delete(unused_vmi_model)
 
