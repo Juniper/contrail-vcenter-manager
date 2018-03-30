@@ -71,6 +71,7 @@ class VirtualMachineModel(object):
         self.tools_running_status = vmware_vm.guest.toolsRunningStatus
         self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
         self.interfaces = self._read_interfaces()
+        self._vnc_vm = None
 
     @staticmethod
     def from_event(event):
@@ -95,17 +96,14 @@ class VirtualMachineModel(object):
             logger.error('Could not read Virtual Machine Interfaces for %s.', self.name)
         return None
 
-    def to_vnc(self):
-        """
-        Gets fresh instance of vnc_api.VirtualMachine for this model.
-
-        Since vnc_api.VirtualMachine is only a DTO, it can be created each time we need to use it.
-        """
-        vnc_vm = VirtualMachine(name=self.uuid,
-                                display_name=self.vrouter_ip_address,
-                                id_perms=ID_PERMS)
-        vnc_vm.set_uuid(self.uuid)
-        return vnc_vm
+    @property
+    def vnc_vm(self):
+        if not self._vnc_vm:
+            self._vnc_vm = VirtualMachine(name=self.uuid,
+                                          display_name=self.vrouter_ip_address,
+                                          id_perms=ID_PERMS)
+            self._vnc_vm.set_uuid(self.uuid)
+        return self._vnc_vm
 
     def get_distributed_portgroups(self):
         return [dpg for dpg in self.vmware_vm.network if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup)]
@@ -226,7 +224,7 @@ class VirtualMachineInterfaceModel(object):
                                                    parent_obj=self.parent,
                                                    id_perms=ID_PERMS)
             self.vnc_vmi.set_uuid(self.uuid)
-            self.vnc_vmi.add_virtual_machine(self.vm_model.to_vnc())
+            self.vnc_vmi.add_virtual_machine(self.vm_model.vnc_vm)
             self.vnc_vmi.set_virtual_network(self.vn_model.vnc_vn)
             self.vnc_vmi.set_virtual_machine_interface_mac_addresses(MacAddressesType([self.mac_address]))
             self.vnc_vmi.set_port_security_enabled(True)

@@ -106,7 +106,7 @@ class TestVirtualMachineModel(TestCase):
         vm_model.uuid = 'd376b6b4-943d-4599-862f-d852fd6ba425'
         vm_model.vrouter_ip_address = '192.168.0.10'
 
-        vnc_vm = vm_model.to_vnc()
+        vnc_vm = vm_model.vnc_vm
 
         self.assertEqual(vnc_vm.name, vm_model.uuid)
         self.assertEqual(vnc_vm.uuid, vm_model.uuid)
