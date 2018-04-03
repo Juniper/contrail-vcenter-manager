@@ -184,7 +184,6 @@ class VirtualMachineInterfaceService(Service):
                     vmi_model.vn_model = vn_model
                 self._create_or_update(vmi_model)
 
-        # TODO: What if interface still exists, but is no longer connected to any network?
         for unused_vmi_model in existing_vmi_models.values():
             self._delete(unused_vmi_model)
 
