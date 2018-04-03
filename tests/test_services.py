@@ -1,6 +1,6 @@
 from unittest import TestCase, skip
 
-from mock import Mock
+from mock import Mock, patch
 from pyVmomi import vim  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 
@@ -153,7 +153,6 @@ class TestVirtualMachineInterface(TestCase):
         self.vn_model = self._create_vn_model(name='VM Portgroup', key='dportgroup-50')
         self.database.save(self.vn_model)
         vmware_vm = create_vmware_vm_mock([self.vn_model.vmware_vn])
-
         self.vm_model = VirtualMachineModel(vmware_vm)
 
     def test_create_vmis_proper_vm_dpg(self):
@@ -209,6 +208,36 @@ class TestVirtualMachineInterface(TestCase):
         self.assertFalse(self.database.get_all_vmi_models())
         self.vnc_client.delete_vmi.assert_called_once_with(
             VirtualMachineInterfaceModel.get_uuid('c8:5b:76:53:0f:f5'))
+
+    def test_sync_vmis(self):
+        self.database.save(self.vm_model)
+        vnc_vmi = Mock()
+        vnc_vmi.get_virtual_network_refs.return_value = [{'uuid': self.vn_model.uuid}]
+        vnc_vmi.get_virtual_machine_refs.return_value = [{'uuid': self.vm_model.uuid}]
+        self.vnc_client.get_vmis_by_project.return_value = [vnc_vmi]
+
+        self.vmi_service.sync_vmis()
+
+        self.assertEqual(1, len(self.database.get_all_vmi_models()))
+
+    def test_syncs_one_vmi_once(self):
+        self.database.save(self.vm_model)
+        vnc_vmi = Mock()
+        vnc_vmi.get_virtual_network_refs.return_value = [{'uuid': self.vn_model.uuid}]
+        vnc_vmi.get_virtual_machine_refs.return_value = [{'uuid': self.vm_model.uuid}]
+        self.vnc_client.get_vmis_by_project.return_value = [vnc_vmi]
+
+        with patch.object(self.database, 'save') as database_save_mock:
+            self.vmi_service.sync_vmis()
+
+        database_save_mock.assert_called_once()
+
+    def test_sync_no_vmis(self):
+        self.vnc_client.get_vmis_by_project.return_value = []
+
+        self.vmi_service.sync_vmis()
+
+        self.assertEqual(0, len(self.database.get_all_vmi_models()))
 
     @staticmethod
     def _create_vn_model(name, key):
