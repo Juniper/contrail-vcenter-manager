@@ -7,7 +7,8 @@ from vnc_api import vnc_api
 from cvm.database import Database
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
-from cvm.services import VirtualMachineInterfaceService, VirtualMachineService
+from cvm.services import (VirtualMachineInterfaceService,
+                          VirtualMachineService, VirtualNetworkService)
 
 
 def create_vmware_vm_mock(network):
@@ -30,6 +31,21 @@ def create_dpg_mock(**kwargs):
     return dpg_mock
 
 
+def create_vcenter_client_mock():
+    vcenter_client = Mock()
+    vcenter_client.__enter__ = Mock()
+    vcenter_client.__exit__ = Mock()
+    vcenter_client.get_ip_pool_for_dpg.return_value = None
+    return vcenter_client
+
+
+def create_vnc_client_mock():
+    vnc_client = Mock()
+    vnc_client.read_project.return_value = vnc_api.Project()
+    vnc_client.read_security_group.return_value = vnc_api.SecurityGroup()
+    return vnc_client
+
+
 class TestVirtualMachineService(TestCase):
 
     def setUp(self):
@@ -39,7 +55,7 @@ class TestVirtualMachineService(TestCase):
             Mock(spec=vim.Network),
         ])
         self.vnc_client = Mock()
-        self.vcenter_client = self._create_vcenter_client_mock()
+        self.vcenter_client = create_vcenter_client_mock()
         self.database = Mock()
         self.esxi_api_client = Mock()
         self.vm_service = VirtualMachineService(self.esxi_api_client, self.vnc_client, self.database)
@@ -95,22 +111,13 @@ class TestVirtualMachineService(TestCase):
         self.vnc_client.update_vm.assert_not_called()
         self.vnc_client.delete_vm.assert_called_once_with(old_vm_model.uuid)
 
-    @staticmethod
-    def _create_vcenter_client_mock():
-        vcenter_client = Mock()
-        vcenter_client.__enter__ = Mock()
-        vcenter_client.__exit__ = Mock()
-        vcenter_client.get_ip_pool_for_dpg.return_value = None
-        return vcenter_client
-
 
 class TestVirtualMachineInterface(TestCase):
 
     def setUp(self):
         self.database = Database()
 
-        self.vnc_client = Mock()
-        self.vnc_client.read_project.return_value = vnc_api.Project()
+        self.vnc_client = create_vnc_client_mock()
 
         self.vmi_service = VirtualMachineInterfaceService(self.vnc_client, self.database)
 
@@ -180,3 +187,35 @@ class TestVirtualMachineInterface(TestCase):
         vnc_vn.name = name
         vmware_dpg = create_dpg_mock(name=name, key=key)
         return VirtualNetworkModel(vmware_dpg, vnc_vn, None)
+
+
+class TestVirtualNetworkService(TestCase):
+
+    def setUp(self):
+        self.vcenter_api_client = create_vcenter_client_mock()
+        self.vnc_api_client = create_vnc_client_mock()
+        self.database = Database()
+        self.vn_service = VirtualNetworkService(self.vcenter_api_client,
+                                                self.vnc_api_client, self.database)
+
+    def test_sync_no_vns(self):
+        """ Syncing when there's no VNC VNs doesn't save anything to the database. """
+        self.vnc_api_client.get_all_vns.return_value = None
+
+        self.vn_service.sync_vns()
+
+        self.assertFalse(self.database.vn_models)
+
+    def test_sync_vns(self):
+        first_vnc_vn = vnc_api.VirtualNetwork('VM Portgroup')
+        second_vnc_vn = vnc_api.VirtualNetwork(VirtualNetworkModel.get_uuid('DPortgroup'))
+        self.vnc_api_client.get_vns_by_project.return_value = [first_vnc_vn, second_vnc_vn]
+
+        first_vmware_dpg = create_dpg_mock(name='VM Portgroup', key='dportgroup-50')
+        second_vmware_dpg = create_dpg_mock(name='DPortgroup', key='dportgroup-51')
+        self.vcenter_api_client.get_dpg_by_name.side_effect = [first_vmware_dpg, second_vmware_dpg]
+
+        self.vn_service.sync_vns()
+
+        self.assertEqual(first_vnc_vn, self.database.get_vn_model_by_key('dportgroup-50').vnc_vn)
+        self.assertEqual(second_vnc_vn, self.database.get_vn_model_by_key('dportgroup-51').vnc_vn)
