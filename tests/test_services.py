@@ -1,4 +1,4 @@
-from unittest import TestCase
+from unittest import TestCase, skip
 
 from mock import Mock
 from pyVmomi import vim  # pylint: disable=no-name-in-module
@@ -57,12 +57,11 @@ class TestVirtualMachineService(TestCase):
         self.vnc_client = Mock()
         self.vcenter_client = create_vcenter_client_mock()
         self.database = Mock()
+        self.database.get_vm_model_by_uuid.return_value = None
         self.esxi_api_client = Mock()
         self.vm_service = VirtualMachineService(self.esxi_api_client, self.vnc_client, self.database)
 
     def test_update_new_vm(self):
-        self.database.get_vm_model_by_uuid.return_value = None
-
         vm_model = self.vm_service.update(self.vmware_vm)
 
         self.assertIsNotNone(vm_model)
@@ -86,7 +85,6 @@ class TestVirtualMachineService(TestCase):
 
     def test_update_new_no_vmis(self):
         """ Test creating of a new VM with no Interfaces. """
-        self.database.get_vm_model_by_uuid.return_value = None
         self.vmware_vm.config.hardware.device = []
 
         vm_model = self.vm_service.update(self.vmware_vm)
@@ -110,6 +108,37 @@ class TestVirtualMachineService(TestCase):
         self.database.delete_vm_model.assert_called_once_with(old_vm_model.uuid)
         self.vnc_client.update_vm.assert_not_called()
         self.vnc_client.delete_vm.assert_called_once_with(old_vm_model.uuid)
+
+    def test_sync_vms(self):
+        self.esxi_api_client.get_all_vms.return_value = [self.vmware_vm]
+        self.vnc_client.get_all_vms.return_value = []
+
+        self.vm_service.sync_vms()
+
+        self.database.save.assert_called_once()
+        self.vnc_client.update_vm.assert_called_once()
+        self.assertEqual(self.vmware_vm, self.database.save.call_args[0][0].vmware_vm)
+
+    def test_sync_no_vms(self):
+        """ Syncing when there's no VMware VMs doesn't update anything. """
+        self.esxi_api_client.get_all_vms.return_value = []
+        self.vnc_client.get_all_vms.return_value = []
+
+        self.vm_service.sync_vms()
+
+        self.database.save.assert_not_called()
+        self.vnc_client.update_vm.assert_not_called()
+
+    @skip("Deleting is disabled for now")
+    def test_delete_unused_vms(self):
+        self.esxi_api_client.get_all_vms.return_value = []
+        self.vnc_client.get_all_vms.return_value = [
+            vnc_api.VirtualMachine('d376b6b4-943d-4599-862f-d852fd6ba425')]
+
+        self.vm_service.sync_vms()
+
+        self.database.save.assert_not_called()
+        self.vnc_client.delete_vm.assert_called_once_with('d376b6b4-943d-4599-862f-d852fd6ba425')
 
 
 class TestVirtualMachineInterface(TestCase):
