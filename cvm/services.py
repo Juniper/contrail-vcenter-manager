@@ -103,25 +103,8 @@ class VirtualNetworkService(Service):
 
 class VirtualMachineInterfaceService(Service):
     def sync_vmis(self):
-        self._get_vmis_from_vnc()
         self._create_new_vmis()
         self._delete_unused_vmis()
-
-    def _get_vmis_from_vnc(self):
-        for vmi in self._vnc_api_client.get_vmis_by_project(self._project):
-            vm_model = self._database.get_vm_model_by_uuid(self._get_vm_from_vmi(vmi)['uuid'])
-            vn_model = self._database.get_vn_model_by_uuid(self._get_vn_from_vmi(vmi)['uuid'])
-            if not vm_model or not vn_model:
-                return
-
-            vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, self._project, self._default_security_group)
-            if vmi_model.mac_address:
-                self._create_or_update(vmi_model)
-
-    def _create_or_update(self, vmi_model):
-        self._vnc_api_client.update_vmi(vmi_model.to_vnc())
-        self._add_or_update_vrouter_port(vmi_model)
-        self._database.save(vmi_model)
 
     def _create_new_vmis(self):
         for vm_model in self._database.get_all_vm_models():
@@ -133,6 +116,11 @@ class VirtualMachineInterfaceService(Service):
             vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, self._project, self._default_security_group)
             if not self._database.get_vmi_model_by_uuid(vmi_model.uuid):
                 self._create_or_update(vmi_model)
+
+    def _create_or_update(self, vmi_model):
+        self._vnc_api_client.update_vmi(vmi_model.to_vnc())
+        self._add_or_update_vrouter_port(vmi_model)
+        self._database.save(vmi_model)
 
     def _delete_unused_vmis(self):
         for vnc_vmi in self._vnc_api_client.get_vmis_by_project(self._project):

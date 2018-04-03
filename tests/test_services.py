@@ -211,10 +211,7 @@ class TestVirtualMachineInterface(TestCase):
 
     def test_sync_vmis(self):
         self.database.save(self.vm_model)
-        vnc_vmi = Mock()
-        vnc_vmi.get_virtual_network_refs.return_value = [{'uuid': self.vn_model.uuid}]
-        vnc_vmi.get_virtual_machine_refs.return_value = [{'uuid': self.vm_model.uuid}]
-        self.vnc_client.get_vmis_by_project.return_value = [vnc_vmi]
+        self.vnc_client.get_vmis_by_project.return_value = []
 
         self.vmi_service.sync_vmis()
 
@@ -222,10 +219,7 @@ class TestVirtualMachineInterface(TestCase):
 
     def test_syncs_one_vmi_once(self):
         self.database.save(self.vm_model)
-        vnc_vmi = Mock()
-        vnc_vmi.get_virtual_network_refs.return_value = [{'uuid': self.vn_model.uuid}]
-        vnc_vmi.get_virtual_machine_refs.return_value = [{'uuid': self.vm_model.uuid}]
-        self.vnc_client.get_vmis_by_project.return_value = [vnc_vmi]
+        self.vnc_client.get_vmis_by_project.return_value = []
 
         with patch.object(self.database, 'save') as database_save_mock:
             self.vmi_service.sync_vmis()
@@ -238,6 +232,13 @@ class TestVirtualMachineInterface(TestCase):
         self.vmi_service.sync_vmis()
 
         self.assertEqual(0, len(self.database.get_all_vmi_models()))
+
+    def test_sync_deletes_unused_vmis(self):
+        self.vnc_client.get_vmis_by_project.return_value = [Mock()]
+
+        self.vmi_service.sync_vmis()
+
+        self.vnc_client.delete_vmi.assert_called_once()
 
     @staticmethod
     def _create_vn_model(name, key):
