@@ -114,6 +114,24 @@ class TestVirtualMachineService(TestCase):
         self.database.save.assert_not_called()
         self.vnc_client.delete_vm.assert_called_once_with('d376b6b4-943d-4599-862f-d852fd6ba425')
 
+    def test_remove_vm(self):
+        vm_model = Mock(uuid='d376b6b4-943d-4599-862f-d852fd6ba425')
+        self.database.get_vm_model_by_name.return_value = vm_model
+
+        self.vm_service.remove_vm('VM')
+
+        self.database.delete_vm_model.assert_called_once_with(vm_model.uuid)
+        self.vnc_client.delete_vm.assert_called_once_with(vm_model.uuid)
+
+    def test_remove_no_vm(self):
+        """ Remove VM should do nothing when VM doesn't exist in database. """
+        self.database.get_vm_model_by_name.return_value = None
+
+        self.vm_service.remove_vm('VM')
+
+        self.database.delete_vm_model.assert_not_called()
+        self.vnc_client.delete_vm.assert_not_called()
+
 
 class TestVirtualMachineInterface(TestCase):
 

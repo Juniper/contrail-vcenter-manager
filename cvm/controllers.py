@@ -72,8 +72,8 @@ class VmwareController(object):
             logger.info('Skipping event for a non-existent VM.')
 
     def _handle_vm_removed_event(self, event):
-        # self._vm_service.delete_vm(event.vm.name)
-        pass
+        vm_model = self._vm_service.remove_vm(event.vm.name)
+        # TODO: self._vmi_service.remove_vmis_for_vm_model(vm_model)
 
     def _handle_net_change(self, nic_infos):
         logger.info('Handling NicInfo update.')

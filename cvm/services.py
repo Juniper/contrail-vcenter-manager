@@ -92,6 +92,13 @@ class VirtualMachineService(Service):
                 # TODO: Uncomment once we have our own VNC
                 # self._vnc_api_clinet.delete_vm(vm.uuid)
 
+    def remove_vm(self, name):
+        vm_model = self._database.get_vm_model_by_name(name)
+        if vm_model:
+            self._database.delete_vm_model(vm_model.uuid)
+            self._vnc_api_client.delete_vm(vm_model.uuid)
+        return vm_model
+
 
 class VirtualNetworkService(Service):
     def __init__(self, vcenter_api_client, vnc_api_client, database):
