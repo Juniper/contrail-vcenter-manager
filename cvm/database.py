@@ -35,6 +35,13 @@ class Database(object):
             logger.error('Could not find VM with uuid %s.', uid)
         return vm_model
 
+    def get_vm_model_by_name(self, name):
+        try:
+            return [vm_model for vm_model in self.vm_models.values() if vm_model.name == name][0]
+        except IndexError:
+            logger.error('Could not find VM with name %s.', name)
+            return None
+
     def get_vn_model_by_key(self, key):
         vn_model = self.vn_models.get(key, None)
         if not vn_model:
