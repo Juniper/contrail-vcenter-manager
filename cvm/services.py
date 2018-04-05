@@ -19,19 +19,30 @@ class Service(object):
         self._ipam = self._create_or_read_ipam()
 
     def _create_or_read_project(self):
-        project = self._vnc_api_client.construct_project()
-        self._vnc_api_client.create_project(project)
-        return self._vnc_api_client.read_project([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT])
+        project = self._vnc_api_client.read_project([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT])
+        if not project:
+            logger.info('Project not found - creating...')
+            project = self._vnc_api_client.construct_project()
+            self._vnc_api_client.create_project(project)
+        return project
 
     def _create_or_read_security_group(self):
-        security_group = self._vnc_api_client.construct_security_group(self._project)
-        self._vnc_api_client.create_security_group(security_group)
-        return self._vnc_api_client.read_security_group([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_DEFAULT_SG])
+        security_group = self._vnc_api_client.read_security_group(
+            [VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_DEFAULT_SG]
+        )
+        if not security_group:
+            logger.info('Security group not found - creating...')
+            security_group = self._vnc_api_client.construct_security_group(self._project)
+            self._vnc_api_client.create_security_group(security_group)
+        return security_group
 
     def _create_or_read_ipam(self):
-        ipam = self._vnc_api_client.construct_ipam(self._project)
-        self._vnc_api_client.create_ipam(ipam)
-        return self._vnc_api_client.read_ipam([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_IPAM])
+        ipam = self._vnc_api_client.read_ipam([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_IPAM])
+        if not ipam:
+            logger.info('IPAM not found - creating...')
+            ipam = self._vnc_api_client.construct_ipam(self._project)
+            self._vnc_api_client.create_ipam(ipam)
+        return ipam
 
 
 class VirtualMachineService(Service):
