@@ -83,32 +83,6 @@ class TestVirtualMachineService(TestCase):
         old_vm_model.set_vmware_vm.assert_called_once_with(self.vmware_vm)
         self.vnc_client.update_vm.assert_not_called()
 
-    def test_update_new_no_vmis(self):
-        """ Test creating of a new VM with no Interfaces. """
-        self.vmware_vm.config.hardware.device = []
-
-        vm_model = self.vm_service.update(self.vmware_vm)
-
-        self.assertEqual({}, vm_model.interfaces)
-        self.esxi_api_client.add_filter.assert_not_called()
-        self.vnc_client.update_vm.assert_not_called()
-        self.database.save.assert_not_called()
-
-    def test_update_no_vmis(self):
-        """ Test updating an existing VM with no Interfaces. """
-        old_vm_model = Mock()
-        old_vm_model.interfaces = {}
-        self.database.get_vm_model_by_uuid.return_value = old_vm_model
-
-        new_vm_model = self.vm_service.update(self.vmware_vm)
-
-        self.assertEqual(old_vm_model, new_vm_model)
-        self.esxi_api_client.add_filter.assert_not_called()
-        self.database.save.assert_not_called()
-        self.database.delete_vm_model.assert_called_once_with(old_vm_model.uuid)
-        self.vnc_client.update_vm.assert_not_called()
-        self.vnc_client.delete_vm.assert_called_once_with(old_vm_model.uuid)
-
     def test_sync_vms(self):
         self.esxi_api_client.get_all_vms.return_value = [self.vmware_vm]
         self.vnc_client.get_all_vms.return_value = []
