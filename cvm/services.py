@@ -59,19 +59,14 @@ class VirtualMachineService(Service):
 
     def _update(self, vm_model, vmware_vm):
         vm_model.set_vmware_vm(vmware_vm)
-        if vm_model.interfaces:
-            self._database.save(vm_model)
-        else:
-            self._database.delete_vm_model(vm_model.uuid)
-            self._vnc_api_client.delete_vm(vm_model.uuid)
+        self._database.save(vm_model)
         return vm_model
 
     def _create(self, vmware_vm):
         vm_model = VirtualMachineModel(vmware_vm)
-        if vm_model.interfaces:
-            self._add_property_filter_for_vm(vmware_vm, ['guest.toolsRunningStatus', 'guest.net'])
-            self._vnc_api_client.update_vm(vm_model.vnc_vm)
-            self._database.save(vm_model)
+        self._add_property_filter_for_vm(vmware_vm, ['guest.toolsRunningStatus', 'guest.net'])
+        self._vnc_api_client.update_vm(vm_model.vnc_vm)
+        self._database.save(vm_model)
         return vm_model
 
     def _add_property_filter_for_vm(self, vmware_vm, filters):
