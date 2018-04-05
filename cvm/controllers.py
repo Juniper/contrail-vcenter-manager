@@ -1,6 +1,6 @@
 import logging
 
-from pyVmomi import vim  # pylint: disable=no-name-in-module
+from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -65,11 +65,15 @@ class VmwareController(object):
 
     def _handle_vm_updated_event(self, event):
         vmware_vm = event.vm.vm
-        vm_model = self._vm_service.update(vmware_vm)
-        self._vmi_service.update_vmis_for_vm_model(vm_model)
+        try:
+            vm_model = self._vm_service.update(vmware_vm)
+            self._vmi_service.update_vmis_for_vm_model(vm_model)
+        except vmodl.fault.ManagedObjectNotFound:
+            logger.info('Skipping event for a non-existent VM.')
 
     def _handle_vm_removed_event(self, event):
-        self._vm_service.delete_vm(event.vm.name)
+        # self._vm_service.delete_vm(event.vm.name)
+        pass
 
     def _handle_net_change(self, nic_infos):
         logger.info('Handling NicInfo update.')
