@@ -232,6 +232,28 @@ class TestVirtualMachineInterface(TestCase):
 
         self.vnc_client.delete_vmi.assert_called_once()
 
+    def test_remove_vmis_for_vm_model(self):
+        vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
+                                                 vnc_api.Project(), vnc_api.SecurityGroup())
+        self.database.save(vmi_model)
+
+        with patch.object(self.database, 'delete_vmi_model') as database_del_mock:
+            self.vmi_service.remove_vmis_for_vm_model(self.vm_model)
+
+        database_del_mock.assert_called_once_with(vmi_model.uuid)
+        self.vnc_client.delete_vmi.assert_called_once_with(vmi_model.uuid)
+
+    def test_remove_vmis_no_vm_model(self):
+        """
+        When the passed VM Model is None, we can't retrieve its interfaces
+        and therefore remove them.
+        """
+        with patch.object(self.database, 'delete_vmi_model') as database_del_mock:
+            self.vmi_service.remove_vmis_for_vm_model(None)
+
+        database_del_mock.assert_not_called()
+        self.vnc_client.delete_vmi.assert_not_called()
+
     @staticmethod
     def _create_vn_model(name, key):
         vnc_vn = Mock()
