@@ -37,7 +37,7 @@ class VmwareController(object):
                     for event in sorted(value, key=lambda e: e.key):
                         self._handle_event(event)
             elif name.startswith('guest.toolsRunningStatus'):
-                print obj.name, name, value
+                self._handle_tools_status(obj, value)
             elif name.startswith('guest.net'):
                 self._handle_net_change(value)
 
@@ -74,6 +74,13 @@ class VmwareController(object):
     def _handle_vm_removed_event(self, event):
         vm_model = self._vm_service.remove_vm(event.vm.name)
         self._vmi_service.remove_vmis_for_vm_model(vm_model)
+
+    def _handle_tools_status(self, vmware_vm, value):
+        try:
+            logger.info('Handling toolsRunningStatus update.')
+            self._vm_service.set_tools_running_status(vmware_vm, value)
+        except vmodl.fault.ManagedObjectNotFound:
+            logger.info('Skipping toolsRunningStatus change for a non-existent VM.')
 
     def _handle_net_change(self, nic_infos):
         logger.info('Handling NicInfo update.')

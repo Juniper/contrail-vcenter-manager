@@ -99,6 +99,12 @@ class VirtualMachineService(Service):
             self._vnc_api_client.delete_vm(vm_model.uuid)
         return vm_model
 
+    def set_tools_running_status(self, vmware_vm, value):
+        vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
+        vm_model.tools_running_status = value
+        logger.info('Tools running status of %s set to %s', vm_model.name, value)
+        self._database.save(vm_model)
+
 
 class VirtualNetworkService(Service):
     def __init__(self, vcenter_api_client, vnc_api_client, database):
