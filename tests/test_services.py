@@ -132,6 +132,17 @@ class TestVirtualMachineService(TestCase):
         self.database.delete_vm_model.assert_not_called()
         self.vnc_client.delete_vm.assert_not_called()
 
+    def test_set_tools_running_status(self):
+        vm_model = Mock()
+        self.database.get_vm_model_by_uuid.return_value = vm_model
+        vmware_vm = Mock()
+        value = 'guestToolsNotRunning'
+
+        self.vm_service.set_tools_running_status(vmware_vm, value)
+
+        self.assertEqual(value, vm_model.tools_running_status)
+        self.database.save.assert_called_once_with(vm_model)
+
 
 class TestVirtualMachineInterface(TestCase):
 

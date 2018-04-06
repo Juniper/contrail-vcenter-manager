@@ -9,8 +9,9 @@ from cvm.controllers import VmwareController
 logging.disable(logging.CRITICAL)
 
 
-def construct_update_set_for_event(event):
-    property_change = Mock(name='latestPage', val=event)
+def construct_update_set(name, value):
+    property_change = Mock(val=value)
+    property_change.configure_mock(name=name)
     object_update = Mock(changeSet=[property_change])
     property_filter_update = Mock(objectSet=[object_update])
     update_set = Mock(filterSet=[property_filter_update])
@@ -60,10 +61,31 @@ class TestVmwareController(TestCase):
         When an event for an already deleted VM is received,
         the controller should do nothing.
         """
-        update_set = construct_update_set_for_event(Mock(spec=vim.event.VmCreatedEvent()))
+        update_set = construct_update_set('latestPage', Mock(spec=vim.event.VmCreatedEvent()))
         self.vm_service.update.side_effect = vmodl.fault.ManagedObjectNotFound
 
         self.vmware_controller.handle_update(update_set)
 
         self.database.save.assert_not_called()
         self.vmi_service.update_vmis_for_vm_model.assert_not_called()
+
+    def test_handle_tools_status(self):
+        vmware_vm = Mock()
+        update_set = construct_update_set('guest.toolsRunningStatus', 'guestToolsNotRunning')
+        update_set.filterSet[0].objectSet[0].obj = vmware_vm
+
+        self.vmware_controller.handle_update(update_set)
+
+        self.vm_service.set_tools_running_status.assert_called_once_with(
+            vmware_vm, 'guestToolsNotRunning'
+        )
+
+    def test_handle_tools_deleted_vm(self):
+        """
+        When 'guest.toolsRunningStatus' change for an already deleted VM is received,
+        the controller should do nothing.
+        """
+        update_set = construct_update_set('guest.toolsRunningStatus', 'guestToolsNotRunning')
+        self.vm_service.set_tools_running_status.side_effect = vmodl.fault.ManagedObjectNotFound
+
+        self.vmware_controller.handle_update(update_set)
