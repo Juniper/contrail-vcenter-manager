@@ -13,6 +13,14 @@ EVENTS_TO_OBSERVE = [
     'VmRemovedEvent',
 ]
 
+VM_PROPERTY_FILTERS = [
+    'config.instanceUuid',
+    'name',
+    'runtime.powerState',
+    'guest.toolsRunningStatus',
+    'summary.runtime.host',
+]
+
 VNC_ROOT_DOMAIN = 'default-domain'
 VNC_VCENTER_PROJECT = 'vCenter'
 VNC_VCENTER_IPAM = 'vCenter-ipam'

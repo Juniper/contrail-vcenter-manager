@@ -4,7 +4,7 @@ from mock import Mock, patch
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 
-from cvm.clients import make_object_set, make_prop_set
+from cvm.clients import make_filter_spec
 from cvm.database import Database
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
@@ -12,16 +12,17 @@ from cvm.services import (VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService)
 
 
-def create_vmware_vm_mock(network):
+def create_vmware_vm_mock(network=None):
     vmware_vm = Mock(spec=vim.VirtualMachine)
     vmware_vm.summary.runtime.host.vm = []
     vmware_vm.network = network
-    device = Mock()
-    backing_mock = Mock(spec=vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo())
-    device.backing = backing_mock
-    device.backing.port.portgroupKey = network[0].key
-    device.macAddress = 'c8:5b:76:53:0f:f5'
-    vmware_vm.config.hardware.device = [device]
+    if network:
+        device = Mock()
+        backing_mock = Mock(spec=vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo())
+        device.backing = backing_mock
+        device.backing.port.portgroupKey = network[0].key
+        device.macAddress = 'c8:5b:76:53:0f:f5'
+        vmware_vm.config.hardware.device = [device]
     return vmware_vm
 
 
@@ -48,9 +49,7 @@ def create_vnc_client_mock():
 
 
 def create_property_filter(obj, filters):
-    filter_spec = vmodl.query.PropertyCollector.FilterSpec()
-    filter_spec.objectSet = make_object_set(obj)
-    filter_spec.propSet = make_prop_set(obj, filters)
+    filter_spec = make_filter_spec(obj, filters)
     return vmodl.query.PropertyCollector.Filter(filter_spec)
 
 

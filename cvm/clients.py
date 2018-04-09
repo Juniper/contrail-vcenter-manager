@@ -8,8 +8,9 @@ from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 from vnc_api.exceptions import NoIdError, RefsExistError
 
-from cvm.constants import (VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
-                           VNC_VCENTER_IPAM, VNC_VCENTER_PROJECT)
+from cvm.constants import (VM_PROPERTY_FILTERS, VNC_VCENTER_DEFAULT_SG,
+                           VNC_VCENTER_DEFAULT_SG_FQN, VNC_VCENTER_IPAM,
+                           VNC_VCENTER_PROJECT)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,42 +31,47 @@ def make_object_set(obj):
     return object_set
 
 
+def make_filter_spec(obj, filters):
+    filter_spec = vmodl.query.PropertyCollector.FilterSpec()
+    filter_spec.objectSet = make_object_set(obj)
+    filter_spec.propSet = make_prop_set(obj, filters)
+    return filter_spec
+
+
 class ESXiAPIClient(object):
     _version = ''
 
     def __init__(self, esxi_cfg):
-        self.si = SmartConnectNoSSL(host=esxi_cfg['host'],
-                                    user=esxi_cfg['username'],
-                                    pwd=esxi_cfg['password'],
-                                    port=esxi_cfg['port'],
-                                    preferredApiVersions=esxi_cfg['preferred_api_versions'])
-        atexit.register(Disconnect, self.si)
-        self._property_collector = self.si.content.propertyCollector
+        self._si = SmartConnectNoSSL(host=esxi_cfg.get('host'),
+                                     user=esxi_cfg.get('username'),
+                                     pwd=esxi_cfg.get('password'),
+                                     port=esxi_cfg.get('port'),
+                                     preferredApiVersions=esxi_cfg.get('preferred_api_versions'))
+        atexit.register(Disconnect, self._si)
+        self._property_collector = self._si.content.propertyCollector
         self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
 
     def get_all_vms(self):
-        return self.si.content.rootFolder.childEntity[0].vmFolder.childEntity
+        return self._si.content.rootFolder.childEntity[0].vmFolder.childEntity
 
     def get_all_dpgs(self):
-        all_networks = self.si.content.rootFolder.childEntity[0].network
+        all_networks = self._si.content.rootFolder.childEntity[0].network
         return [net for net in all_networks if isinstance(net, vim.dvs.DistributedVirtualPortgroup)]
 
     def create_event_history_collector(self, events_to_observe):
-        event_manager = self.si.content.eventManager
+        event_manager = self._si.content.eventManager
         event_filter_spec = vim.event.EventFilterSpec()
         event_types = [getattr(vim.event, et) for et in events_to_observe]
         event_filter_spec.type = event_types
         entity_spec = vim.event.EventFilterSpec.ByEntity()
         # TODO: find a way to search for this entity
-        entity_spec.entity = self.si.content.rootFolder.childEntity[0]
+        entity_spec.entity = self._si.content.rootFolder.childEntity[0]
         entity_spec.recursion = vim.event.EventFilterSpec.RecursionOption.children
         event_filter_spec.entity = entity_spec
         return event_manager.CreateCollectorForEvents(filter=event_filter_spec)
 
     def add_filter(self, obj, filters):
-        filter_spec = vmodl.query.PropertyCollector.FilterSpec()
-        filter_spec.objectSet = make_object_set(obj)
-        filter_spec.propSet = make_prop_set(obj, filters)
+        filter_spec = make_filter_spec(filters, obj)
         return self._property_collector.CreateFilter(filter_spec, True)
 
     def make_wait_options(self, max_wait_seconds=None, max_object_updates=None):
@@ -79,6 +85,11 @@ class ESXiAPIClient(object):
         if update_set:
             self._version = update_set.version
         return update_set
+
+    def read_vm_properties(self, vmware_vm):
+        filter_spec = make_filter_spec(vmware_vm, VM_PROPERTY_FILTERS)
+        prop_set = self._property_collector.RetrievePropertiesEx(filter_spec).propSet
+        return {prop.name: prop.val for prop in prop_set}
 
 
 class VCenterAPIClient(object):
