@@ -1,9 +1,10 @@
 from unittest import TestCase, skip
 
 from mock import Mock, patch
-from pyVmomi import vim  # pylint: disable=no-name-in-module
+from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 
+from cvm.clients import make_object_set, make_prop_set
 from cvm.database import Database
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
@@ -12,7 +13,7 @@ from cvm.services import (VirtualMachineInterfaceService,
 
 
 def create_vmware_vm_mock(network):
-    vmware_vm = Mock()
+    vmware_vm = Mock(spec=vim.VirtualMachine)
     vmware_vm.summary.runtime.host.vm = []
     vmware_vm.network = network
     device = Mock()
@@ -46,6 +47,13 @@ def create_vnc_client_mock():
     return vnc_client
 
 
+def create_property_filter(obj, filters):
+    filter_spec = vmodl.query.PropertyCollector.FilterSpec()
+    filter_spec.objectSet = make_object_set(obj)
+    filter_spec.propSet = make_prop_set(obj, filters)
+    return vmodl.query.PropertyCollector.Filter(filter_spec)
+
+
 class TestVirtualMachineService(TestCase):
 
     def setUp(self):
@@ -67,11 +75,30 @@ class TestVirtualMachineService(TestCase):
         self.assertIsNotNone(vm_model)
         self.assertEqual(self.vmware_vm, vm_model.vmware_vm)
         self.assertEqual({'c8:5b:76:53:0f:f5': 'dportgroup-50'}, vm_model.interfaces)
+        self.vnc_client.update_vm.assert_called_once_with(vm_model.vnc_vm)
+        self.database.save.assert_called_once_with(vm_model)
+
+    def test_create_property_filter(self):
+        property_filter = create_property_filter(
+            self.vmware_vm,
+            ['guest.toolsRunningStatus', 'guest.net']
+        )
+        self.esxi_api_client.add_filter.return_value = property_filter
+
+        vm_model = self.vm_service.update(self.vmware_vm)
+
         self.esxi_api_client.add_filter.assert_called_once_with(
             self.vmware_vm, ['guest.toolsRunningStatus', 'guest.net']
         )
-        self.vnc_client.update_vm.assert_called_once_with(vm_model.vnc_vm)
-        self.database.save.assert_called_once_with(vm_model)
+        self.assertEqual(property_filter, vm_model.property_filter)
+
+    def test_destroy_property_filter(self):
+        vm_model = Mock()
+        self.database.get_vm_model_by_name.return_value = vm_model
+
+        self.vm_service.remove_vm('VM')
+
+        vm_model.destroy_property_filter.assert_called_once()
 
     def test_update_existing_vm(self):
         old_vm_model = Mock()

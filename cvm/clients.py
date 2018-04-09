@@ -66,7 +66,7 @@ class ESXiAPIClient(object):
         filter_spec = vmodl.query.PropertyCollector.FilterSpec()
         filter_spec.objectSet = make_object_set(obj)
         filter_spec.propSet = make_prop_set(obj, filters)
-        self._property_collector.CreateFilter(filter_spec, True)
+        return self._property_collector.CreateFilter(filter_spec, True)
 
     def make_wait_options(self, max_wait_seconds=None, max_object_updates=None):
         if max_object_updates is not None:
