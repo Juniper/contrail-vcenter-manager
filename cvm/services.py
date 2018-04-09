@@ -64,13 +64,14 @@ class VirtualMachineService(Service):
 
     def _create(self, vmware_vm):
         vm_model = VirtualMachineModel(vmware_vm)
-        self._add_property_filter_for_vm(vmware_vm, ['guest.toolsRunningStatus', 'guest.net'])
+        self._add_property_filter_for_vm(vm_model, ['guest.toolsRunningStatus', 'guest.net'])
         self._vnc_api_client.update_vm(vm_model.vnc_vm)
         self._database.save(vm_model)
         return vm_model
 
-    def _add_property_filter_for_vm(self, vmware_vm, filters):
-        self._esxi_api_client.add_filter(vmware_vm, filters)
+    def _add_property_filter_for_vm(self, vm_model, filters):
+        property_filter = self._esxi_api_client.add_filter(vm_model.vmware_vm, filters)
+        vm_model.property_filter = property_filter
 
     def sync_vms(self):
         self._get_vms_from_vmware()
@@ -97,6 +98,7 @@ class VirtualMachineService(Service):
         if vm_model:
             self._database.delete_vm_model(vm_model.uuid)
             self._vnc_api_client.delete_vm(vm_model.uuid)
+            vm_model.destroy_property_filter()
         return vm_model
 
     def set_tools_running_status(self, vmware_vm, value):

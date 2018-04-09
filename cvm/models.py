@@ -70,6 +70,7 @@ class VirtualMachineModel(object):
         self.power_state = vmware_vm.runtime.powerState
         self.tools_running_status = vmware_vm.guest.toolsRunningStatus
         self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
+        self.property_filter = None
         self.interfaces = self._read_interfaces()
         self._vnc_vm = None
 
@@ -107,6 +108,9 @@ class VirtualMachineModel(object):
 
     def get_distributed_portgroups(self):
         return [dpg for dpg in self.vmware_vm.network if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup)]
+
+    def destroy_property_filter(self):
+        self.property_filter.DestroyPropertyFilter()
 
     @property
     def is_powered_on(self):
