@@ -7,6 +7,7 @@ from vnc_api.vnc_api import Project, SecurityGroup
 from cvm.models import (ID_PERMS, VirtualMachineInterfaceModel,
                         VirtualMachineModel, VirtualNetworkModel,
                         find_virtual_machine_ip_address)
+from tests.test_services import create_vmware_vm_mock
 
 
 class TestFindVirtualMachineIpAddress(TestCase):
@@ -97,13 +98,20 @@ class TestFindVirtualMachineIpAddress(TestCase):
 
 class TestVirtualMachineModel(TestCase):
     def setUp(self):
-        self.vmware_vm = Mock()
-        self.vmware_vm.summary.runtime.host.vm = []
-        self.vmware_vm.config.hardware.device = []
+        self.vmware_vm, self.vm_properties = create_vmware_vm_mock()
+
+    def test_init(self):
+        vm_model = VirtualMachineModel(self.vmware_vm, self.vm_properties)
+
+        self.assertEqual(self.vmware_vm, vm_model.vmware_vm)
+        self.assertEqual('d376b6b4-943d-4599-862f-d852fd6ba425', vm_model.uuid)
+        self.assertEqual('VM', vm_model.name)
+        self.assertTrue(vm_model.is_powered_on)
+        self.assertTrue(vm_model.tools_running)
 
     def test_to_vnc(self):
-        vm_model = VirtualMachineModel(self.vmware_vm)
-        vm_model.uuid = 'd376b6b4-943d-4599-862f-d852fd6ba425'
+        vm_model = VirtualMachineModel(self.vmware_vm, self.vm_properties)
+        vm_model.vm_properties['config.instanceUuid'] = 'd376b6b4-943d-4599-862f-d852fd6ba425'
         vm_model.vrouter_ip_address = '192.168.0.10'
 
         vnc_vm = vm_model.vnc_vm
@@ -113,23 +121,25 @@ class TestVirtualMachineModel(TestCase):
         self.assertEqual(vnc_vm.display_name, vm_model.vrouter_ip_address)
         self.assertEqual(vnc_vm.fq_name, [vm_model.uuid])
 
-    def test_set_vmware_vm(self):
-        vm_model = VirtualMachineModel(self.vmware_vm)
+    def test_update(self):
+        vm_model = VirtualMachineModel(self.vmware_vm, self.vm_properties)
         vmware_vm = Mock()
-        vmware_vm.config.instanceUuid = 'd376b6b4-943d-4599-862f-d852fd6ba425'
-        vmware_vm.name = 'VM'
-        vmware_vm.runtime.powerState = 'on'
-        vmware_vm.guest.toolsRunningStatus = 'on'
         vmware_vm.summary.runtime.host = None
         vmware_vm.config.hardware.device = []
+        new_properties = {
+            'config.instanceUuid': '52073317-45b6-c3ee-596f-63dd49dd689e',
+            'name': 'VM',
+            'runtime.powerState': 'poweredOff',
+            'guest.toolsRunningStatus': 'guestToolsNotRunning',
+        }
 
-        vm_model.set_vmware_vm(vmware_vm)
+        vm_model.update(vmware_vm, new_properties)
 
         self.assertEqual(vmware_vm, vm_model.vmware_vm)
-        self.assertEqual('d376b6b4-943d-4599-862f-d852fd6ba425', vm_model.uuid)
+        self.assertEqual('52073317-45b6-c3ee-596f-63dd49dd689e', vm_model.uuid)
         self.assertEqual('VM', vm_model.name)
-        self.assertEqual('on', vm_model.power_state)
-        self.assertEqual('on', vm_model.tools_running_status)
+        self.assertFalse(vm_model.is_powered_on)
+        self.assertFalse(vm_model.tools_running)
 
 
 class TestVirtualMachineInterfaceModel(TestCase):
@@ -137,16 +147,13 @@ class TestVirtualMachineInterfaceModel(TestCase):
         self.project = Project()
         self.security_group = SecurityGroup()
 
-        vmware_vm = Mock()
-        vmware_vm.name = 'VM'
-        vmware_vm.summary.runtime.host.vm = []
+        vmware_vm, vm_properties = create_vmware_vm_mock()
         device = Mock()
         device.backing.port.portgroupKey = '123'
         device.macAddress = 'c8:5b:76:53:0f:f5'
         vmware_vm.config.hardware.device = [device]
-        vmware_vm.guest.net = []
-        self.vm_model = VirtualMachineModel(vmware_vm)
-        self.vm_model.uuid = 'd376b6b4-943d-4599-862f-d852fd6ba425'
+        self.vm_model = VirtualMachineModel(vmware_vm, vm_properties)
+        self.vm_model.vm_properties['config.instanceUuid'] = 'd376b6b4-943d-4599-862f-d852fd6ba425'
         self.vm_model.vrouter_ip_address = '192.168.0.10'
 
         vmware_vn = Mock()

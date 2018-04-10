@@ -47,13 +47,12 @@ def find_vrouter_ip_address(host):
     return None
 
 
-def find_virtual_machine_mac_address(vmware_vm, portgroup_key):
+def find_vm_mac_address(vmware_vm, portgroup_key):
     try:
         devices = vmware_vm.config.hardware.device
         for device in devices:
             try:
-                portgroupKey = device.backing.port.portgroupKey
-                if portgroupKey == portgroup_key:
+                if device.backing.port.portgroupKey == portgroup_key:
                     return device.macAddress
             except AttributeError:
                 pass
@@ -63,28 +62,17 @@ def find_virtual_machine_mac_address(vmware_vm, portgroup_key):
 
 
 class VirtualMachineModel(object):
-    def __init__(self, vmware_vm):
+    def __init__(self, vmware_vm, vm_properties):
         self.vmware_vm = vmware_vm  # TODO: Consider removing this
-        self.uuid = vmware_vm.config.instanceUuid
-        self.name = vmware_vm.name
-        self.power_state = vmware_vm.runtime.powerState
-        self.tools_running_status = vmware_vm.guest.toolsRunningStatus
+        self.vm_properties = vm_properties
         self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
         self.property_filter = None
         self.interfaces = self._read_interfaces()
         self._vnc_vm = None
 
-    @staticmethod
-    def from_event(event):
-        vmware_vm = event.vm.vm
-        return VirtualMachineModel(vmware_vm)
-
-    def set_vmware_vm(self, vmware_vm):
+    def update(self, vmware_vm, vm_properties):
         self.vmware_vm = vmware_vm  # TODO: Consider removing this
-        self.uuid = vmware_vm.config.instanceUuid
-        self.name = vmware_vm.name
-        self.power_state = vmware_vm.runtime.powerState
-        self.tools_running_status = vmware_vm.guest.toolsRunningStatus
+        self.vm_properties = vm_properties
         self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
         self.interfaces = self._read_interfaces()
 
@@ -97,6 +85,28 @@ class VirtualMachineModel(object):
             logger.error('Could not read Virtual Machine Interfaces for %s.', self.name)
         return None
 
+    def get_distributed_portgroups(self):
+        return [dpg for dpg in self.vmware_vm.network if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup)]
+
+    def destroy_property_filter(self):
+        self.property_filter.DestroyPropertyFilter()
+
+    @property
+    def uuid(self):
+        return self.vm_properties.get('config.instanceUuid')
+
+    @property
+    def name(self):
+        return self.vm_properties.get('name')
+
+    @property
+    def is_powered_on(self):
+        return self.vm_properties.get('runtime.powerState') == 'poweredOn'
+
+    @property
+    def tools_running(self):
+        return self.vm_properties.get('guest.toolsRunningStatus') == 'guestToolsRunning'
+
     @property
     def vnc_vm(self):
         if not self._vnc_vm:
@@ -105,20 +115,6 @@ class VirtualMachineModel(object):
                                           id_perms=ID_PERMS)
             self._vnc_vm.set_uuid(self.uuid)
         return self._vnc_vm
-
-    def get_distributed_portgroups(self):
-        return [dpg for dpg in self.vmware_vm.network if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup)]
-
-    def destroy_property_filter(self):
-        self.property_filter.DestroyPropertyFilter()
-
-    @property
-    def is_powered_on(self):
-        return self.power_state == 'poweredOn'
-
-    @property
-    def tools_running(self):
-        return self.tools_running_status == 'guestToolsRunning'
 
 
 class VirtualNetworkModel(object):
@@ -206,7 +202,7 @@ class VirtualMachineInterfaceModel(object):
         self.parent = parent
         self.vm_model = vm_model
         self.vn_model = vn_model
-        self.mac_address = find_virtual_machine_mac_address(self.vm_model.vmware_vm, self.vn_model.key)
+        self.mac_address = find_vm_mac_address(self.vm_model.vmware_vm, self.vn_model.key)
         self.ip_address = self._find_ip_address()
         self.security_group = security_group
         self.vnc_vmi = None
