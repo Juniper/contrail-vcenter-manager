@@ -71,7 +71,7 @@ class ESXiAPIClient(object):
         return event_manager.CreateCollectorForEvents(filter=event_filter_spec)
 
     def add_filter(self, obj, filters):
-        filter_spec = make_filter_spec(filters, obj)
+        filter_spec = make_filter_spec(obj, filters)
         return self._property_collector.CreateFilter(filter_spec, True)
 
     def make_wait_options(self, max_wait_seconds=None, max_object_updates=None):
@@ -88,7 +88,9 @@ class ESXiAPIClient(object):
 
     def read_vm_properties(self, vmware_vm):
         filter_spec = make_filter_spec(vmware_vm, VM_PROPERTY_FILTERS)
-        prop_set = self._property_collector.RetrievePropertiesEx(filter_spec).propSet
+        options = vmodl.query.PropertyCollector.RetrieveOptions()
+        object_set = self._property_collector.RetrievePropertiesEx([filter_spec], options=options).objects
+        prop_set = object_set[0].propSet
         return {prop.name: prop.val for prop in prop_set}
 
 

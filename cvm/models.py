@@ -85,9 +85,6 @@ class VirtualMachineModel(object):
             logger.error('Could not read Virtual Machine Interfaces for %s.', self.name)
         return None
 
-    def get_distributed_portgroups(self):
-        return [dpg for dpg in self.vmware_vm.network if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup)]
-
     def destroy_property_filter(self):
         self.property_filter.DestroyPropertyFilter()
 
