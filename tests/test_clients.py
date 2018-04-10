@@ -13,7 +13,7 @@ class TestESXiAPIClient(TestCase):
             self.si_mock.return_value.content.propertyCollector = self.property_collector
             self.esxi_client = ESXiAPIClient({})
 
-        self.vmware_vm = create_vmware_vm_mock()
+        self.vmware_vm, _ = create_vmware_vm_mock()
 
     def test_read_vm(self):
         dynamic_property = Mock(val='VM')

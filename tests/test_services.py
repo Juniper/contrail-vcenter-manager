@@ -14,8 +14,16 @@ from cvm.services import (VirtualMachineInterfaceService,
 
 def create_vmware_vm_mock(network=None):
     vmware_vm = Mock(spec=vim.VirtualMachine)
-    vmware_vm.summary.runtime.host.vm = []
+    vmware_vm.summary.runtime.host = Mock(vm=[vmware_vm])
+    vmware_vm.config.hardware.device = []
+    vm_properties = {
+        'config.instanceUuid': 'd376b6b4-943d-4599-862f-d852fd6ba425',
+        'name': 'VM',
+        'runtime.powerState': 'poweredOn',
+        'guest.toolsRunningStatus': 'guestToolsRunning',
+    }
     vmware_vm.network = network
+    vmware_vm.guest.net = []
     if network:
         device = Mock()
         backing_mock = Mock(spec=vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo())
@@ -23,7 +31,7 @@ def create_vmware_vm_mock(network=None):
         device.backing.port.portgroupKey = network[0].key
         device.macAddress = 'c8:5b:76:53:0f:f5'
         vmware_vm.config.hardware.device = [device]
-    return vmware_vm
+    return vmware_vm, vm_properties
 
 
 def create_dpg_mock(**kwargs):
@@ -56,9 +64,9 @@ def create_property_filter(obj, filters):
 class TestVirtualMachineService(TestCase):
 
     def setUp(self):
-        self.vmware_dpg = create_dpg_mock(name='VM Portgroup', key='dportgroup-50')
-        self.vmware_vm = create_vmware_vm_mock([
-            self.vmware_dpg,
+        vmware_dpg = create_dpg_mock(name='VM Portgroup', key='dportgroup-50')
+        self.vmware_vm, self.vm_properties = create_vmware_vm_mock([
+            vmware_dpg,
             Mock(spec=vim.Network),
         ])
         self.vnc_client = Mock()
@@ -66,12 +74,14 @@ class TestVirtualMachineService(TestCase):
         self.database = Mock()
         self.database.get_vm_model_by_uuid.return_value = None
         self.esxi_api_client = Mock()
+        self.esxi_api_client.read_vm.return_value = self.vm_properties
         self.vm_service = VirtualMachineService(self.esxi_api_client, self.vnc_client, self.database)
 
     def test_update_new_vm(self):
         vm_model = self.vm_service.update(self.vmware_vm)
 
         self.assertIsNotNone(vm_model)
+        self.assertEqual(self.vm_properties, vm_model.vm_properties)
         self.assertEqual(self.vmware_vm, vm_model.vmware_vm)
         self.assertEqual({'c8:5b:76:53:0f:f5': 'dportgroup-50'}, vm_model.interfaces)
         self.vnc_client.update_vm.assert_called_once_with(vm_model.vnc_vm)
@@ -106,7 +116,7 @@ class TestVirtualMachineService(TestCase):
         new_vm_model = self.vm_service.update(self.vmware_vm)
 
         self.assertEqual(old_vm_model, new_vm_model)
-        old_vm_model.set_vmware_vm.assert_called_once_with(self.vmware_vm)
+        old_vm_model.update.assert_called_once_with(self.vmware_vm, self.vm_properties)
         self.vnc_client.update_vm.assert_not_called()
 
     def test_sync_vms(self):
@@ -181,8 +191,8 @@ class TestVirtualMachineInterface(TestCase):
 
         self.vn_model = self._create_vn_model(name='VM Portgroup', key='dportgroup-50')
         self.database.save(self.vn_model)
-        vmware_vm = create_vmware_vm_mock([self.vn_model.vmware_vn])
-        self.vm_model = VirtualMachineModel(vmware_vm)
+        vmware_vm, vm_properties = create_vmware_vm_mock([self.vn_model.vmware_vn])
+        self.vm_model = VirtualMachineModel(vmware_vm, vm_properties)
 
     def test_create_vmis_proper_vm_dpg(self):
         """ A new VMI is being created with proper VM/DPG pair. """

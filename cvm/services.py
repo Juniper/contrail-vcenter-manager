@@ -51,19 +51,20 @@ class VirtualMachineService(Service):
         self._esxi_api_client = esxi_api_client
 
     def update(self, vmware_vm):
+        vm_properties = self._esxi_api_client.read_vm(vmware_vm)
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
         if vm_model:
-            return self._update(vm_model, vmware_vm)
-        return self._create(vmware_vm)
+            return self._update(vm_model, vmware_vm, vm_properties)
+        return self._create(vmware_vm, vm_properties)
         # TODO: vrouter_client.set_active_state(boolean) -- see VirtualMachineInfo.setContrailVmActiveState
 
-    def _update(self, vm_model, vmware_vm):
-        vm_model.set_vmware_vm(vmware_vm)
+    def _update(self, vm_model, vmware_vm, vm_properties):
+        vm_model.update(vmware_vm, vm_properties)
         self._database.save(vm_model)
         return vm_model
 
-    def _create(self, vmware_vm):
-        vm_model = VirtualMachineModel(vmware_vm)
+    def _create(self, vmware_vm, vm_properties):
+        vm_model = VirtualMachineModel(vmware_vm, vm_properties)
         self._add_property_filter_for_vm(vm_model, ['guest.toolsRunningStatus', 'guest.net'])
         self._vnc_api_client.update_vm(vm_model.vnc_vm)
         self._database.save(vm_model)
