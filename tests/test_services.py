@@ -74,7 +74,7 @@ class TestVirtualMachineService(TestCase):
         self.database = Mock()
         self.database.get_vm_model_by_uuid.return_value = None
         self.esxi_api_client = Mock()
-        self.esxi_api_client.read_vm.return_value = self.vm_properties
+        self.esxi_api_client.read_vm_properties.return_value = self.vm_properties
         self.vm_service = VirtualMachineService(self.esxi_api_client, self.vnc_client, self.database)
 
     def test_update_new_vm(self):

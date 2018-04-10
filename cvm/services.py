@@ -51,7 +51,7 @@ class VirtualMachineService(Service):
         self._esxi_api_client = esxi_api_client
 
     def update(self, vmware_vm):
-        vm_properties = self._esxi_api_client.read_vm(vmware_vm)
+        vm_properties = self._esxi_api_client.read_vm_properties(vmware_vm)
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
         if vm_model:
             return self._update(vm_model, vmware_vm, vm_properties)

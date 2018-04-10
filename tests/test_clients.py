@@ -19,7 +19,7 @@ class TestESXiAPIClient(TestCase):
         dynamic_property = Mock(val='VM')
         dynamic_property.configure_mock(name='name')
         object_content = Mock(obj=self.vmware_vm, propSet=[dynamic_property])
-        self.property_collector.RetrievePropertiesEx.return_value = object_content
+        self.property_collector.RetrievePropertiesEx.return_value.objects = [object_content]
 
         result = self.esxi_client.read_vm_properties(self.vmware_vm)
 
