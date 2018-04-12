@@ -205,7 +205,7 @@ class TestVirtualMachineInterface(TestCase):
         saved_vmi = self.database.get_all_vmi_models()[0]
         self.assertEqual(self.vm_model, saved_vmi.vm_model)
         self.assertEqual(self.vn_model, saved_vmi.vn_model)
-        self.vnc_client.update_vmi.assert_called_once_with(saved_vmi.to_vnc())
+        self.vnc_client.update_or_create_vmi.assert_called_once_with(saved_vmi.to_vnc())
         self.assertTrue(saved_vmi.vrouter_port_added)
 
     def test_no_update_for_no_dpgs(self):
@@ -215,7 +215,7 @@ class TestVirtualMachineInterface(TestCase):
         self.vmi_service.update_vmis_for_vm_model(self.vm_model)
 
         self.assertEqual(0, len(self.database.get_all_vmi_models()))
-        self.vnc_client.update_vmi.assert_not_called()
+        self.vnc_client.update_or_create_vmi.assert_not_called()
 
     def test_update_existing_vmi(self):
         """ Existing VMI is updated when VM changes the DPG to which it is connected. """
@@ -232,7 +232,7 @@ class TestVirtualMachineInterface(TestCase):
         saved_vmi = self.database.get_all_vmi_models()[0]
         self.assertEqual(self.vm_model, saved_vmi.vm_model)
         self.assertEqual(second_vn_model, saved_vmi.vn_model)
-        self.vnc_client.update_vmi.assert_called_once_with(saved_vmi.to_vnc())
+        self.vnc_client.update_or_create_vmi.assert_called_once_with(saved_vmi.to_vnc())
         self.assertTrue(saved_vmi.vrouter_port_added)
 
     def test_removes_unused_vmis(self):

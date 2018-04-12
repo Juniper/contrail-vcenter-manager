@@ -216,21 +216,20 @@ class VNCAPIClient(object):
         vms = self.vnc_lib.virtual_machines_list().get('virtual-machines')
         return [self.vnc_lib.virtual_machine_read(vm['fq_name']) for vm in vms]
 
-    def create_vmi(self, vmi):
+    def update_or_create_vmi(self, vnc_vmi):
         try:
-            self.vnc_lib.virtual_machine_interface_create(vmi)
-            logger.info('Virtual Machine Interface created: %s', vmi.display_name)
-        except RefsExistError:
-            logger.error('Virtual Machine Interface already exists: %s', vmi.display_name)
-
-    def update_vmi(self, vmi):
-        """ TODO: Change name - it's more of a update_or_create than update. """
-        try:
-            self.vnc_lib.virtual_machine_interface_update(vmi)
-            logger.info('Virtual Machine Interface updated: %s', vmi.name)
+            self._update_vmi(vnc_vmi)
         except NoIdError:
-            logger.info('Virtual Machine Interface not found - creating: %s', vmi.name)
-            self.create_vmi(vmi)
+            logger.info('Virtual Machine Interface not found - creating: %s', vnc_vmi.name)
+            self._create_vmi(vnc_vmi)
+
+    def _update_vmi(self, vnc_vmi):
+        self.vnc_lib.virtual_machine_interface_update(vnc_vmi)
+        logger.info('Virtual Machine Interface updated: %s', vnc_vmi.name)
+
+    def _create_vmi(self, vmi):
+        self.vnc_lib.virtual_machine_interface_create(vmi)
+        logger.info('Virtual Machine Interface created: %s', vmi.display_name)
 
     def read_vmi(self, name, uuid):
         try:

@@ -140,7 +140,7 @@ class VirtualMachineInterfaceService(Service):
                 self._create_or_update(vmi_model)
 
     def _create_or_update(self, vmi_model):
-        self._vnc_api_client.update_vmi(vmi_model.to_vnc())
+        self._vnc_api_client.update_or_create_vmi(vmi_model.to_vnc())
         self._add_or_update_vrouter_port(vmi_model)
         self._database.save(vmi_model)
 
@@ -171,7 +171,7 @@ class VirtualMachineInterfaceService(Service):
             for ip in nic_info.ipAddress:
                 if isinstance(ipaddress.ip_address(ip.decode('utf-8')), ipaddress.IPv4Address):
                     vmi_model.ip_address = ip
-                    self._vnc_api_client.update_vmi(vmi_model.to_vnc())
+                    self._vnc_api_client.update_or_create_vmi(vmi_model.to_vnc())
                     logger.info('IP address of %s updated to %s', vmi_model.display_name, ip)
         except AttributeError:
             pass
