@@ -38,15 +38,30 @@ def make_filter_spec(obj, filters):
     return filter_spec
 
 
+def make_dv_port_spec(dv_port, vlan_id):
+    dv_port_config_spec = vim.dvs.DistributedVirtualPort.ConfigSpec()
+    dv_port_config_spec.key = dv_port.key
+    dv_port_config_spec.operation = 'edit'
+    dv_port_config_spec.configVersion = dv_port.config.configVersion
+    vlan_spec = vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec()
+    vlan_spec.vlanId = vlan_id
+    dv_port_setting = vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy()
+    dv_port_setting.vlan = vlan_spec
+    dv_port_config_spec.setting = dv_port_setting
+    return dv_port_config_spec
+
+
 class ESXiAPIClient(object):
     _version = ''
 
     def __init__(self, esxi_cfg):
-        self._si = SmartConnectNoSSL(host=esxi_cfg.get('host'),
-                                     user=esxi_cfg.get('username'),
-                                     pwd=esxi_cfg.get('password'),
-                                     port=esxi_cfg.get('port'),
-                                     preferredApiVersions=esxi_cfg.get('preferred_api_versions'))
+        self._si = SmartConnectNoSSL(
+            host=esxi_cfg.get('host'),
+            user=esxi_cfg.get('username'),
+            pwd=esxi_cfg.get('password'),
+            port=esxi_cfg.get('port'),
+            preferredApiVersions=esxi_cfg.get('preferred_api_versions')
+        )
         atexit.register(Disconnect, self._si)
         self._property_collector = self._si.content.propertyCollector
         self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
@@ -96,40 +111,48 @@ class ESXiAPIClient(object):
 
 class VCenterAPIClient(object):
     def __init__(self, vcenter_cfg):
-        self.vcenter_cfg = vcenter_cfg
-        self.si = None
+        self._vcenter_cfg = vcenter_cfg
+        self._si = None
 
     def __enter__(self):
-        self.si = SmartConnectNoSSL(host=self.vcenter_cfg['host'],
-                                    user=self.vcenter_cfg['username'],
-                                    pwd=self.vcenter_cfg['password'],
-                                    port=self.vcenter_cfg['port'],
-                                    preferredApiVersions=self.vcenter_cfg['preferred_api_versions'])
+        self._si = SmartConnectNoSSL(
+            host=self._vcenter_cfg.get('host'),
+            user=self._vcenter_cfg.get('username'),
+            pwd=self._vcenter_cfg.get('password'),
+            port=self._vcenter_cfg.get('port'),
+            preferredApiVersions=self._vcenter_cfg.get('preferred_api_versions')
+        )
 
     def __exit__(self, *args):
-        Disconnect(self.si)
+        Disconnect(self._si)
 
     def get_dpg_by_name(self, name):
-        for dpg in self.si.content.rootFolder.childEntity[0].network:
+        for dpg in self._si.content.rootFolder.childEntity[0].network:
             if dpg.name == name and isinstance(dpg, vim.dvs.DistributedVirtualPortgroup):
                 return dpg
         return None
 
     def get_dpgs_for_vm(self, vm_model):
-        for vmware_vm in self.si.content.rootFolder.childEntity[0].hostFolder.childEntity[0].host[0].vm:
+        for vmware_vm in self._si.content.rootFolder.childEntity[0].hostFolder.childEntity[0].host[0].vm:
             if vmware_vm.config.instanceUuid == vm_model.uuid:
                 return [dpg for dpg in vmware_vm.network if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup)]
         return []
 
     def get_ip_pool_for_dpg(self, dpg):
-        dc = self.si.content.rootFolder.childEntity[0]
+        dc = self._si.content.rootFolder.childEntity[0]
         return self._get_ip_pool_by_id(dpg.summary.ipPoolId, dc)
 
     def _get_ip_pool_by_id(self, pool_id, dc):
-        for ip_pool in self.si.content.ipPoolManager.QueryIpPools(dc):
+        for ip_pool in self._si.content.ipPoolManager.QueryIpPools(dc):
             if ip_pool.id == pool_id:
                 return ip_pool
         return None
+
+    @staticmethod
+    def set_vlan_id(dvs, key, vlan_id):
+        dv_port = [port for port in dvs.FetchDVPorts() if port.key == key][0]
+        dv_port_spec = make_dv_port_spec(dv_port, vlan_id)
+        dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
 
 
 class VNCAPIClient(object):
