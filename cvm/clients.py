@@ -190,13 +190,6 @@ class VNCAPIClient(object):
         except NoIdError:
             logger.error('Virtual Machine not found: %s', uuid)
 
-    def read_vm(self, uuid):
-        try:
-            return self.vnc_lib.virtual_machine_read(id=uuid)
-        except NoIdError:
-            logger.error('Virtual Machine not found: %s', uuid)
-            return None
-
     def update_or_create_vm(self, vnc_vm):
         try:
             self._update_vm(vnc_vm)
@@ -214,7 +207,10 @@ class VNCAPIClient(object):
 
     def get_all_vms(self):
         vms = self.vnc_lib.virtual_machines_list().get('virtual-machines')
-        return [self.vnc_lib.virtual_machine_read(vm['fq_name']) for vm in vms]
+        return [self._read_vm(vm['fq_name']) for vm in vms]
+
+    def _read_vm(self, fq_name):
+        return self.vnc_lib.virtual_machine_read(fq_name)
 
     def update_or_create_vmi(self, vnc_vmi):
         try:

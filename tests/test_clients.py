@@ -4,7 +4,8 @@ from mock import Mock, patch
 from pyVmomi import vim  # pylint: disable=no-name-in-module
 from vnc_api.exceptions import NoIdError
 
-from cvm.clients import ESXiAPIClient, VCenterAPIClient, make_dv_port_spec, VNCAPIClient
+from cvm.clients import (ESXiAPIClient, VCenterAPIClient, VNCAPIClient,
+                         make_dv_port_spec)
 from tests.test_services import create_vmware_vm_mock
 
 
@@ -110,3 +111,19 @@ class TestVNCAPIClient(TestCase):
         self.vnc_client.update_or_create_vmi(vnc_vmi)
 
         self.vnc_lib.virtual_machine_interface_create.assert_called_once_with(vnc_vmi)
+
+    def test_get_all_vms(self):
+        self.vnc_lib.virtual_machines_list.return_value = {
+            u'virtual-machines': [{
+                u'fq_name': [u'5027a82e-fbc7-0898-b64c-4bf9f5b9d07c'],
+                u'href': u'http://10.100.0.84:8082/virtual-machine/5027a82e-fbc7-0898-b64c-4bf9f5b9d07c',
+                u'uuid': u'5027a82e-fbc7-0898-b64c-4bf9f5b9d07c',
+            }]
+        }
+        vnc_vm = Mock()
+        self.vnc_lib.virtual_machine_read.return_value = vnc_vm
+
+        all_vms = self.vnc_client.get_all_vms()
+
+        self.vnc_lib.virtual_machine_read.assert_called_once_with(['5027a82e-fbc7-0898-b64c-4bf9f5b9d07c'])
+        self.assertEqual([vnc_vm], all_vms)
