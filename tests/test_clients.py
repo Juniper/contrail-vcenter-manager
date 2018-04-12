@@ -1,7 +1,7 @@
 from unittest import TestCase
 
 from mock import Mock, patch
-from pyVmomi import vim
+from pyVmomi import vim # pylint: disable=no-name-in-module
 
 from cvm.clients import ESXiAPIClient, VCenterAPIClient, make_dv_port_spec
 from tests.test_services import create_vmware_vm_mock
