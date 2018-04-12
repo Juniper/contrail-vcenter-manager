@@ -1,9 +1,10 @@
 from unittest import TestCase
 
 from mock import Mock, patch
-from pyVmomi import vim # pylint: disable=no-name-in-module
+from pyVmomi import vim  # pylint: disable=no-name-in-module
+from vnc_api.exceptions import NoIdError
 
-from cvm.clients import ESXiAPIClient, VCenterAPIClient, make_dv_port_spec
+from cvm.clients import ESXiAPIClient, VCenterAPIClient, make_dv_port_spec, VNCAPIClient
 from tests.test_services import create_vmware_vm_mock
 
 
@@ -71,3 +72,26 @@ class TestFunctions(TestCase):
         self.assertEqual('edit', spec.operation)
         self.assertEqual(10, spec.setting.vlan.vlanId)
         self.assertEqual('1', spec.configVersion)
+
+
+class TestVNCAPIClient(TestCase):
+    def setUp(self):
+        self.vnc_lib = Mock()
+        with patch('cvm.clients.vnc_api.VncApi') as vnc_api_mock:
+            vnc_api_mock.return_value = self.vnc_lib
+            self.vnc_client = VNCAPIClient({})
+
+    def test_update_create_vm(self):
+        vnc_vm = Mock()
+
+        self.vnc_client.update_or_create_vm(vnc_vm)
+
+        self.vnc_lib.virtual_machine_update.assert_called_once()
+
+    def test_update_create_new_vm(self):
+        vnc_vm = Mock()
+        self.vnc_lib.virtual_machine_update.side_effect = NoIdError(unknown_id=1)
+
+        self.vnc_client.update_or_create_vm(vnc_vm)
+
+        self.vnc_lib.virtual_machine_create.called_once_with(vnc_vm)

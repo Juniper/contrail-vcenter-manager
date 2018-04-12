@@ -170,27 +170,21 @@ class VCenterAPIClient(object):
 
 class VNCAPIClient(object):
     def __init__(self, vnc_cfg):
-        self.vnc_lib = vnc_api.VncApi(username=vnc_cfg['username'],
-                                      password=vnc_cfg['password'],
-                                      tenant_name=vnc_cfg['tenant_name'],
-                                      api_server_host=vnc_cfg['api_server_host'],
-                                      api_server_port=vnc_cfg['api_server_port'],
-                                      auth_host=vnc_cfg['auth_host'],
-                                      auth_port=vnc_cfg['auth_port'])
+        self.vnc_lib = vnc_api.VncApi(
+            username=vnc_cfg.get('username'),
+            password=vnc_cfg.get('password'),
+            tenant_name=vnc_cfg.get('tenant_name'),
+            api_server_host=vnc_cfg.get('api_server_host'),
+            api_server_port=vnc_cfg.get('api_server_port'),
+            auth_host=vnc_cfg.get('auth_host'),
+            auth_port=vnc_cfg.get('auth_port')
+        )
         self.id_perms = vnc_api.IdPermsType()
         self.id_perms.set_creator('vcenter-manager')
         self.id_perms.set_enable(True)
 
-    def create_vm(self, vnc_vm):
-        try:
-            self.vnc_lib.virtual_machine_create(vnc_vm)
-            logger.info('Virtual Machine created: %s', vnc_vm.name)
-        except RefsExistError:
-            logger.error('Virtual Machine already exists: %s', vnc_vm.name)
-
     def delete_vm(self, uuid):
         try:
-
             self.vnc_lib.virtual_machine_delete(id=uuid)
             logger.info('Virtual Machine removed: %s', uuid)
         except NoIdError:
@@ -203,14 +197,20 @@ class VNCAPIClient(object):
             logger.error('Virtual Machine not found: %s', uuid)
             return None
 
-    def update_vm(self, vnc_vm):
-        """ TODO: Change name - it's more of a update_or_create than update. """
+    def update_or_create_vm(self, vnc_vm):
         try:
-            self.vnc_lib.virtual_machine_update(vnc_vm)
-            logger.info('Virtual Machine updated: %s', vnc_vm.name)
+            self._update_vm(vnc_vm)
         except NoIdError:
             logger.info('Virtual Machine not found - creating: %s', vnc_vm.name)
-            self.create_vm(vnc_vm)
+            self._create_vm(vnc_vm)
+
+    def _update_vm(self, vnc_vm):
+        self.vnc_lib.virtual_machine_update(vnc_vm)
+        logger.info('Virtual Machine updated: %s', vnc_vm.name)
+
+    def _create_vm(self, vnc_vm):
+        self.vnc_lib.virtual_machine_create(vnc_vm)
+        logger.info('Virtual Machine created: %s', vnc_vm.name)
 
     def get_all_vms(self):
         vms = self.vnc_lib.virtual_machines_list().get('virtual-machines')
