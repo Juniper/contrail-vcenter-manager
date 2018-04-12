@@ -84,7 +84,7 @@ class TestVirtualMachineService(TestCase):
         self.assertEqual(self.vm_properties, vm_model.vm_properties)
         self.assertEqual(self.vmware_vm, vm_model.vmware_vm)
         self.assertEqual({'c8:5b:76:53:0f:f5': 'dportgroup-50'}, vm_model.interfaces)
-        self.vnc_client.update_vm.assert_called_once_with(vm_model.vnc_vm)
+        self.vnc_client.update_or_create_vm.assert_called_once_with(vm_model.vnc_vm)
         self.database.save.assert_called_once_with(vm_model)
 
     def test_create_property_filter(self):
@@ -126,7 +126,7 @@ class TestVirtualMachineService(TestCase):
         self.vm_service.sync_vms()
 
         self.database.save.assert_called_once()
-        self.vnc_client.update_vm.assert_called_once()
+        self.vnc_client.update_or_create_vm.assert_called_once()
         self.assertEqual(self.vmware_vm, self.database.save.call_args[0][0].vmware_vm)
 
     def test_sync_no_vms(self):
