@@ -1,6 +1,7 @@
 from unittest import TestCase
 
 from mock import Mock, patch
+from pyVmomi import vim
 
 from cvm.clients import ESXiAPIClient, VCenterAPIClient, make_dv_port_spec
 from tests.test_services import create_vmware_vm_mock
@@ -45,6 +46,20 @@ class TestVCenterAPIClient(TestCase):
         self.assertEqual('8', spec.key)
         self.assertEqual('1', spec.configVersion)
         self.assertEqual(10, spec.setting.vlan.vlanId)
+
+    def test_enable_vlan_override(self):
+        portgroup = Mock()
+        portgroup.config.policy = Mock(spec=vim.dvs.DistributedVirtualPortgroup.PortgroupPolicy())
+        portgroup.config.configVersion = '1'
+
+        with patch('cvm.clients.SmartConnectNoSSL'):
+            with self.vcenter_client:
+                self.vcenter_client.enable_vlan_override(portgroup=portgroup)
+
+        portgroup.ReconfigureDVPortgroup_Task.assert_called_once()
+        config = portgroup.ReconfigureDVPortgroup_Task.call_args
+        self.assertTrue(config.policy.vlanOverrideAllowed)
+        self.assertEqual('1', config.configVersion)
 
 
 class TestFunctions(TestCase):

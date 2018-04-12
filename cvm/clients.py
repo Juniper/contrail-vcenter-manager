@@ -51,6 +51,14 @@ def make_dv_port_spec(dv_port, vlan_id):
     return dv_port_config_spec
 
 
+def make_pg_config_vlan_override(portgroup):
+    pg_config_spec = vim.dvs.DistributedVirtualPortgroup.ConfigSpec()
+    pg_config_spec.policy = portgroup.config.policy
+    pg_config_spec.policy.vlanOverrideAllowed = True
+    pg_config_spec.configVersion = portgroup.config.configVersion
+    return pg_config_spec
+
+
 class ESXiAPIClient(object):
     _version = ''
 
@@ -153,6 +161,11 @@ class VCenterAPIClient(object):
         dv_port = [port for port in dvs.FetchDVPorts() if port.key == key][0]
         dv_port_spec = make_dv_port_spec(dv_port, vlan_id)
         dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
+
+    @staticmethod
+    def enable_vlan_override(portgroup):
+        pg_config_spec = make_pg_config_vlan_override(portgroup)
+        portgroup.ReconfigureDVPortgroup_Task(pg_config_spec)
 
 
 class VNCAPIClient(object):
