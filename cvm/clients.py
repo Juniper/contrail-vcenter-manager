@@ -256,26 +256,12 @@ class VNCAPIClient(object):
         ).get('virtual-machine-interfaces')
         return [self.vnc_lib.virtual_machine_interface_read(vmi['fq_name']) for vmi in vmis]
 
-    def create_vn(self, vnc_vn):
-        try:
-            self.vnc_lib.virtual_network_create(vnc_vn)
-            logger.info('Virtual Network created: %s', vnc_vn.name)
-        except RefsExistError:
-            logger.error('Virtual Network already exists: %s', vnc_vn.name)
-
     def read_vn(self, fq_name):
         try:
             return self.vnc_lib.virtual_network_read(fq_name)
         except NoIdError:
             logger.error('Virtual Machine not found: %s', fq_name)
             return None
-
-    def delete_vn(self, uuid):
-        try:
-            self.vnc_lib.virtual_network_delete(id=uuid)
-            logger.info('Virtual Network removed: %s', uuid)
-        except NoIdError:
-            logger.error('Virtual Network not found: %s', uuid)
 
     def get_vns_by_project(self, project):
         vns = self.vnc_lib.virtual_networks_list(parent_id=project.uuid).get('virtual-networks')
