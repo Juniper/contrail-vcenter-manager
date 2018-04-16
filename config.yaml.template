@@ -5,6 +5,7 @@ esxi:
   password:
   preferred_api_versions:
     - vim.version.version10
+  datacenter:
 vcenter:
   host:
   port: 443
@@ -12,6 +13,7 @@ vcenter:
   password:
   preferred_api_versions:
     - vim.version.version10
+  datacenter:
 vnc:
   api_server_host:
   api_server_port: 8082
