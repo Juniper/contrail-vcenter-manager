@@ -59,10 +59,31 @@ def make_pg_config_vlan_override(portgroup):
     return pg_config_spec
 
 
-class ESXiAPIClient(object):
+class VSphereAPIClient(object):
+    def __init__(self):
+        self._si = None
+        self._datacenter = None
+
+    def _get_datacenter(self, name):
+        return self._get_object([vim.Datacenter], name)
+
+    def _get_object(self, vimtype, name):
+        """
+         Get the vsphere object associated with a given text name
+        """
+        content = self._si.content
+        container = content.viewManager.CreateContainerView(content.rootFolder, vimtype, True)
+        try:
+            return [obj for obj in container.view if obj.name == name][0]
+        except IndexError:
+            return None
+
+
+class ESXiAPIClient(VSphereAPIClient):
     _version = ''
 
     def __init__(self, esxi_cfg):
+        super(ESXiAPIClient, self).__init__()
         self._si = SmartConnectNoSSL(
             host=esxi_cfg.get('host'),
             user=esxi_cfg.get('username'),
@@ -70,15 +91,16 @@ class ESXiAPIClient(object):
             port=esxi_cfg.get('port'),
             preferredApiVersions=esxi_cfg.get('preferred_api_versions')
         )
+        self._datacenter = self._get_datacenter(esxi_cfg.get('datacenter'))
         atexit.register(Disconnect, self._si)
         self._property_collector = self._si.content.propertyCollector
         self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
 
     def get_all_vms(self):
-        return self._si.content.rootFolder.childEntity[0].vmFolder.childEntity
+        return self._datacenter.vmFolder.childEntity
 
     def get_all_dpgs(self):
-        all_networks = self._si.content.rootFolder.childEntity[0].network
+        all_networks = self._datacenter.network
         return [net for net in all_networks if isinstance(net, vim.dvs.DistributedVirtualPortgroup)]
 
     def create_event_history_collector(self, events_to_observe):
@@ -87,8 +109,7 @@ class ESXiAPIClient(object):
         event_types = [getattr(vim.event, et) for et in events_to_observe]
         event_filter_spec.type = event_types
         entity_spec = vim.event.EventFilterSpec.ByEntity()
-        # TODO: find a way to search for this entity
-        entity_spec.entity = self._si.content.rootFolder.childEntity[0]
+        entity_spec.entity = self._datacenter
         entity_spec.recursion = vim.event.EventFilterSpec.RecursionOption.children
         event_filter_spec.entity = entity_spec
         return event_manager.CreateCollectorForEvents(filter=event_filter_spec)
@@ -117,10 +138,10 @@ class ESXiAPIClient(object):
         return {prop.name: prop.val for prop in prop_set}
 
 
-class VCenterAPIClient(object):
+class VCenterAPIClient(VSphereAPIClient):
     def __init__(self, vcenter_cfg):
+        super(VCenterAPIClient, self).__init__()
         self._vcenter_cfg = vcenter_cfg
-        self._si = None
 
     def __enter__(self):
         self._si = SmartConnectNoSSL(
@@ -130,28 +151,28 @@ class VCenterAPIClient(object):
             port=self._vcenter_cfg.get('port'),
             preferredApiVersions=self._vcenter_cfg.get('preferred_api_versions')
         )
+        self._datacenter = self._get_datacenter(self._vcenter_cfg.get('datacenter'))
 
     def __exit__(self, *args):
         Disconnect(self._si)
 
     def get_dpg_by_name(self, name):
-        for dpg in self._si.content.rootFolder.childEntity[0].network:
+        for dpg in self._datacenter.network:
             if dpg.name == name and isinstance(dpg, vim.dvs.DistributedVirtualPortgroup):
                 return dpg
         return None
 
     def get_dpgs_for_vm(self, vm_model):
-        for vmware_vm in self._si.content.rootFolder.childEntity[0].hostFolder.childEntity[0].host[0].vm:
+        for vmware_vm in self._datacenter.hostFolder.childEntity[0].host[0].vm:
             if vmware_vm.config.instanceUuid == vm_model.uuid:
                 return [dpg for dpg in vmware_vm.network if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup)]
         return []
 
     def get_ip_pool_for_dpg(self, dpg):
-        dc = self._si.content.rootFolder.childEntity[0]
-        return self._get_ip_pool_by_id(dpg.summary.ipPoolId, dc)
+        return self._get_ip_pool_by_id(dpg.summary.ipPoolId)
 
-    def _get_ip_pool_by_id(self, pool_id, dc):
-        for ip_pool in self._si.content.ipPoolManager.QueryIpPools(dc):
+    def _get_ip_pool_by_id(self, pool_id):
+        for ip_pool in self._si.content.ipPoolManager.QueryIpPools(self._datacenter):
             if ip_pool.id == pool_id:
                 return ip_pool
         return None
