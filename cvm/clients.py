@@ -238,13 +238,6 @@ class VNCAPIClient(object):
         self.vnc_lib.virtual_machine_interface_create(vmi)
         logger.info('Virtual Machine Interface created: %s', vmi.display_name)
 
-    def read_vmi(self, name, uuid):
-        try:
-            return self.vnc_lib.virtual_machine_interface_read([name, uuid])
-        except NoIdError:
-            logger.error('Virtual Machine not found: %s', name)
-            return None
-
     def delete_vmi(self, uuid):
         try:
             self.vnc_lib.virtual_machine_interface_delete(id=uuid)
@@ -260,18 +253,17 @@ class VNCAPIClient(object):
         vmis = self.vnc_lib.virtual_machine_interfaces_list(
             back_ref_id=vm_model.uuid
         ).get('virtual-machine-interfaces')
-        return [self.vnc_lib.virtual_machine_interface_read(vmi['fq_name']) for vmi in vmis]
+        return [self._read_vmi(vmi['fq_name']) for vmi in vmis]
 
-    def read_vn(self, fq_name):
-        try:
-            return self.vnc_lib.virtual_network_read(fq_name)
-        except NoIdError:
-            logger.error('Virtual Machine not found: %s', fq_name)
-            return None
+    def _read_vmi(self, fq_name):
+        return self.vnc_lib.virtual_machine_interface_read(fq_name)
 
     def get_vns_by_project(self, project):
         vns = self.vnc_lib.virtual_networks_list(parent_id=project.uuid).get('virtual-networks')
-        return [self.vnc_lib.virtual_network_read(vn['fq_name']) for vn in vns]
+        return [self._read_vn(vn['fq_name']) for vn in vns]
+
+    def _read_vn(self, fq_name):
+        return self.vnc_lib.virtual_network_read(fq_name)
 
     @staticmethod
     def construct_project():
