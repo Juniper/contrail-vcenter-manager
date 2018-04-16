@@ -99,10 +99,6 @@ class ESXiAPIClient(VSphereAPIClient):
     def get_all_vms(self):
         return self._datacenter.vmFolder.childEntity
 
-    def get_all_dpgs(self):
-        all_networks = self._datacenter.network
-        return [net for net in all_networks if isinstance(net, vim.dvs.DistributedVirtualPortgroup)]
-
     def create_event_history_collector(self, events_to_observe):
         event_manager = self._si.content.eventManager
         event_filter_spec = vim.event.EventFilterSpec()
@@ -161,12 +157,6 @@ class VCenterAPIClient(VSphereAPIClient):
             if dpg.name == name and isinstance(dpg, vim.dvs.DistributedVirtualPortgroup):
                 return dpg
         return None
-
-    def get_dpgs_for_vm(self, vm_model):
-        for vmware_vm in self._datacenter.hostFolder.childEntity[0].host[0].vm:
-            if vmware_vm.config.instanceUuid == vm_model.uuid:
-                return [dpg for dpg in vmware_vm.network if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup)]
-        return []
 
     def get_ip_pool_for_dpg(self, dpg):
         return self._get_ip_pool_by_id(dpg.summary.ipPoolId)
