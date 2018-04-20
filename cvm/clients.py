@@ -3,6 +3,7 @@ import logging
 from uuid import uuid4
 
 import requests
+from contrail_vrouter_api.vrouter_api import ContrailVRouterApi
 from pyVim.connect import Disconnect, SmartConnectNoSSL
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
@@ -363,50 +364,30 @@ class VNCAPIClient(object):
 
 
 class VRouterAPIClient(object):
-    """
-    A client for Contrail VRouter Agent REST API.
+    """ A client for Contrail VRouter Agent REST API. """
 
-    Based on:
-    - https://github.com/Juniper/contrail-controller/blob/master/src/vnsw/agent/port_ipc/vrouter-port-control
-    - https://github.com/Juniper/contrail-vrouter-java-api/blob/master/src/net/juniper/contrail/contrail_vrouter_api/ContrailVRouterApi.java
-    """
-
-    def __init__(self, address, port):
-        self.url = 'http://{0}:{1}'.format(address, port)
+    def __init__(self):
+        self.vrouter_api = ContrailVRouterApi()
 
     def add_port(self, vmi_model):
         """ Add port to VRouter Agent. """
-        payload = {
-            'uuid': vmi_model.uuid,
-            'name': vmi_model.uuid,
-            'id': vmi_model.uuid,
-            'instance-id': vmi_model.vm_model.uuid,
-            'system-name': vmi_model.uuid,
-            'ip-address': vmi_model.ip_address,
-            'mac-address': vmi_model.mac_address,
-            'vn-id': vmi_model.vn_model.uuid,
-            'display-name': vmi_model.vm_model.name,
-            'vm-project-id': vmi_model.parent.uuid,
-            'tx-vlan-id': vmi_model.vn_model.primary_vlan_id,
-            'rx-vlan-id': vmi_model.vn_model.isolated_vlan_id,
-        }
-
-        url = self.url + '/port'
-
-        response = requests.post(url, json=payload)
-
-        if response.status_code == requests.codes.ok:
-            logger.error('Port created for interface: %s', vmi_model.uuid)
-        else:
-            logger.error('Port not added for interface %s, agent returned: %s', vmi_model.uuid, response.reason)
+        try:
+            self.vrouter_api.add_port(
+                vm_uuid_str=vmi_model.vm_model.uuid,
+                vif_uuid_str=vmi_model.uuid,
+                interface_name=vmi_model.uuid,
+                mac_address=vmi_model.mac_address,
+                ip_address=vmi_model.ip_address,
+                vn_id=vmi_model.vn_model.uuid,
+                display_name=vmi_model.vm_model.name,
+                vlan=vmi_model.vn_model.primary_vlan_id,
+            )
+        except Exception, e:
+            logger.error('There was a problem with vRouter API Client: %s' % e)
 
     def delete_port(self, vmi_uuid):
         """ Delete port from VRouter Agent. """
-        url = self.url + '/port/{0}'.format(vmi_uuid)
-
-        response = requests.delete(url)
-
-        if response.status_code == requests.codes.ok:
-            logger.error('Port removed for interface: %s', vmi_uuid)
-        else:
-            logger.error('Port not removed for interface %s, agent returned: %s', vmi_uuid, response.reason)
+        try:
+            self.vrouter_api.delete_port(vmi_uuid)
+        except Exception, e:
+            logger.error('There was a problem with vRouter API Client: %s' % e)
