@@ -72,8 +72,9 @@ class VmwareController(object):
             logger.info('Skipping event for a non-existent VM.')
 
     def _handle_vm_removed_event(self, event):
-        vm_model = self._vm_service.remove_vm(event.vm.name)
-        self._vmi_service.remove_vmis_for_vm_model(vm_model)
+        vm_name = event.vm.name
+        self._vmi_service.remove_vmis_for_vm_model(vm_name)
+        self._vm_service.remove_vm(vm_name)
 
     def _handle_tools_status(self, vmware_vm, value):
         try:
