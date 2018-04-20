@@ -210,7 +210,8 @@ class VirtualMachineInterfaceService(Service):
             # vrouter_api.delete_port(vmi_model)
             vmi_model.vrouter_port_added = False
 
-    def remove_vmis_for_vm_model(self, vm_model):
+    def remove_vmis_for_vm_model(self, vm_name):
+        vm_model = self._database.get_vm_model_by_name(vm_name)
         if not vm_model:
             return
         for mac_address in vm_model.interfaces.keys():

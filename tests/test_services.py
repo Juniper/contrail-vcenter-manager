@@ -180,7 +180,7 @@ class TestVirtualMachineService(TestCase):
         self.database.save.assert_called_once_with(vm_model)
 
 
-class TestVirtualMachineInterface(TestCase):
+class TestVirtualMachineInterfaceService(TestCase):
 
     def setUp(self):
         self.database = Database()
@@ -283,9 +283,10 @@ class TestVirtualMachineInterface(TestCase):
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
                                                  vnc_api.Project(), vnc_api.SecurityGroup())
         self.database.save(vmi_model)
+        self.database.save(self.vm_model)
 
         with patch.object(self.database, 'delete_vmi_model') as database_del_mock:
-            self.vmi_service.remove_vmis_for_vm_model(self.vm_model)
+            self.vmi_service.remove_vmis_for_vm_model(self.vm_model.name)
 
         database_del_mock.assert_called_once_with(vmi_model.uuid)
         self.vnc_client.delete_vmi.assert_called_once_with(vmi_model.uuid)
@@ -296,7 +297,7 @@ class TestVirtualMachineInterface(TestCase):
         and therefore remove them.
         """
         with patch.object(self.database, 'delete_vmi_model') as database_del_mock:
-            self.vmi_service.remove_vmis_for_vm_model(None)
+            self.vmi_service.remove_vmis_for_vm_model('VM')
 
         database_del_mock.assert_not_called()
         self.vnc_client.delete_vmi.assert_not_called()
