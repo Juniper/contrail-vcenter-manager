@@ -239,6 +239,7 @@ class TestVirtualMachineInterfaceService(TestCase):
         """ VMIs are deleted when the VM is no longer connected to corresponding DPG. """
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
                                                  vnc_api.Project(), vnc_api.SecurityGroup())
+        vmi_model.vnc_instance_ip = Mock()
         self.database.save(vmi_model)
 
         self.vm_model.interfaces = {}
@@ -282,6 +283,7 @@ class TestVirtualMachineInterfaceService(TestCase):
     def test_remove_vmis_for_vm_model(self):
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
                                                  vnc_api.Project(), vnc_api.SecurityGroup())
+        vmi_model.vnc_instance_ip = Mock()
         self.database.save(vmi_model)
         self.database.save(self.vm_model)
 
@@ -340,3 +342,25 @@ class TestVirtualNetworkService(TestCase):
 
         self.assertEqual(first_vnc_vn, self.database.get_vn_model_by_key('dportgroup-50').vnc_vn)
         self.assertEqual(second_vnc_vn, self.database.get_vn_model_by_key('dportgroup-51').vnc_vn)
+
+
+class TestVMIInstanceIp(TestCase):
+    def setUp(self):
+        self.instance_ip = Mock()
+        self.vmi_model = Mock()
+        self.vmi_model.vnc_instance_ip = self.instance_ip
+        self.database = Database()
+        self.vnc_client = create_vnc_client_mock()
+        self.vmi_service = VirtualMachineInterfaceService(self.vnc_client, self.database)
+
+    def test_update_vmi(self):
+        self.vmi_service._create_or_update(self.vmi_model)
+
+        self.vnc_client.update_or_create_instance_ip.assert_called_once_with(self.instance_ip)
+
+    def test_delete_vmi(self):
+        self.instance_ip.uuid = '63f2594b-3c7d-4b8a-bb3d-cc6a098ad284'
+
+        self.vmi_service._delete(self.vmi_model)
+
+        self.vnc_client.delete_instance_ip.assert_called_once_with(self.instance_ip.uuid)

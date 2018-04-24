@@ -1,6 +1,7 @@
 from unittest import TestCase
 
-from mock import Mock
+import uuid
+from mock import Mock, patch
 from pyVmomi import vim  # pylint: disable=no-name-in-module
 from vnc_api.vnc_api import Project, SecurityGroup
 
@@ -173,6 +174,27 @@ class TestVirtualMachineInterfaceModel(TestCase):
         self.assertEqual(vnc_vmi.uuid, vmi_model.uuid)
         self.assertEqual(vnc_vmi.virtual_machine_interface_mac_addresses.mac_address, [vmi_model.mac_address])
         self.assertEqual(vnc_vmi.get_id_perms(), ID_PERMS)
+
+    @patch('cvm.models.find_vm_mac_address')
+    @patch('cvm.models.VirtualMachineInterfaceModel.to_vnc')
+    @patch('cvm.models.VirtualMachineInterfaceModel._find_ip_address')
+    @patch('cvm.models.VirtualMachineInterfaceModel._should_construct_instance_ip')
+    def test_construct_instance_ip(self, should_construct, ip_mock, to_vnc_mock, _):
+        ip_mock.return_value = '192.168.1.100'
+        should_construct.return_value = True
+        to_vnc_mock.return_value.uuid = 'd376b6b4-943d-4599-862f-d852fd6ba425'
+
+        vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, None, None)
+        instance_ip = vmi_model.vnc_instance_ip
+
+        self.assertEqual('192.168.1.100', instance_ip.instance_ip_address)
+        self.assertEqual('d376b6b4-943d-4599-862f-d852fd6ba425',
+                         instance_ip.virtual_machine_interface_refs[0]['uuid'])
+        self.assertEqual(
+            str(uuid.uuid3(uuid.NAMESPACE_DNS,
+                           'ip-' + self.vn_model.name + '-' + self.vm_model.name)),
+            instance_ip.uuid
+        )
 
 
 class TestVirtualNetworkModel(TestCase):
