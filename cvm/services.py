@@ -142,6 +142,7 @@ class VirtualMachineInterfaceService(Service):
 
     def _create_or_update(self, vmi_model):
         self._vnc_api_client.update_or_create_vmi(vmi_model.to_vnc())
+        self._vnc_api_client.update_or_create_instance_ip(vmi_model.vnc_instance_ip)
         self._add_or_update_vrouter_port(vmi_model)
         self._database.save(vmi_model)
 
@@ -199,6 +200,7 @@ class VirtualMachineInterfaceService(Service):
             self._delete(unused_vmi_model)
 
     def _delete(self, vmi_model):
+        self._vnc_api_client.delete_instance_ip(vmi_model.vnc_instance_ip.uuid)
         self._vnc_api_client.delete_vmi(vmi_model.uuid)
         self._database.delete_vmi_model(vmi_model.uuid)
         self._delete_vrouter_port(vmi_model)
@@ -206,6 +208,7 @@ class VirtualMachineInterfaceService(Service):
     def _delete_vrouter_port(self, vmi_model):
         if vmi_model.vrouter_port_added:
             logger.info('Deleting vRouter port for %s...', vmi_model.display_name)
+            # TODO: VrouterAPIClient should be passed in the constructor.
             vrouter_api = VRouterAPIClient()
             vrouter_api.delete_port(vmi_model.uuid)
             vmi_model.vrouter_port_added = False
