@@ -55,6 +55,7 @@ class VmwareController(object):
                 vim.event.DrsVmMigratedEvent,
                 vim.event.DrsVmPoweredOnEvent,
                 vim.event.VmMigratedEvent,
+                vim.event.VmRegisteredEvent,
                 vim.event.VmPoweredOnEvent,
                 vim.event.VmPoweredOffEvent,
                 vim.event.VmSuspendedEvent,

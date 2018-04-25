@@ -10,6 +10,7 @@ EVENTS_TO_OBSERVE = [
     'VmMacAssignedEvent',
     'VmReconfiguredEvent',
     'VmMigratedEvent',
+    'VmRegisteredEvent',
     'VmRemovedEvent',
 ]
 
