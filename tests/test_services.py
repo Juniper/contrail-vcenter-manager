@@ -6,7 +6,7 @@ from vnc_api import vnc_api
 
 from cvm.clients import VNCAPIClient, make_filter_spec
 from cvm.constants import (VNC_ROOT_DOMAIN, VNC_VCENTER_DEFAULT_SG,
-                           VNC_VCENTER_PROJECT)
+                           VNC_VCENTER_IPAM, VNC_VCENTER_PROJECT)
 from cvm.database import Database
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
@@ -434,4 +434,40 @@ class TestVNCEnvironmentSetup(TestCase):
         self.assertEqual(
             [VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_DEFAULT_SG],
             security_group.fq_name
+        )
+
+    def test_read_ipam(self):
+        self.vnc_lib.network_ipam_create.side_effect = vnc_api.RefsExistError()
+        self.vnc_lib.network_ipam_read.return_value = vnc_api.SecurityGroup(
+            name=VNC_VCENTER_IPAM,
+            parent_obj=vnc_api.Project(
+                name=VNC_VCENTER_PROJECT,
+                parent_obj=vnc_api.Domain(name=VNC_ROOT_DOMAIN)
+            )
+        )
+
+        service = Service(self.vnc_client, None)
+        ipam = service._ipam
+
+        self.assertEqual(VNC_VCENTER_IPAM, ipam.name)
+        self.assertEqual(
+            [VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_IPAM],
+            ipam.fq_name
+        )
+
+    def test_read_no_ipam(self):
+        self.vnc_lib.network_ipam_read.side_effect = vnc_api.NoIdError(0)
+        self.vnc_lib.project_read.return_value = vnc_api.Project(
+            name=VNC_VCENTER_PROJECT,
+            parent_obj=vnc_api.Domain(name=VNC_ROOT_DOMAIN)
+        )
+
+        service = Service(self.vnc_client, None)
+        ipam = service._ipam
+
+        self.vnc_lib.network_ipam_create.assert_called_once()
+        self.assertEqual(VNC_VCENTER_IPAM, ipam.name)
+        self.assertEqual(
+            [VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_IPAM],
+            ipam.fq_name
         )
