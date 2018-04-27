@@ -10,7 +10,8 @@ from vnc_api.exceptions import NoIdError, RefsExistError
 
 from cvm.constants import (VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
-                           VNC_VCENTER_IPAM, VNC_VCENTER_PROJECT)
+                           VNC_VCENTER_IPAM, VNC_VCENTER_IPAM_FQN,
+                           VNC_VCENTER_PROJECT)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -292,6 +293,9 @@ class VNCAPIClient(object):
             logger.error('Security group not found: %s, creating...', VNC_VCENTER_DEFAULT_SG_FQN)
             return self._create_security_group()
 
+    def _read_security_group(self):
+        return self.vnc_lib.security_group_read(VNC_VCENTER_DEFAULT_SG_FQN)
+
     def _create_security_group(self):
         project = self._read_project()
         security_group = construct_security_group(project)
@@ -299,28 +303,22 @@ class VNCAPIClient(object):
         logger.info('Security group created: %s', security_group.name)
         return security_group
 
-    def _read_security_group(self):
-        return self.vnc_lib.security_group_read(VNC_VCENTER_DEFAULT_SG_FQN)
-
-    @staticmethod
-    def construct_ipam(project):
-        return vnc_api.NetworkIpam(
-            name=VNC_VCENTER_IPAM,
-            parent_obj=project
-        )
-
-    def create_ipam(self, ipam):
+    def read_or_create_ipam(self):
         try:
-            self.vnc_lib.network_ipam_create(ipam)
-            logger.info('Network IPAM created: %s', ipam.name)
-        except RefsExistError:
-            logger.error('Network IPAM already exists: %s', ipam.name)
-
-    def read_ipam(self, fq_name):
-        try:
-            return self.vnc_lib.network_ipam_read(fq_name)
+            return self._read_ipam()
         except NoIdError:
-            logger.error('Network IPAM not found: %s', fq_name)
+            logger.error('Ipam not found: %s, creating...', VNC_VCENTER_IPAM_FQN)
+            return self._create_ipam()
+
+    def _read_ipam(self):
+        return self.vnc_lib.network_ipam_read(VNC_VCENTER_IPAM_FQN)
+
+    def _create_ipam(self):
+        project = self._read_project()
+        ipam = construct_ipam(project)
+        self.vnc_lib.network_ipam_create(ipam)
+        logger.info('Network IPAM created: %s', ipam.name)
+        return ipam
 
     def create_instance_ip(self, instance_ip):
         try:
@@ -328,6 +326,13 @@ class VNCAPIClient(object):
             logger.debug("Created instanceIP: " + instance_ip.name + ": " + instance_ip.address)
         except RefsExistError:
             logger.error('Instance IP already exists: %s', instance_ip.name)
+
+
+def construct_ipam(project):
+    return vnc_api.NetworkIpam(
+        name=VNC_VCENTER_IPAM,
+        parent_obj=project
+    )
 
 
 def construct_security_group(project):

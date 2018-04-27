@@ -2,8 +2,6 @@ import ipaddress
 import logging
 
 from cvm.clients import VRouterAPIClient
-from cvm.constants import (VNC_ROOT_DOMAIN, VNC_VCENTER_IPAM,
-                           VNC_VCENTER_PROJECT)
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
 
@@ -17,15 +15,7 @@ class Service(object):
         self._database = database
         self._project = self._vnc_api_client.create_or_read_project()
         self._default_security_group = self._vnc_api_client.read_or_create_security_group()
-        self._ipam = self._create_or_read_ipam()
-
-    def _create_or_read_ipam(self):
-        ipam = self._vnc_api_client.read_ipam([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_IPAM])
-        if not ipam:
-            logger.info('IPAM not found - creating...')
-            ipam = self._vnc_api_client.construct_ipam(self._project)
-            self._vnc_api_client.create_ipam(ipam)
-        return ipam
+        self._ipam = self._vnc_api_client.read_or_create_ipam()
 
 
 class VirtualMachineService(Service):
