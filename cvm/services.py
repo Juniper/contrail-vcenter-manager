@@ -2,8 +2,8 @@ import ipaddress
 import logging
 
 from cvm.clients import VRouterAPIClient
-from cvm.constants import (VNC_ROOT_DOMAIN, VNC_VCENTER_DEFAULT_SG,
-                           VNC_VCENTER_IPAM, VNC_VCENTER_PROJECT)
+from cvm.constants import (VNC_ROOT_DOMAIN, VNC_VCENTER_IPAM,
+                           VNC_VCENTER_PROJECT)
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
 
@@ -16,18 +16,8 @@ class Service(object):
         self._vnc_api_client = vnc_api_client
         self._database = database
         self._project = self._vnc_api_client.create_or_read_project()
-        self._default_security_group = self._create_or_read_security_group()
+        self._default_security_group = self._vnc_api_client.read_or_create_security_group()
         self._ipam = self._create_or_read_ipam()
-
-    def _create_or_read_security_group(self):
-        security_group = self._vnc_api_client.read_security_group(
-            [VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_DEFAULT_SG]
-        )
-        if not security_group:
-            logger.info('Security group not found - creating...')
-            security_group = self._vnc_api_client.construct_security_group(self._project)
-            self._vnc_api_client.create_security_group(security_group)
-        return security_group
 
     def _create_or_read_ipam(self):
         ipam = self._vnc_api_client.read_ipam([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_IPAM])

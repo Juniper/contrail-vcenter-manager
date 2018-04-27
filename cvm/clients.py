@@ -285,55 +285,22 @@ class VNCAPIClient(object):
         fq_name = [VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT]
         return self.vnc_lib.project_read(fq_name)
 
-    @staticmethod
-    def construct_security_group(project):
-        security_group = vnc_api.SecurityGroup(name=VNC_VCENTER_DEFAULT_SG,
-                                               parent_obj=project)
+    def read_or_create_security_group(self):
+        try:
+            return self._read_security_group()
+        except NoIdError:
+            logger.error('Security group not found: %s, creating...', VNC_VCENTER_DEFAULT_SG_FQN)
+            return self._create_security_group()
 
-        security_group_entry = vnc_api.PolicyEntriesType()
-
-        ingress_rule = vnc_api.PolicyRuleType(
-            rule_uuid=str(uuid4()),
-            direction='>',
-            protocol='any',
-            src_addresses=[vnc_api.AddressType(
-                security_group=VNC_VCENTER_DEFAULT_SG_FQN)],
-            src_ports=[vnc_api.PortType(0, 65535)],
-            dst_addresses=[vnc_api.AddressType(security_group='local')],
-            dst_ports=[vnc_api.PortType(0, 65535)],
-            ethertype='IPv4',
-        )
-
-        egress_rule = vnc_api.PolicyRuleType(
-            rule_uuid=str(uuid4()),
-            direction='>',
-            protocol='any',
-            src_addresses=[vnc_api.AddressType(security_group='local')],
-            src_ports=[vnc_api.PortType(0, 65535)],
-            dst_addresses=[vnc_api.AddressType(vnc_api.SubnetType('0.0.0.0', 0))],
-            dst_ports=[vnc_api.PortType(0, 65535)],
-            ethertype='IPv4',
-        )
-
-        security_group_entry.add_policy_rule(ingress_rule)
-        security_group_entry.add_policy_rule(egress_rule)
-
-        security_group.set_security_group_entries(security_group_entry)
+    def _create_security_group(self):
+        project = self._read_project()
+        security_group = construct_security_group(project)
+        self.vnc_lib.security_group_create(security_group)
+        logger.info('Security group created: %s', security_group.name)
         return security_group
 
-    def create_security_group(self, security_group):
-        try:
-            self.vnc_lib.security_group_create(security_group)
-            logger.info('Security group created: %s', security_group.name)
-        except RefsExistError:
-            logger.error('Security group already exists: %s', security_group.name)
-
-    def read_security_group(self, fq_name):
-        try:
-            return self.vnc_lib.security_group_read(fq_name)
-        except NoIdError:
-            logger.error('Security group not found: %s', fq_name)
-            return None
+    def _read_security_group(self):
+        return self.vnc_lib.security_group_read(VNC_VCENTER_DEFAULT_SG_FQN)
 
     @staticmethod
     def construct_ipam(project):
@@ -361,6 +328,42 @@ class VNCAPIClient(object):
             logger.debug("Created instanceIP: " + instance_ip.name + ": " + instance_ip.address)
         except RefsExistError:
             logger.error('Instance IP already exists: %s', instance_ip.name)
+
+
+def construct_security_group(project):
+    security_group = vnc_api.SecurityGroup(name=VNC_VCENTER_DEFAULT_SG,
+                                           parent_obj=project)
+
+    security_group_entry = vnc_api.PolicyEntriesType()
+
+    ingress_rule = vnc_api.PolicyRuleType(
+        rule_uuid=str(uuid4()),
+        direction='>',
+        protocol='any',
+        src_addresses=[vnc_api.AddressType(
+            security_group=VNC_VCENTER_DEFAULT_SG_FQN)],
+        src_ports=[vnc_api.PortType(0, 65535)],
+        dst_addresses=[vnc_api.AddressType(security_group='local')],
+        dst_ports=[vnc_api.PortType(0, 65535)],
+        ethertype='IPv4',
+    )
+
+    egress_rule = vnc_api.PolicyRuleType(
+        rule_uuid=str(uuid4()),
+        direction='>',
+        protocol='any',
+        src_addresses=[vnc_api.AddressType(security_group='local')],
+        src_ports=[vnc_api.PortType(0, 65535)],
+        dst_addresses=[vnc_api.AddressType(vnc_api.SubnetType('0.0.0.0', 0))],
+        dst_ports=[vnc_api.PortType(0, 65535)],
+        ethertype='IPv4',
+    )
+
+    security_group_entry.add_policy_rule(ingress_rule)
+    security_group_entry.add_policy_rule(egress_rule)
+
+    security_group.set_security_group_entries(security_group_entry)
+    return security_group
 
 
 def construct_project():
