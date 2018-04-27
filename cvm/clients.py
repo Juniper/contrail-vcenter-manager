@@ -2,16 +2,15 @@ import atexit
 import logging
 from uuid import uuid4
 
-import requests
 from contrail_vrouter_api.vrouter_api import ContrailVRouterApi
 from pyVim.connect import Disconnect, SmartConnectNoSSL
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 from vnc_api.exceptions import NoIdError, RefsExistError
 
-from cvm.constants import (VM_PROPERTY_FILTERS, VNC_VCENTER_DEFAULT_SG,
-                           VNC_VCENTER_DEFAULT_SG_FQN, VNC_VCENTER_IPAM,
-                           VNC_VCENTER_PROJECT)
+from cvm.constants import (VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
+                           VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
+                           VNC_VCENTER_IPAM, VNC_VCENTER_PROJECT)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -266,11 +265,15 @@ class VNCAPIClient(object):
     def _read_vn(self, fq_name):
         return self.vnc_lib.virtual_network_read(fq_name)
 
-    @staticmethod
-    def construct_project():
-        return vnc_api.Project(name=VNC_VCENTER_PROJECT)
+    def create_or_read_project(self):
+        try:
+            self._create_project()
+        except vnc_api.RefsExistError:
+            pass
+        return self._read_project()
 
-    def create_project(self, project):
+    def _create_project(self):
+        project = construct_project()
         try:
             project.set_id_perms(self.id_perms)
             self.vnc_lib.project_create(project)
@@ -278,12 +281,9 @@ class VNCAPIClient(object):
         except RefsExistError:
             logger.error('Project already exists: %s', project.name)
 
-    def read_project(self, fq_name):
-        try:
-            return self.vnc_lib.project_read(fq_name)
-        except NoIdError:
-            logger.error('Project not found: %s', fq_name)
-            return None
+    def _read_project(self):
+        fq_name = [VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT]
+        return self.vnc_lib.project_read(fq_name)
 
     @staticmethod
     def construct_security_group(project):
@@ -361,6 +361,10 @@ class VNCAPIClient(object):
             logger.debug("Created instanceIP: " + instance_ip.name + ": " + instance_ip.address)
         except RefsExistError:
             logger.error('Instance IP already exists: %s', instance_ip.name)
+
+
+def construct_project():
+    return vnc_api.Project(name=VNC_VCENTER_PROJECT)
 
 
 class VRouterAPIClient(object):

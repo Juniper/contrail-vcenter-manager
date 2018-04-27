@@ -15,17 +15,9 @@ class Service(object):
     def __init__(self, vnc_api_client, database):
         self._vnc_api_client = vnc_api_client
         self._database = database
-        self._project = self._create_or_read_project()
+        self._project = self._vnc_api_client.create_or_read_project()
         self._default_security_group = self._create_or_read_security_group()
         self._ipam = self._create_or_read_ipam()
-
-    def _create_or_read_project(self):
-        project = self._vnc_api_client.read_project([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT])
-        if not project:
-            logger.info('Project not found - creating...')
-            project = self._vnc_api_client.construct_project()
-            self._vnc_api_client.create_project(project)
-        return project
 
     def _create_or_read_security_group(self):
         security_group = self._vnc_api_client.read_security_group(

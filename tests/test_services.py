@@ -4,11 +4,12 @@ from mock import Mock, patch
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 
-from cvm.clients import make_filter_spec
+from cvm.clients import VNCAPIClient, make_filter_spec
+from cvm.constants import VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT
 from cvm.database import Database
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
-from cvm.services import (VirtualMachineInterfaceService,
+from cvm.services import (Service, VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService)
 
 
@@ -51,7 +52,7 @@ def create_vcenter_client_mock():
 
 def create_vnc_client_mock():
     vnc_client = Mock()
-    vnc_client.read_project.return_value = vnc_api.Project()
+    vnc_client.create_or_read_project.return_value = vnc_api.Project()
     vnc_client.read_security_group.return_value = vnc_api.SecurityGroup()
     return vnc_client
 
@@ -364,3 +365,36 @@ class TestVMIInstanceIp(TestCase):
         self.vmi_service._delete(self.vmi_model)
 
         self.vnc_client.delete_instance_ip.assert_called_once_with(self.instance_ip.uuid)
+
+
+class TestVNCEnvironmentSetup(TestCase):
+    def setUp(self):
+        with patch('cvm.clients.vnc_api.VncApi') as vnc_api_mock:
+            self.vnc_api = vnc_api_mock.return_value
+            self.vnc_client = VNCAPIClient({})
+
+    def test_read_project(self):
+        self.vnc_api.project_create.side_effect = vnc_api.RefsExistError()
+        self.vnc_api.project_read.return_value = vnc_api.Project(
+            name=VNC_VCENTER_PROJECT,
+            parent_obj=vnc_api.Domain(name=VNC_ROOT_DOMAIN)
+        )
+        service = Service(self.vnc_client, None)
+
+        project = service._project
+
+        self.assertEqual(VNC_VCENTER_PROJECT, project.name)
+        self.assertEqual([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT], project.fq_name)
+
+    def test_read_no_project(self):
+        self.vnc_api.project_read.return_value = vnc_api.Project(
+            name=VNC_VCENTER_PROJECT,
+            parent_obj=vnc_api.Domain(name=VNC_ROOT_DOMAIN)
+        )
+        service = Service(self.vnc_client, None)
+
+        project = service._project
+
+        self.vnc_api.project_create.assert_called_once()
+        self.assertEqual(VNC_VCENTER_PROJECT, project.name)
+        self.assertEqual([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT], project.fq_name)
