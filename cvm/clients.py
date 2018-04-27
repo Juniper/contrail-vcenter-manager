@@ -266,21 +266,19 @@ class VNCAPIClient(object):
     def _read_vn(self, fq_name):
         return self.vnc_lib.virtual_network_read(fq_name)
 
-    def create_or_read_project(self):
+    def read_or_create_project(self):
         try:
-            self._create_project()
-        except vnc_api.RefsExistError:
-            pass
-        return self._read_project()
+            return self._read_project()
+        except NoIdError:
+            logger.error('Project not found: %s, creating...', VNC_VCENTER_PROJECT)
+            return self._create_project()
 
     def _create_project(self):
         project = construct_project()
-        try:
-            project.set_id_perms(self.id_perms)
-            self.vnc_lib.project_create(project)
-            logger.info('Project created: %s', project.name)
-        except RefsExistError:
-            logger.error('Project already exists: %s', project.name)
+        project.set_id_perms(self.id_perms)
+        self.vnc_lib.project_create(project)
+        logger.info('Project created: %s', project.name)
+        return project
 
     def _read_project(self):
         fq_name = [VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT]

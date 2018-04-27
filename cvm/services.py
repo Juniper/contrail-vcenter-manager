@@ -13,7 +13,7 @@ class Service(object):
     def __init__(self, vnc_api_client, database):
         self._vnc_api_client = vnc_api_client
         self._database = database
-        self._project = self._vnc_api_client.create_or_read_project()
+        self._project = self._vnc_api_client.read_or_create_project()
         self._default_security_group = self._vnc_api_client.read_or_create_security_group()
         self._ipam = self._vnc_api_client.read_or_create_ipam()
 

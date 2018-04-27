@@ -53,7 +53,7 @@ def create_vcenter_client_mock():
 
 def create_vnc_client_mock():
     vnc_client = Mock()
-    vnc_client.create_or_read_project.return_value = vnc_api.Project()
+    vnc_client.read_or_create_project.return_value = vnc_api.Project()
     vnc_client.read_security_group.return_value = vnc_api.SecurityGroup()
     return vnc_client
 
@@ -375,7 +375,6 @@ class TestVNCEnvironmentSetup(TestCase):
             self.vnc_client = VNCAPIClient({})
 
     def test_read_project(self):
-        self.vnc_lib.project_create.side_effect = vnc_api.RefsExistError()
         self.vnc_lib.project_read.return_value = vnc_api.Project(
             name=VNC_VCENTER_PROJECT,
             parent_obj=vnc_api.Domain(name=VNC_ROOT_DOMAIN)
@@ -388,10 +387,7 @@ class TestVNCEnvironmentSetup(TestCase):
         self.assertEqual([VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT], project.fq_name)
 
     def test_read_no_project(self):
-        self.vnc_lib.project_read.return_value = vnc_api.Project(
-            name=VNC_VCENTER_PROJECT,
-            parent_obj=vnc_api.Domain(name=VNC_ROOT_DOMAIN)
-        )
+        self.vnc_lib.project_read.side_effect = vnc_api.NoIdError(0)
 
         service = Service(self.vnc_client, None)
         project = service._project
