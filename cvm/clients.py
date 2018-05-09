@@ -319,6 +319,8 @@ class VNCAPIClient(object):
         return ipam
 
     def create_instance_ip(self, instance_ip):
+        if not instance_ip:
+            return
         try:
             self.vnc_lib.instance_ip_create(instance_ip)
             logger.debug("Created instanceIP: " + instance_ip.name + ": " + instance_ip.address)
