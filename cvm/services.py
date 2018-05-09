@@ -114,7 +114,7 @@ class VirtualMachineInterfaceService(Service):
 
     def _create_or_update(self, vmi_model):
         self._vnc_api_client.update_or_create_vmi(vmi_model.to_vnc())
-        self._vnc_api_client.update_or_create_instance_ip(vmi_model.vnc_instance_ip)
+        self._vnc_api_client.create_instance_ip(vmi_model.vnc_instance_ip)
         self._add_or_update_vrouter_port(vmi_model)
         self._database.save(vmi_model)
 
