@@ -6,6 +6,9 @@ from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+VLAN_RANGE_START = 0
+VLAN_RANGE_END = 4094
+
 
 class Database(object):
 
@@ -87,3 +90,23 @@ class Database(object):
         print self.vm_models
         print self.vn_models
         print self.vmi_models
+
+
+class VlanIdPool(object):
+    def __init__(self):
+        self._available_ids = set(range(VLAN_RANGE_START, VLAN_RANGE_END + 1))
+
+    def reserve(self, vlan_id):
+        try:
+            self._available_ids.remove(vlan_id)
+        except KeyError:
+            pass
+
+    def get_available(self):
+        try:
+            return self._available_ids.pop()
+        except KeyError:
+            return None
+
+    def free(self, vlan_id):
+        self._available_ids.add(vlan_id)
