@@ -120,11 +120,7 @@ class VirtualNetworkModel(object):
         self.key = vmware_vn.key
         self.dvs = vmware_vn.config.distributedVirtualSwitch
         self.default_port_config = vmware_vn.config.defaultPortConfig
-        self.vendor_specific_config = vmware_vn.config.vendorSpecificConfig
         self.vnc_vn = vnc_vn
-        self.primary_vlan_id = None
-        self.isolated_vlan_id = None
-        self._populate_vlans()
 
     @property
     def name(self):
@@ -141,43 +137,6 @@ class VirtualNetworkModel(object):
     @staticmethod
     def get_uuid(key):
         return str(uuid.uuid3(uuid.NAMESPACE_DNS, key))
-
-    def _populate_vlans(self):
-        pvlan_map = self.dvs.config.pvlanConfig
-        if not pvlan_map:
-            logger.error('Cannot populate vlan, private vlan not configured on dvSwitch: %s', self.dvs.name)
-            return
-
-        try:
-            self._extract_data_from_vlan_spec(pvlan_map)
-        except AttributeError:
-            logger.error('Cannot populate vlan, invalid port setting: %s', self.default_port_config)
-
-    def _extract_data_from_vlan_spec(self, pvlan_map):
-        vlan_spec = self.default_port_config.vlan
-        if isinstance(vlan_spec, vim.dvs.VmwareDistributedVirtualSwitch.PvlanSpec):
-            self._find_primary_vlan_for_isolated(pvlan_map, vlan_spec)
-        elif isinstance(vlan_spec, vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec):
-            self._set_regular_vlan(vlan_spec)
-        else:
-            logger.error('Cannot populate vlan, invalid vlan spec: %s', type(vlan_spec))
-
-    def _set_regular_vlan(self, vlan_spec):
-        self.primary_vlan_id = self.isolated_vlan_id = vlan_spec.vlanId
-        logger.info('VlanType = VLAN VlanId = %d', self.primary_vlan_id)
-
-    def _find_primary_vlan_for_isolated(self, pvlan_map, vlan_spec):
-        self.isolated_vlan_id = vlan_spec.pvlanId
-        try:
-            matching_entry = [e for e in [isolated for isolated in pvlan_map if isolated.pvlanType == 'isolated']
-                              if e.secondaryVlanId == self.isolated_vlan_id][0]
-            self.primary_vlan_id = matching_entry.primaryVlanId
-            logger.info('VlanType = PrivateVLAN PrimaryVLAN = %d IsolatedVLAN = %d',
-                        self.primary_vlan_id,
-                        self.isolated_vlan_id)
-        except IndexError:
-            logger.error('Cannot populate vlan, could not find primary vlan for isolated vlan: %d',
-                         self.isolated_vlan_id)
 
     def subnet_info_is_set(self):
         return self.vnc_vn.get_network_ipam_refs()

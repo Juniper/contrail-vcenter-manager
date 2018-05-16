@@ -1,8 +1,7 @@
+import uuid
 from unittest import TestCase
 
-import uuid
 from mock import Mock, patch
-from pyVmomi import vim  # pylint: disable=no-name-in-module
 from vnc_api.vnc_api import Project, SecurityGroup
 
 from cvm.models import (ID_PERMS, VirtualMachineInterfaceModel,
@@ -195,98 +194,3 @@ class TestVirtualMachineInterfaceModel(TestCase):
                            'ip-' + self.vn_model.name + '-' + self.vm_model.name)),
             instance_ip.uuid
         )
-
-
-class TestVirtualNetworkModel(TestCase):
-    def setUp(self):
-        self.vmware_vn = Mock()
-
-    def test_populate_vlans(self):
-        entry_1 = self._create_pvlan_map_entry_mock('isolated', 2, 3)
-        entry_2 = self._create_pvlan_map_entry_mock('promiscuous', 2, 3)
-        entry_3 = self._create_pvlan_map_entry_mock('isolated', 3, 4)
-        self.vmware_vn.config.distributedVirtualSwitch.config.pvlanConfig = [entry_1, entry_2, entry_3]
-        self.vmware_vn.config.defaultPortConfig = self._create_pvlan_port_config_mock(3)
-
-        vn_model = VirtualNetworkModel(self.vmware_vn, None)
-
-        self.assertEqual(vn_model.isolated_vlan_id, 3)
-        self.assertEqual(vn_model.primary_vlan_id, 2)
-
-    def test_populate_vlans_no_p_found(self):
-        """ No primary vlan corresponding to isolated vlan in vlan map. """
-        entry = self._create_pvlan_map_entry_mock('isolated', 4, 5)
-        self.vmware_vn.config.distributedVirtualSwitch.config.pvlanConfig = [entry]
-        self.vmware_vn.config.defaultPortConfig = self._create_pvlan_port_config_mock(3)
-
-        vn_model = VirtualNetworkModel(self.vmware_vn, None)
-
-        self.assertEqual(vn_model.isolated_vlan_id, 3)
-        self.assertEqual(vn_model.primary_vlan_id, None)
-
-    def test_populate_vlans_not_p(self):
-        """
-        default_port_config.vlan is instance of
-        vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec.
-        VlanType = VLAN.
-        """
-        self.vmware_vn.config.defaultPortConfig = self._create_vlan_port_config_mock(3)
-
-        vn_model = VirtualNetworkModel(self.vmware_vn, None)
-
-        self.assertEqual(vn_model.isolated_vlan_id, 3)
-        self.assertEqual(vn_model.primary_vlan_id, 3)
-
-    def test_populate_vlans_inv_spec(self):
-        """ Sometimes vlan_spec is of invalid type, e.g. TrunkVlanSpec. """
-        self.vmware_vn.config.defaultPortConfig.vlan = Mock(spec=vim.dvs.VmwareDistributedVirtualSwitch.TrunkVlanSpec)
-
-        vn_model = VirtualNetworkModel(self.vmware_vn, None)
-
-        self.assertIsNone(vn_model.primary_vlan_id)
-        self.assertIsNone(vn_model.isolated_vlan_id)
-
-    def test_populate_vlans_no_map(self):
-        """ Private vlan not configured on dvSwitch. """
-        self.vmware_vn.config.distributedVirtualSwitch.config.pvlanConfig = None
-
-        vn_model = VirtualNetworkModel(self.vmware_vn, None)
-
-        self.assertIsNone(vn_model.primary_vlan_id)
-        self.assertIsNone(vn_model.isolated_vlan_id)
-
-    def test_populate_vlans_no_spec(self):
-        """
-        vn_model.default_port_config has no vlan field.
-        Invalid port setting.
-        """
-        entry = self._create_pvlan_map_entry_mock('isolated', 2, 3)
-        self.vmware_vn.config.distributedVirtualSwitch.config.pvlanConfig = [entry]
-        self.vmware_vn.config.defaultPortConfig = None
-
-        vn_model = VirtualNetworkModel(self.vmware_vn, None)
-
-        self.assertIsNone(vn_model.primary_vlan_id)
-        self.assertIsNone(vn_model.isolated_vlan_id)
-
-    @staticmethod
-    def _create_pvlan_port_config_mock(pvlan_id):
-        default_port_config = Mock()
-        default_port_config.vlan = Mock(spec=vim.dvs.VmwareDistributedVirtualSwitch.PvlanSpec)
-        default_port_config.vlan.pvlanId = pvlan_id
-        return default_port_config
-
-    @staticmethod
-    def _create_vlan_port_config_mock(vlan_id):
-        default_port_config = Mock()
-        default_port_config.vlan = Mock(spec=vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec)
-        default_port_config.vlan.vlanId = vlan_id
-        return default_port_config
-
-    @staticmethod
-    def _create_pvlan_map_entry_mock(pvlan_type, primary_id, secondary_id):
-        entry = Mock()
-        entry.pvlanType = pvlan_type
-        entry.primaryVlanId = primary_id
-        entry.secondaryVlanId = secondary_id
-        return entry
