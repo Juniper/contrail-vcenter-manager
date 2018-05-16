@@ -5,7 +5,7 @@ from mock import Mock, patch
 from vnc_api.vnc_api import Project, SecurityGroup
 
 from cvm.models import (ID_PERMS, VirtualMachineInterfaceModel,
-                        VirtualMachineModel, VirtualNetworkModel,
+                        VirtualMachineModel, VirtualNetworkModel, VlanIdPool,
                         find_virtual_machine_ip_address)
 from tests.test_services import create_vmware_vm_mock
 
@@ -194,3 +194,43 @@ class TestVirtualMachineInterfaceModel(TestCase):
                            'ip-' + self.vn_model.name + '-' + self.vm_model.name)),
             instance_ip.uuid
         )
+
+
+class TestVlanIdPool(TestCase):
+    def setUp(self):
+        self.vlan_id_pool = VlanIdPool()
+
+    def test_reserve(self):
+        self.vlan_id_pool.reserve(0)
+
+        self.assertNotIn(0, self.vlan_id_pool._available_ids)
+
+    def test_reserve_existing(self):
+        self.vlan_id_pool.reserve(0)
+
+        self.vlan_id_pool.reserve(0)
+
+        self.assertNotIn(0, self.vlan_id_pool._available_ids)
+
+    def test_get_first_available(self):
+        self.vlan_id_pool.reserve(0)
+
+        result = self.vlan_id_pool.get_available()
+
+        self.assertEqual(1, result)
+        self.assertNotIn(1, self.vlan_id_pool._available_ids)
+
+    def test_no_available(self):
+        for i in range(4095):
+            self.vlan_id_pool.reserve(i)
+
+        result = self.vlan_id_pool.get_available()
+
+        self.assertIsNone(result)
+
+    def test_free(self):
+        self.vlan_id_pool.reserve(0)
+
+        self.vlan_id_pool.free(0)
+
+        self.assertIn(0, self.vlan_id_pool._available_ids)
