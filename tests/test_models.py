@@ -7,7 +7,7 @@ from vnc_api.vnc_api import Project, SecurityGroup
 from cvm.models import (ID_PERMS, VirtualMachineInterfaceModel,
                         VirtualMachineModel, VirtualNetworkModel, VlanIdPool,
                         find_virtual_machine_ip_address)
-from tests.test_services import create_vmware_vm_mock
+from tests.test_services import create_vmware_vm_mock, create_dpg_mock
 
 
 class TestFindVirtualMachineIpAddress(TestCase):
@@ -156,11 +156,10 @@ class TestVirtualMachineInterfaceModel(TestCase):
         self.vm_model.vm_properties['config.instanceUuid'] = 'd376b6b4-943d-4599-862f-d852fd6ba425'
         self.vm_model.vrouter_ip_address = '192.168.0.10'
 
-        vmware_vn = Mock()
+        vmware_vn = create_dpg_mock(name='VM Network', key='123')
         vnc_vn = Mock(uuid='d376b6b4-943d-4599-862f-d852fd6ba425')
         vnc_vn.name = 'VM Network'
         self.vn_model = VirtualNetworkModel(vmware_vn, vnc_vn)
-        self.vn_model.key = '123'
 
     def test_to_vnc(self):
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, self.project, self.security_group)
@@ -234,3 +233,32 @@ class TestVlanIdPool(TestCase):
         self.vlan_id_pool.free(0)
 
         self.assertIn(0, self.vlan_id_pool._available_ids)
+
+
+def create_port_mock(vlan_id):
+    port = Mock()
+    port.config.setting.vlan = vlan_id
+    return port
+
+
+class TestVirtualNetworkVlans(TestCase):
+    def setUp(self):
+        self.dpg = create_dpg_mock(name='DPG1', key='dvportgroup-20')
+        self.ports = []
+
+    def test_sync_vlan_ids(self):
+        self.ports.append(create_port_mock(1))
+        self.ports.append(create_port_mock(2))
+        dvs = Mock()
+        dvs.FetchDVPorts.side_effect = self._check_criteria
+        self.dpg.config.distributedVirtualSwitch = dvs
+
+        vn_model = VirtualNetworkModel(self.dpg, None)
+
+        self.assertNotIn(1, vn_model.vlan_id_pool._available_ids)
+        self.assertNotIn(2, vn_model.vlan_id_pool._available_ids)
+
+    def _check_criteria(self, criteria):
+        if criteria.portgroupKey == 'dvportgroup-20' and criteria.inside:
+            return self.ports
+

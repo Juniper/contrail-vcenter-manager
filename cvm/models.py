@@ -123,6 +123,8 @@ class VirtualNetworkModel(object):
         self.dvs = vmware_vn.config.distributedVirtualSwitch
         self.default_port_config = vmware_vn.config.defaultPortConfig
         self.vnc_vn = vnc_vn
+        self.vlan_id_pool = VlanIdPool()
+        self._sync_vlan_ids()
 
     @property
     def name(self):
@@ -142,6 +144,16 @@ class VirtualNetworkModel(object):
 
     def subnet_info_is_set(self):
         return self.vnc_vn.get_network_ipam_refs()
+
+    def _sync_vlan_ids(self):
+        criteria = vim.dvs.PortCriteria()
+        criteria.portgroupKey = self.key
+        criteria.inside = True
+
+        vlan_ids = [port.config.setting.vlan for port in self.dvs.FetchDVPorts(criteria)]
+
+        for vlan_id in vlan_ids:
+            self.vlan_id_pool.reserve(vlan_id)
 
 
 class VirtualMachineInterfaceModel(object):
