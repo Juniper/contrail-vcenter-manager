@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 ID_PERMS = IdPermsType(creator='vcenter-manager',
                        enable=True)
+VLAN_RANGE_START = 0
+VLAN_RANGE_END = 4094
 
 
 def find_virtual_machine_ip_address(vmware_vm, port_group_name):
@@ -213,3 +215,23 @@ class VirtualMachineInterfaceModel(object):
     @staticmethod
     def get_uuid(mac_address):
         return str(uuid.uuid3(uuid.NAMESPACE_DNS, mac_address.encode('utf-8')))
+
+
+class VlanIdPool(object):
+    def __init__(self):
+        self._available_ids = set(range(VLAN_RANGE_START, VLAN_RANGE_END + 1))
+
+    def reserve(self, vlan_id):
+        try:
+            self._available_ids.remove(vlan_id)
+        except KeyError:
+            pass
+
+    def get_available(self):
+        try:
+            return self._available_ids.pop()
+        except KeyError:
+            return None
+
+    def free(self, vlan_id):
+        self._available_ids.add(vlan_id)
