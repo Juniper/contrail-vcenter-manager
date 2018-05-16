@@ -40,6 +40,7 @@ def create_dpg_mock(**kwargs):
     dpg_mock = Mock(spec=vim.dvs.DistributedVirtualPortgroup)
     for kwarg in kwargs:
         setattr(dpg_mock, kwarg, kwargs[kwarg])
+    dpg_mock.config.distributedVirtualSwitch.FetchDVPorts.return_value = []
     return dpg_mock
 
 
