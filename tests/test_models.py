@@ -160,7 +160,7 @@ class TestVirtualMachineInterfaceModel(TestCase):
         vmware_vn = Mock()
         vnc_vn = Mock(uuid='d376b6b4-943d-4599-862f-d852fd6ba425')
         vnc_vn.name = 'VM Network'
-        self.vn_model = VirtualNetworkModel(vmware_vn, vnc_vn, None)
+        self.vn_model = VirtualNetworkModel(vmware_vn, vnc_vn)
         self.vn_model.key = '123'
 
     def test_to_vnc(self):
@@ -208,7 +208,7 @@ class TestVirtualNetworkModel(TestCase):
         self.vmware_vn.config.distributedVirtualSwitch.config.pvlanConfig = [entry_1, entry_2, entry_3]
         self.vmware_vn.config.defaultPortConfig = self._create_pvlan_port_config_mock(3)
 
-        vn_model = VirtualNetworkModel(self.vmware_vn, None, None)
+        vn_model = VirtualNetworkModel(self.vmware_vn, None)
 
         self.assertEqual(vn_model.isolated_vlan_id, 3)
         self.assertEqual(vn_model.primary_vlan_id, 2)
@@ -219,7 +219,7 @@ class TestVirtualNetworkModel(TestCase):
         self.vmware_vn.config.distributedVirtualSwitch.config.pvlanConfig = [entry]
         self.vmware_vn.config.defaultPortConfig = self._create_pvlan_port_config_mock(3)
 
-        vn_model = VirtualNetworkModel(self.vmware_vn, None, None)
+        vn_model = VirtualNetworkModel(self.vmware_vn, None)
 
         self.assertEqual(vn_model.isolated_vlan_id, 3)
         self.assertEqual(vn_model.primary_vlan_id, None)
@@ -232,7 +232,7 @@ class TestVirtualNetworkModel(TestCase):
         """
         self.vmware_vn.config.defaultPortConfig = self._create_vlan_port_config_mock(3)
 
-        vn_model = VirtualNetworkModel(self.vmware_vn, None, None)
+        vn_model = VirtualNetworkModel(self.vmware_vn, None)
 
         self.assertEqual(vn_model.isolated_vlan_id, 3)
         self.assertEqual(vn_model.primary_vlan_id, 3)
@@ -241,7 +241,7 @@ class TestVirtualNetworkModel(TestCase):
         """ Sometimes vlan_spec is of invalid type, e.g. TrunkVlanSpec. """
         self.vmware_vn.config.defaultPortConfig.vlan = Mock(spec=vim.dvs.VmwareDistributedVirtualSwitch.TrunkVlanSpec)
 
-        vn_model = VirtualNetworkModel(self.vmware_vn, None, None)
+        vn_model = VirtualNetworkModel(self.vmware_vn, None)
 
         self.assertIsNone(vn_model.primary_vlan_id)
         self.assertIsNone(vn_model.isolated_vlan_id)
@@ -250,7 +250,7 @@ class TestVirtualNetworkModel(TestCase):
         """ Private vlan not configured on dvSwitch. """
         self.vmware_vn.config.distributedVirtualSwitch.config.pvlanConfig = None
 
-        vn_model = VirtualNetworkModel(self.vmware_vn, None, None)
+        vn_model = VirtualNetworkModel(self.vmware_vn, None)
 
         self.assertIsNone(vn_model.primary_vlan_id)
         self.assertIsNone(vn_model.isolated_vlan_id)
@@ -264,7 +264,7 @@ class TestVirtualNetworkModel(TestCase):
         self.vmware_vn.config.distributedVirtualSwitch.config.pvlanConfig = [entry]
         self.vmware_vn.config.defaultPortConfig = None
 
-        vn_model = VirtualNetworkModel(self.vmware_vn, None, None)
+        vn_model = VirtualNetworkModel(self.vmware_vn, None)
 
         self.assertIsNone(vn_model.primary_vlan_id)
         self.assertIsNone(vn_model.isolated_vlan_id)

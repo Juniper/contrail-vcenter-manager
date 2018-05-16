@@ -318,15 +318,19 @@ class VNCAPIClient(object):
         logger.info('Network IPAM created: %s', ipam.name)
         return ipam
 
-    def create_instance_ip(self, instance_ip):
+    def create_and_read_instance_ip(self, instance_ip):
         if not instance_ip:
             return
         try:
+            return self.vnc_lib.instance_ip_read([instance_ip.uuid])
+            #TODO: Refactor this
+        except NoIdError:
             self.vnc_lib.instance_ip_create(instance_ip)
-            logger.debug("Created instanceIP: " + instance_ip.name + ": " + instance_ip.address)
-        except RefsExistError:
-            logger.error('Instance IP already exists: %s', instance_ip.name)
+            logger.debug("Created instanceIP: " + instance_ip.name)
+            return self.vnc_lib.instance_ip_read([instance_ip.uuid])
 
+    def delete_instance_ip(self, uuid):
+        self.vnc_lib.instance_ip_delete(id=uuid)
 
 def construct_ipam(project):
     return vnc_api.NetworkIpam(
@@ -384,16 +388,17 @@ class VRouterAPIClient(object):
     def add_port(self, vmi_model):
         """ Add port to VRouter Agent. """
         try:
-            self.vrouter_api.add_port(
+            ret = self.vrouter_api.add_port(
                 vm_uuid_str=vmi_model.vm_model.uuid,
                 vif_uuid_str=vmi_model.uuid,
                 interface_name=vmi_model.uuid,
                 mac_address=vmi_model.mac_address,
-                ip_address=vmi_model.ip_address,
+                ip_address=vmi_model.vnc_instance_ip.instance_ip_address,
                 vn_id=vmi_model.vn_model.uuid,
                 display_name=vmi_model.vm_model.name,
                 vlan=vmi_model.vn_model.primary_vlan_id,
             )
+            print ret
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s' % e)
 

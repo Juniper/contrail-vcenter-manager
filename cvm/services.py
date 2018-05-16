@@ -92,7 +92,7 @@ class VirtualNetworkService(Service):
             for vn in self._vnc_api_client.get_vns_by_project(self._project):
                 dpg = self._vcenter_api_client.get_dpg_by_name(vn.name)
                 if vn and dpg:
-                    vn_model = VirtualNetworkModel(dpg, vn, self._vcenter_api_client.get_ip_pool_for_dpg(dpg))
+                    vn_model = VirtualNetworkModel(dpg, vn)
                     self._database.save(vn_model)
 
 
@@ -114,7 +114,8 @@ class VirtualMachineInterfaceService(Service):
 
     def _create_or_update(self, vmi_model):
         self._vnc_api_client.update_or_create_vmi(vmi_model.to_vnc())
-        self._vnc_api_client.create_instance_ip(vmi_model.vnc_instance_ip)
+        instance_ip = self._vnc_api_client.create_and_read_instance_ip(vmi_model.vnc_instance_ip)
+        vmi_model.vnc_instance_ip = instance_ip
         self._add_or_update_vrouter_port(vmi_model)
         self._database.save(vmi_model)
 

@@ -40,7 +40,7 @@ def is_nic_info_valid(info):
 def find_vrouter_ip_address(host):
     try:
         for vmware_vm in host.vm:
-            if vmware_vm.name == CONTRAIL_VM_NAME:
+            if vmware_vm.name.startswith(CONTRAIL_VM_NAME):
                 return find_virtual_machine_ip_address(vmware_vm, CONTRAIL_NETWORK)
     except AttributeError:
         pass
@@ -115,7 +115,7 @@ class VirtualMachineModel(object):
 
 
 class VirtualNetworkModel(object):
-    def __init__(self, vmware_vn, vnc_vn, ip_pool):
+    def __init__(self, vmware_vn, vnc_vn):
         self.vmware_vn = vmware_vn
         self.key = vmware_vn.key
         self.dvs = vmware_vn.config.distributedVirtualSwitch
@@ -124,11 +124,6 @@ class VirtualNetworkModel(object):
         self.vnc_vn = vnc_vn
         self.primary_vlan_id = None
         self.isolated_vlan_id = None
-        self.ip_pool_info = self._construct_ip_pool_info(
-            ip_pool_id=vmware_vn.summary.ipPoolId,
-            name=vmware_vn.summary.ipPoolName,
-            ip_pool=ip_pool
-        )
         self._populate_vlans()
 
     @property
@@ -146,12 +141,6 @@ class VirtualNetworkModel(object):
     @staticmethod
     def get_uuid(key):
         return str(uuid.uuid3(uuid.NAMESPACE_DNS, key))
-
-    @staticmethod
-    def _construct_ip_pool_info(ip_pool_id, name, ip_pool):
-        if not ip_pool:
-            return None
-        return IpPoolInfo(ip_pool_id, name, ip_pool)
 
     def _populate_vlans(self):
         pvlan_map = self.dvs.config.pvlanConfig
@@ -190,8 +179,8 @@ class VirtualNetworkModel(object):
             logger.error('Cannot populate vlan, could not find primary vlan for isolated vlan: %d',
                          self.isolated_vlan_id)
 
-    def ip_pool_info_is_set(self):
-        return self.ip_pool_info.subnet_address and self.ip_pool_info.subnet_mask
+    def subnet_info_is_set(self):
+        return self.vnc_vn.get_network_ipam_refs()
 
 
 class VirtualMachineInterfaceModel(object):
@@ -237,8 +226,10 @@ class VirtualMachineInterfaceModel(object):
         if not self._should_construct_instance_ip():
             return None
 
+        logger.info('Constructing Instance IP for %s', self.display_name)
+
         instance_ip_name = 'ip-' + self.vn_model.name + '-' + self.vm_model.name
-        instance_ip_uuid = str(uuid.uuid3(uuid.NAMESPACE_DNS, instance_ip_name))
+        instance_ip_uuid = str(uuid.uuid3(uuid.NAMESPACE_DNS, instance_ip_name.encode('utf-8')))
 
         instance_ip = InstanceIp(
             name=instance_ip_uuid,
@@ -246,7 +237,9 @@ class VirtualMachineInterfaceModel(object):
             id_perms=ID_PERMS,
         )
 
-        instance_ip.set_instance_ip_address(self.ip_address)
+        if self.ip_address:
+            instance_ip.set_instance_ip_address(self.ip_address)
+            # TODO: Check if setting this to None works (remove if statement)
         instance_ip.set_uuid(instance_ip_uuid)
         instance_ip.set_virtual_network(self.vn_model.vnc_vn)
         instance_ip.set_virtual_machine_interface(self.to_vnc())
@@ -254,22 +247,10 @@ class VirtualMachineInterfaceModel(object):
 
     def _should_construct_instance_ip(self):
         return (self.mac_address
-                and self.ip_address
-                and self.vn_model.ip_pool_info_is_set()
-                and not self.vn_model.vnc_vn.get_external_ipam())
+                and self.vn_model.subnet_info_is_set()
+                and (self.ip_address
+                     or not self.vn_model.vnc_vn.get_external_ipam()))
 
     @staticmethod
     def get_uuid(mac_address):
         return str(uuid.uuid3(uuid.NAMESPACE_DNS, mac_address.encode('utf-8')))
-
-
-class IpPoolInfo(object):
-    def __init__(self, ip_pool_id, name, ip_pool):
-        self.ip_pool_id = ip_pool_id
-        self.ip_pool_name = name
-        ip_config_info = ip_pool.ipv4Config
-        self.subnet_address = ip_config_info.subnetAddress
-        self.subnet_mask = ip_config_info.netmask
-        self.gateway_address = ip_config_info.gateway
-        self.ip_pool_enabled = ip_config_info.ipPoolEnabled
-        self.range = ip_config_info.range
