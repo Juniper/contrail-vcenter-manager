@@ -323,7 +323,7 @@ class VNCAPIClient(object):
             return
         try:
             return self.vnc_lib.instance_ip_read([instance_ip.uuid])
-            #TODO: Refactor this
+            # TODO: Refactor this
         except NoIdError:
             self.vnc_lib.instance_ip_create(instance_ip)
             logger.debug("Created instanceIP: " + instance_ip.name)
@@ -331,6 +331,7 @@ class VNCAPIClient(object):
 
     def delete_instance_ip(self, uuid):
         self.vnc_lib.instance_ip_delete(id=uuid)
+
 
 def construct_ipam(project):
     return vnc_api.NetworkIpam(
@@ -396,9 +397,11 @@ class VRouterAPIClient(object):
                 ip_address=vmi_model.vnc_instance_ip.instance_ip_address,
                 vn_id=vmi_model.vn_model.uuid,
                 display_name=vmi_model.vm_model.name,
-                vlan=vmi_model.vn_model.primary_vlan_id,
+                vlan=100,
+                rx_vlan=100,
+                port_type=2,
+                vm_project_id=vmi_model.vn_model.vnc_vn.parent_uuid,
             )
-            print ret
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s' % e)
 

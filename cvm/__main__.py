@@ -6,7 +6,8 @@ import gevent
 import yaml
 
 import cvm.constants as const
-from cvm.clients import ESXiAPIClient, VCenterAPIClient, VNCAPIClient
+from cvm.clients import (ESXiAPIClient, VCenterAPIClient, VNCAPIClient,
+                         VRouterAPIClient)
 from cvm.controllers import VmwareController
 from cvm.database import Database
 from cvm.monitors import VCenterMonitor
@@ -50,6 +51,7 @@ def main():
 
     vmi_service = VirtualMachineInterfaceService(
         vnc_api_client=vnc_api_client,
+        vrouter_api_client=VRouterAPIClient(),
         database=database
     )
 

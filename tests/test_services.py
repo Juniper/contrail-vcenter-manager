@@ -4,7 +4,7 @@ from mock import Mock, patch
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 
-from cvm.clients import VNCAPIClient, make_filter_spec
+from cvm.clients import VNCAPIClient, VRouterAPIClient, make_filter_spec
 from cvm.constants import (VNC_ROOT_DOMAIN, VNC_VCENTER_DEFAULT_SG,
                            VNC_VCENTER_IPAM, VNC_VCENTER_PROJECT)
 from cvm.database import Database
@@ -189,8 +189,13 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.database = Database()
 
         self.vnc_client = create_vnc_client_mock()
+        self.vrouter_api_client = Mock()
 
-        self.vmi_service = VirtualMachineInterfaceService(self.vnc_client, self.database)
+        self.vmi_service = VirtualMachineInterfaceService(
+            self.vnc_client,
+            self.vrouter_api_client,
+            self.database
+        )
 
         self.vn_model = self._create_vn_model(name='VM Portgroup', key='dportgroup-50')
         self.database.save(self.vn_model)
@@ -208,6 +213,7 @@ class TestVirtualMachineInterfaceService(TestCase):
         saved_vmi = self.database.get_all_vmi_models()[0]
         self.assertEqual(self.vm_model, saved_vmi.vm_model)
         self.assertEqual(self.vn_model, saved_vmi.vn_model)
+        self.vrouter_api_client.add_port.assert_called_once_with(saved_vmi)
         self.vnc_client.update_or_create_vmi.assert_called_once_with(saved_vmi.to_vnc())
         self.assertTrue(saved_vmi.vrouter_port_added)
 
@@ -219,6 +225,7 @@ class TestVirtualMachineInterfaceService(TestCase):
 
         self.assertEqual(0, len(self.database.get_all_vmi_models()))
         self.vnc_client.update_or_create_vmi.assert_not_called()
+        self.vrouter_api_client.add_port.assert_not_called()
 
     def test_update_existing_vmi(self):
         """ Existing VMI is updated when VM changes the DPG to which it is connected. """
@@ -226,8 +233,10 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.database.save(second_vn_model)
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
                                                  vnc_api.Project(), vnc_api.SecurityGroup())
+        vmi_model.vrouter_port_added = True
         self.database.save(vmi_model)
         self.vm_model.interfaces['c8:5b:76:53:0f:f5'] = 'dportgroup-51'
+        self.vm_model.vmware_vm.config.hardware.device[0].backing.port.portgroupKey = 'dportgroup-51'
 
         self.vmi_service.update_vmis_for_vm_model(self.vm_model)
 
@@ -237,12 +246,15 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.assertEqual(second_vn_model, saved_vmi.vn_model)
         self.vnc_client.update_or_create_vmi.assert_called_once_with(saved_vmi.to_vnc())
         self.assertTrue(saved_vmi.vrouter_port_added)
+        self.vrouter_api_client.delete_port.assert_called_once_with(vmi_model.uuid)
+        self.vrouter_api_client.add_port.assert_called_once()
 
     def test_removes_unused_vmis(self):
         """ VMIs are deleted when the VM is no longer connected to corresponding DPG. """
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
                                                  vnc_api.Project(), vnc_api.SecurityGroup())
         vmi_model.vnc_instance_ip = Mock()
+        vmi_model.vrouter_port_added = True
         self.database.save(vmi_model)
 
         self.vm_model.interfaces = {}
@@ -251,6 +263,7 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.assertFalse(self.database.get_all_vmi_models())
         self.vnc_client.delete_vmi.assert_called_once_with(
             VirtualMachineInterfaceModel.get_uuid('c8:5b:76:53:0f:f5'))
+        self.vrouter_api_client.delete_port.assert_called_once_with(vmi_model.uuid)
 
     def test_sync_vmis(self):
         self.database.save(self.vm_model)
@@ -354,7 +367,7 @@ class TestVMIInstanceIp(TestCase):
         self.vmi_model.vnc_instance_ip = self.instance_ip
         self.database = Database()
         self.vnc_client = create_vnc_client_mock()
-        self.vmi_service = VirtualMachineInterfaceService(self.vnc_client, self.database)
+        self.vmi_service = VirtualMachineInterfaceService(self.vnc_client, Mock(), self.database)
 
     def test_update_vmi(self):
         self.vmi_service._create_or_update(self.vmi_model)

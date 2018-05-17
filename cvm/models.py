@@ -195,6 +195,9 @@ class VirtualMachineInterfaceModel(object):
             return find_virtual_machine_ip_address(self.vm_model.vmware_vm, self.vn_model.name)
         return None
 
+    def update_instance_ip(self):
+        self.vnc_instance_ip = self._construct_instance_ip()
+
     def _construct_instance_ip(self):
         if not self._should_construct_instance_ip():
             return None
@@ -210,9 +213,9 @@ class VirtualMachineInterfaceModel(object):
             id_perms=ID_PERMS,
         )
 
-        if self.ip_address:
-            instance_ip.set_instance_ip_address(self.ip_address)
-            # TODO: Check if setting this to None works (remove if statement)
+        # if self.ip_address:
+        #    instance_ip.set_instance_ip_address(self.ip_address)
+        # TODO: Check if setting this to None works (remove if statement)
         instance_ip.set_uuid(instance_ip_uuid)
         instance_ip.set_virtual_network(self.vn_model.vnc_vn)
         instance_ip.set_virtual_machine_interface(self.to_vnc())
