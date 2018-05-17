@@ -50,11 +50,10 @@ class Database(object):
         return vn_model
 
     def get_vn_model_by_uuid(self, uuid):
-        try:
-            return [vn_model for vn_model in self.vn_models.values() if vn_model.uuid == uuid][0]
-        except IndexError:
-            logger.error('Could not find VN with UUID %s.', uuid)
-            return None
+        for vn_model in self.vn_models.values():
+            if vn_model.uuid == uuid:
+                return vn_model
+        logger.error('Could not find VN with UUID %s.', uuid)
 
     def get_all_vmi_models(self):
         return self.vmi_models.values()
