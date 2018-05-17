@@ -7,7 +7,7 @@ from vnc_api.vnc_api import Project, SecurityGroup
 from cvm.models import (ID_PERMS, VirtualMachineInterfaceModel,
                         VirtualMachineModel, VirtualNetworkModel, VlanIdPool,
                         find_virtual_machine_ip_address)
-from tests.test_services import create_vmware_vm_mock, create_dpg_mock
+from tests.test_services import create_dpg_mock, create_vmware_vm_mock
 
 
 class TestFindVirtualMachineIpAddress(TestCase):
@@ -175,17 +175,14 @@ class TestVirtualMachineInterfaceModel(TestCase):
 
     @patch('cvm.models.find_vm_mac_address')
     @patch('cvm.models.VirtualMachineInterfaceModel.to_vnc')
-    @patch('cvm.models.VirtualMachineInterfaceModel._find_ip_address')
     @patch('cvm.models.VirtualMachineInterfaceModel._should_construct_instance_ip')
-    def test_construct_instance_ip(self, should_construct, ip_mock, to_vnc_mock, _):
-        ip_mock.return_value = '192.168.1.100'
+    def test_construct_instance_ip(self, should_construct, to_vnc_mock, _):
         should_construct.return_value = True
         to_vnc_mock.return_value.uuid = 'd376b6b4-943d-4599-862f-d852fd6ba425'
 
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, None, None)
         instance_ip = vmi_model.vnc_instance_ip
 
-        self.assertEqual('192.168.1.100', instance_ip.instance_ip_address)
         self.assertEqual('d376b6b4-943d-4599-862f-d852fd6ba425',
                          instance_ip.virtual_machine_interface_refs[0]['uuid'])
         self.assertEqual(
@@ -261,4 +258,4 @@ class TestVirtualNetworkVlans(TestCase):
     def _check_criteria(self, criteria):
         if criteria.portgroupKey == 'dvportgroup-20' and criteria.inside:
             return self.ports
-
+        return None
