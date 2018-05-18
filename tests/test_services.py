@@ -1,10 +1,10 @@
 from unittest import TestCase, skip
 
 from mock import Mock, patch
-from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
+from pyVmomi import vim  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 
-from cvm.clients import VNCAPIClient, VRouterAPIClient, make_filter_spec
+from cvm.clients import VNCAPIClient
 from cvm.constants import (VNC_ROOT_DOMAIN, VNC_VCENTER_DEFAULT_SG,
                            VNC_VCENTER_IPAM, VNC_VCENTER_PROJECT)
 from cvm.database import Database
@@ -12,56 +12,9 @@ from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
 from cvm.services import (Service, VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService)
-
-
-def create_vmware_vm_mock(network=None):
-    vmware_vm = Mock(spec=vim.VirtualMachine)
-    vmware_vm.summary.runtime.host = Mock(vm=[vmware_vm])
-    vmware_vm.config.hardware.device = []
-    vm_properties = {
-        'config.instanceUuid': 'd376b6b4-943d-4599-862f-d852fd6ba425',
-        'name': 'VM',
-        'runtime.powerState': 'poweredOn',
-        'guest.toolsRunningStatus': 'guestToolsRunning',
-    }
-    vmware_vm.network = network
-    vmware_vm.guest.net = []
-    if network:
-        device = Mock()
-        backing_mock = Mock(spec=vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo())
-        device.backing = backing_mock
-        device.backing.port.portgroupKey = network[0].key
-        device.macAddress = 'c8:5b:76:53:0f:f5'
-        vmware_vm.config.hardware.device = [device]
-    return vmware_vm, vm_properties
-
-
-def create_dpg_mock(**kwargs):
-    dpg_mock = Mock(spec=vim.dvs.DistributedVirtualPortgroup)
-    for kwarg in kwargs:
-        setattr(dpg_mock, kwarg, kwargs[kwarg])
-    dpg_mock.config.distributedVirtualSwitch.FetchDVPorts.return_value = []
-    return dpg_mock
-
-
-def create_vcenter_client_mock():
-    vcenter_client = Mock()
-    vcenter_client.__enter__ = Mock()
-    vcenter_client.__exit__ = Mock()
-    vcenter_client.get_ip_pool_for_dpg.return_value = None
-    return vcenter_client
-
-
-def create_vnc_client_mock():
-    vnc_client = Mock()
-    vnc_client.read_or_create_project.return_value = vnc_api.Project()
-    vnc_client.read_security_group.return_value = vnc_api.SecurityGroup()
-    return vnc_client
-
-
-def create_property_filter(obj, filters):
-    filter_spec = make_filter_spec(obj, filters)
-    return vmodl.query.PropertyCollector.Filter(filter_spec)
+from tests.utils import (create_dpg_mock, create_property_filter,
+                         create_vcenter_client_mock, create_vmware_vm_mock,
+                         create_vn_model, create_vnc_client_mock)
 
 
 class TestVirtualMachineService(TestCase):
@@ -197,14 +150,14 @@ class TestVirtualMachineInterfaceService(TestCase):
             self.database
         )
 
-        self.vn_model = self._create_vn_model(name='VM Portgroup', key='dportgroup-50')
+        self.vn_model = create_vn_model(name='VM Portgroup', key='dportgroup-50')
         self.database.save(self.vn_model)
         vmware_vm, vm_properties = create_vmware_vm_mock([self.vn_model.vmware_vn])
         self.vm_model = VirtualMachineModel(vmware_vm, vm_properties)
 
     def test_create_vmis_proper_vm_dpg(self):
         """ A new VMI is being created with proper VM/DPG pair. """
-        other_vn_model = self._create_vn_model(name='DPortGroup', key='dportgroup-51')
+        other_vn_model = create_vn_model(name='DPortGroup', key='dportgroup-51')
         self.database.save(other_vn_model)
 
         self.vmi_service.update_vmis_for_vm_model(self.vm_model)
@@ -229,7 +182,7 @@ class TestVirtualMachineInterfaceService(TestCase):
 
     def test_update_existing_vmi(self):
         """ Existing VMI is updated when VM changes the DPG to which it is connected. """
-        second_vn_model = self._create_vn_model(name='DPortGroup', key='dportgroup-51')
+        second_vn_model = create_vn_model(name='DPortGroup', key='dportgroup-51')
         self.database.save(second_vn_model)
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
                                                  vnc_api.Project(), vnc_api.SecurityGroup())
@@ -319,13 +272,6 @@ class TestVirtualMachineInterfaceService(TestCase):
 
         database_del_mock.assert_not_called()
         self.vnc_client.delete_vmi.assert_not_called()
-
-    @staticmethod
-    def _create_vn_model(name, key):
-        vnc_vn = Mock()
-        vnc_vn.name = name
-        vmware_dpg = create_dpg_mock(name=name, key=key)
-        return VirtualNetworkModel(vmware_dpg, vnc_vn)
 
 
 class TestVirtualNetworkService(TestCase):

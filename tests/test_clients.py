@@ -6,7 +6,7 @@ from vnc_api.exceptions import NoIdError
 
 from cvm.clients import (ESXiAPIClient, VCenterAPIClient, VNCAPIClient,
                          make_dv_port_spec)
-from tests.test_services import create_vmware_vm_mock
+from tests.utils import create_vmware_vm_mock
 
 
 class TestESXiAPIClient(TestCase):

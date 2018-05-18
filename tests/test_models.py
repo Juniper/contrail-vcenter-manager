@@ -7,7 +7,7 @@ from vnc_api.vnc_api import Project, SecurityGroup
 from cvm.models import (ID_PERMS, VirtualMachineInterfaceModel,
                         VirtualMachineModel, VirtualNetworkModel, VlanIdPool,
                         find_virtual_machine_ip_address)
-from tests.test_services import create_dpg_mock, create_vmware_vm_mock
+from tests.utils import create_dpg_mock, create_vmware_vm_mock
 
 
 class TestFindVirtualMachineIpAddress(TestCase):

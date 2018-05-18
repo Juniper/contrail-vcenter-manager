@@ -1,7 +1,7 @@
 import logging
 from unittest import TestCase
-from mock import patch, Mock
 
+from mock import Mock, patch
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 
 from cvm.controllers import VmwareController
