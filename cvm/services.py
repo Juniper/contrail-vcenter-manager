@@ -106,14 +106,27 @@ class VirtualMachineInterfaceService(Service):
 
     def _create_new_vmis(self):
         for vm_model in self._database.get_all_vm_models():
-            self._sync_vmis_for_vm_model(vm_model)
+            self.update_vmis_for_vm_model(vm_model)
 
-    def _sync_vmis_for_vm_model(self, vm_model):
-        for portgroup_key in vm_model.interfaces.values():
-            vn_model = self._database.get_vn_model_by_key(portgroup_key)
-            vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, self._project, self._default_security_group)
-            if not self._database.get_vmi_model_by_uuid(vmi_model.uuid):
+    def update_vmis_for_vm_model(self, vm_model):
+        existing_vmi_models = {vmi_model.mac_address: vmi_model
+                               for vmi_model in self._database.get_vmi_models_by_vm_uuid(vm_model.uuid)}
+        if vm_model.interfaces:
+            for mac_address, portgroup_key in vm_model.interfaces.iteritems():
+                vmi_model = existing_vmi_models.pop(mac_address, None)
+                vn_model = self._database.get_vn_model_by_key(portgroup_key)
+                if vmi_model:
+                    self._delete(vmi_model)
+                vmi_model = VirtualMachineInterfaceModel(
+                    vm_model,
+                    vn_model,
+                    self._project,
+                    self._default_security_group
+                )
                 self._create_or_update(vmi_model)
+
+        for unused_vmi_model in existing_vmi_models.values():
+            self._delete(unused_vmi_model)
 
     def _create_or_update(self, vmi_model):
         self._vnc_api_client.update_or_create_vmi(vmi_model.to_vnc())
@@ -150,26 +163,6 @@ class VirtualMachineInterfaceService(Service):
                     self._add_or_update_vrouter_port(vmi_model)
         except AttributeError:
             pass
-
-    def update_vmis_for_vm_model(self, vm_model):
-        existing_vmi_models = {vmi_model.mac_address: vmi_model
-                               for vmi_model in self._database.get_vmi_models_by_vm_uuid(vm_model.uuid)}
-        if vm_model.interfaces:
-            for mac_address, portgroup_key in vm_model.interfaces.iteritems():
-                vmi_model = existing_vmi_models.pop(mac_address, None)
-                vn_model = self._database.get_vn_model_by_key(portgroup_key)
-                if vmi_model:
-                    self._delete(vmi_model)
-                vmi_model = VirtualMachineInterfaceModel(
-                    vm_model,
-                    vn_model,
-                    self._project,
-                    self._default_security_group
-                )
-                self._create_or_update(vmi_model)
-
-        for unused_vmi_model in existing_vmi_models.values():
-            self._delete(unused_vmi_model)
 
     def _delete(self, vmi_model):
         if vmi_model.vnc_instance_ip:
