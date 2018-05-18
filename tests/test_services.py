@@ -167,6 +167,7 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.assertEqual(self.vm_model, saved_vmi.vm_model)
         self.assertEqual(self.vn_model, saved_vmi.vn_model)
         self.vrouter_api_client.add_port.assert_called_once_with(saved_vmi)
+        self.vrouter_api_client.enable_port.assert_called_once_with(saved_vmi.uuid)
         self.vnc_client.update_or_create_vmi.assert_called_once_with(saved_vmi.to_vnc())
         self.assertTrue(saved_vmi.vrouter_port_added)
 
@@ -201,6 +202,7 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.assertTrue(saved_vmi.vrouter_port_added)
         self.vrouter_api_client.delete_port.assert_called_once_with(vmi_model.uuid)
         self.vrouter_api_client.add_port.assert_called_once()
+        self.vrouter_api_client.enable_port.assert_called_once_with(saved_vmi.uuid)
 
     def test_removes_unused_vmis(self):
         """ VMIs are deleted when the VM is no longer connected to corresponding DPG. """

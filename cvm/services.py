@@ -143,13 +143,13 @@ class VirtualMachineInterfaceService(Service):
                 self._vnc_api_client.delete_vmi(vnc_vmi.get_uuid())
 
     def _add_or_update_vrouter_port(self, vmi_model):
-        if not vmi_model.vrouter_port_added:
-            logger.info('Adding new vRouter port for %s...', vmi_model.mac_address)
-            self.vrouter_api_client.add_port(vmi_model)
-        else:
+        if vmi_model.vrouter_port_added:
             logger.info('vRouter port for %s already exists. Updating...', vmi_model.mac_address)
             self.vrouter_api_client.delete_port(vmi_model.uuid)
-            self.vrouter_api_client.add_port(vmi_model)
+        else:
+            logger.info('Adding new vRouter port for %s...', vmi_model.mac_address)
+        self.vrouter_api_client.add_port(vmi_model)
+        self.vrouter_api_client.enable_port(vmi_model.uuid)
         vmi_model.vrouter_port_added = True
 
     def update_nic(self, nic_info):

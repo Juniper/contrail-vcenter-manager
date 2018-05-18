@@ -389,7 +389,7 @@ class VRouterAPIClient(object):
     def add_port(self, vmi_model):
         """ Add port to VRouter Agent. """
         try:
-            ret = self.vrouter_api.add_port(
+            self.vrouter_api.add_port(
                 vm_uuid_str=vmi_model.vm_model.uuid,
                 vif_uuid_str=vmi_model.uuid,
                 interface_name=vmi_model.uuid,
@@ -409,5 +409,11 @@ class VRouterAPIClient(object):
         """ Delete port from VRouter Agent. """
         try:
             self.vrouter_api.delete_port(vmi_uuid)
+        except Exception, e:
+            logger.error('There was a problem with vRouter API Client: %s' % e)
+
+    def enable_port(self, vmi_uuid):
+        try:
+            self.vrouter_api.enable_port(vmi_uuid)
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s' % e)
