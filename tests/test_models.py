@@ -181,6 +181,7 @@ class TestVirtualMachineInterfaceModel(TestCase):
         to_vnc_mock.return_value.uuid = 'd376b6b4-943d-4599-862f-d852fd6ba425'
 
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, None, None)
+        vmi_model.construct_instance_ip()
         instance_ip = vmi_model.vnc_instance_ip
 
         self.assertEqual('d376b6b4-943d-4599-862f-d852fd6ba425',

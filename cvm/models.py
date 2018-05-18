@@ -165,7 +165,7 @@ class VirtualMachineInterfaceModel(object):
         self.ip_address = self._find_ip_address()
         self.security_group = security_group
         self.vnc_vmi = None
-        self.vnc_instance_ip = self._construct_instance_ip()
+        self.vnc_instance_ip = None
         self.vrouter_port_added = False
 
     @property
@@ -190,17 +190,9 @@ class VirtualMachineInterfaceModel(object):
             self.vnc_vmi.set_security_group(self.security_group)
         return self.vnc_vmi
 
-    def _find_ip_address(self):
-        if self.vn_model.vnc_vn.get_external_ipam() and self.vm_model.tools_running:
-            return find_virtual_machine_ip_address(self.vm_model.vmware_vm, self.vn_model.name)
-        return None
-
-    def update_instance_ip(self):
-        self.vnc_instance_ip = self._construct_instance_ip()
-
-    def _construct_instance_ip(self):
+    def construct_instance_ip(self):
         if not self._should_construct_instance_ip():
-            return None
+            return
 
         logger.info('Constructing Instance IP for %s', self.display_name)
 
@@ -219,7 +211,15 @@ class VirtualMachineInterfaceModel(object):
         instance_ip.set_uuid(instance_ip_uuid)
         instance_ip.set_virtual_network(self.vn_model.vnc_vn)
         instance_ip.set_virtual_machine_interface(self.to_vnc())
-        return instance_ip
+        self.vnc_instance_ip = instance_ip
+
+    def _find_ip_address(self):
+        if self.vn_model.vnc_vn.get_external_ipam() and self.vm_model.tools_running:
+            return find_virtual_machine_ip_address(self.vm_model.vmware_vm, self.vn_model.name)
+        return None
+
+    def update_instance_ip(self):
+        self.vnc_instance_ip = self._construct_instance_ip()
 
     def _should_construct_instance_ip(self):
         return (self.mac_address
