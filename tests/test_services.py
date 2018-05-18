@@ -1,4 +1,4 @@
-from unittest import TestCase, skip
+from unittest import TestCase
 
 from mock import Mock, patch
 from pyVmomi import vim  # pylint: disable=no-name-in-module
@@ -95,11 +95,11 @@ class TestVirtualMachineService(TestCase):
         self.database.save.assert_not_called()
         self.vnc_client.update_vm.assert_not_called()
 
-    @skip("Deleting is disabled for now")
     def test_delete_unused_vms(self):
         self.esxi_api_client.get_all_vms.return_value = []
-        self.vnc_client.get_all_vms.return_value = [
-            vnc_api.VirtualMachine('d376b6b4-943d-4599-862f-d852fd6ba425')]
+        vnc_vm = vnc_api.VirtualMachine('d376b6b4-943d-4599-862f-d852fd6ba425')
+        vnc_vm.set_uuid('d376b6b4-943d-4599-862f-d852fd6ba425')
+        self.vnc_client.get_all_vms.return_value = [vnc_vm]
 
         self.vm_service.sync_vms()
 
@@ -322,7 +322,6 @@ class TestVMIInstanceIp(TestCase):
 
         self.vnc_client.create_and_read_instance_ip.assert_called_once_with(self.instance_ip)
 
-    @skip('Pass the VRouter API client in the services constructor to mock it here.')
     def test_delete_vmi(self):
         self.instance_ip.uuid = '63f2594b-3c7d-4b8a-bb3d-cc6a098ad284'
 

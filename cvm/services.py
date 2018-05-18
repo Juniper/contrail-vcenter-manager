@@ -28,7 +28,6 @@ class VirtualMachineService(Service):
         if vm_model:
             return self._update(vm_model, vmware_vm, vm_properties)
         return self._create(vmware_vm, vm_properties)
-        # TODO: vrouter_client.set_active_state(boolean) -- see VirtualMachineInfo.setContrailVmActiveState
 
     def _update(self, vm_model, vmware_vm, vm_properties):
         vm_model.update(vmware_vm, vm_properties)
@@ -60,11 +59,8 @@ class VirtualMachineService(Service):
         for vnc_vm in vnc_vms:
             vm_model = self._database.get_vm_model_by_uuid(vnc_vm.uuid)
             if not vm_model:
-                logger.info('Deleting %s from VNC (Not really)', vnc_vm.name)
-                # This will delete all VMs which are
-                # not present in ESXi from VNC!
-                # TODO: Uncomment once we have our own VNC
-                # self._vnc_api_clinet.delete_vm(vm.uuid)
+                logger.info('Deleting %s from VNC', vnc_vm.name)
+                self._vnc_api_client.delete_vm(vnc_vm.uuid)
 
     def remove_vm(self, name):
         vm_model = self._database.get_vm_model_by_name(name)
