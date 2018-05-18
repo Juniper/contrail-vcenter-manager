@@ -397,8 +397,8 @@ class VRouterAPIClient(object):
                 ip_address=vmi_model.vnc_instance_ip.instance_ip_address,
                 vn_id=vmi_model.vn_model.uuid,
                 display_name=vmi_model.vm_model.name,
-                vlan=100,
-                rx_vlan=100,
+                vlan=vmi_model.vlan_id,
+                rx_vlan=vmi_model.vlan_id,
                 port_type=2,
                 vm_project_id=vmi_model.vn_model.vnc_vn.parent_uuid,
             )

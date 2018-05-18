@@ -127,10 +127,12 @@ class VirtualMachineInterfaceService(Service):
     def _update_vmis_vn(self, vmi_model, vn_model):
         if vmi_model.vn_model == vn_model:
             return
+        vmi_model.clear_vlan_id()
         vmi_model.vn_model = vn_model
         self._vnc_api_client.delete_instance_ip(vmi_model.vnc_instance_ip)
 
     def _create_or_update(self, vmi_model):
+        vmi_model.aquire_vlan_id()
         vmi_model.construct_instance_ip()
         instance_ip = self._vnc_api_client.create_and_read_instance_ip(vmi_model.vnc_instance_ip)
         vmi_model.vnc_instance_ip = instance_ip
@@ -170,6 +172,7 @@ class VirtualMachineInterfaceService(Service):
     def _delete(self, vmi_model):
         if vmi_model.vnc_instance_ip:
             self._vnc_api_client.delete_instance_ip(vmi_model.vnc_instance_ip.uuid)
+        vmi_model.clear_vlan_id()
         self._vnc_api_client.delete_vmi(vmi_model.uuid)
         self._database.delete_vmi_model(vmi_model.uuid)
         self._delete_vrouter_port(vmi_model)

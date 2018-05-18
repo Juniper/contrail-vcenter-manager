@@ -61,3 +61,9 @@ def create_vn_model(name, key):
     vnc_vn.name = name
     vmware_dpg = create_dpg_mock(name=name, key=key)
     return VirtualNetworkModel(vmware_dpg, vnc_vn)
+
+
+def create_port_mock(vlan_id):
+    port = Mock()
+    port.config.setting.vlan = vlan_id
+    return port

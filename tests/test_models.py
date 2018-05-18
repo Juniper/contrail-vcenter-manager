@@ -7,7 +7,8 @@ from vnc_api.vnc_api import Project, SecurityGroup
 from cvm.models import (ID_PERMS, VirtualMachineInterfaceModel,
                         VirtualMachineModel, VirtualNetworkModel, VlanIdPool,
                         find_virtual_machine_ip_address)
-from tests.utils import create_dpg_mock, create_vmware_vm_mock
+from tests.utils import (create_dpg_mock, create_port_mock,
+                         create_vmware_vm_mock)
 
 
 class TestFindVirtualMachineIpAddress(TestCase):
@@ -233,28 +234,33 @@ class TestVlanIdPool(TestCase):
         self.assertIn(0, self.vlan_id_pool._available_ids)
 
 
-def create_port_mock(vlan_id):
-    port = Mock()
-    port.config.setting.vlan = vlan_id
-    return port
-
-
 class TestVirtualNetworkVlans(TestCase):
     def setUp(self):
         self.dpg = create_dpg_mock(name='DPG1', key='dvportgroup-20')
         self.ports = []
+        self.dvs = Mock()
+        self.dpg.config.distributedVirtualSwitch = self.dvs
 
     def test_sync_vlan_ids(self):
         self.ports.append(create_port_mock(1))
         self.ports.append(create_port_mock(2))
-        dvs = Mock()
-        dvs.FetchDVPorts.side_effect = self._check_criteria
-        self.dpg.config.distributedVirtualSwitch = dvs
+        self.dvs.FetchDVPorts.side_effect = self._check_criteria
 
         vn_model = VirtualNetworkModel(self.dpg, None)
 
         self.assertNotIn(1, vn_model.vlan_id_pool._available_ids)
         self.assertNotIn(2, vn_model.vlan_id_pool._available_ids)
+
+    def test_vmi_vlan_id_aquisition(self):
+        self.ports.append(create_port_mock(0))
+        self.ports.append(create_port_mock(1))
+        self.dvs.FetchDVPorts.side_effect = self._check_criteria
+        vn_model = VirtualNetworkModel(self.dpg, None)
+        vm_model = VirtualMachineModel(*create_vmware_vm_mock([self.dpg]))
+
+        vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, None, None)
+
+        self.assertEqual(2, vmi_model.vlan_id)
 
     def _check_criteria(self, criteria):
         if criteria.portgroupKey == 'dvportgroup-20' and criteria.inside:

@@ -162,7 +162,8 @@ class VirtualMachineInterfaceModel(object):
         self.vm_model = vm_model
         self.vn_model = vn_model
         self.mac_address = find_vm_mac_address(self.vm_model.vmware_vm, self.vn_model.key)
-        self.ip_address = self._find_ip_address()
+        self.ip_address = None
+        self.vlan_id = vn_model.vlan_id_pool.get_available()
         self.security_group = security_group
         self.vnc_vmi = None
         self.vnc_instance_ip = None
@@ -212,6 +213,13 @@ class VirtualMachineInterfaceModel(object):
         instance_ip.set_virtual_network(self.vn_model.vnc_vn)
         instance_ip.set_virtual_machine_interface(self.to_vnc())
         self.vnc_instance_ip = instance_ip
+
+    def aquire_vlan_id(self):
+        self.vlan_id = self.vn_model.vlan_id_pool.get_available()
+
+    def clear_vlan_id(self):
+        self.vn_model.vlan_id_pool.free(self.vlan_id)
+        self.vlan_id = None
 
     def _find_ip_address(self):
         if self.vn_model.vnc_vn.get_external_ipam() and self.vm_model.tools_running:
