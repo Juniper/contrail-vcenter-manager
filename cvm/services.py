@@ -1,8 +1,9 @@
 import ipaddress
 import logging
 
+from cvm.constants import VLAN_ID_RANGE_END, VLAN_ID_RANGE_START
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
-                        VirtualNetworkModel)
+                        VirtualNetworkModel, VlanIdPool)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -88,7 +89,7 @@ class VirtualNetworkService(Service):
             for vn in self._vnc_api_client.get_vns_by_project(self._project):
                 dpg = self._vcenter_api_client.get_dpg_by_name(vn.name)
                 if vn and dpg:
-                    vn_model = VirtualNetworkModel(dpg, vn)
+                    vn_model = VirtualNetworkModel(dpg, vn, VlanIdPool(VLAN_ID_RANGE_START, VLAN_ID_RANGE_END))
                     self._vcenter_api_client.enable_vlan_override(vn_model.vmware_vn)
                     self._database.save(vn_model)
 

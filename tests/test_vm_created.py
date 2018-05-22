@@ -5,7 +5,7 @@ from vnc_api.vnc_api import InstanceIp, Project, VirtualNetwork
 
 from cvm.controllers import VmwareController
 from cvm.database import Database
-from cvm.models import VirtualNetworkModel
+from cvm.models import VirtualNetworkModel, VlanIdPool
 from cvm.services import VirtualMachineInterfaceService, VirtualMachineService
 
 
@@ -23,7 +23,7 @@ def vn_model_1(vnc_vn_1):
     dvs = Mock()
     dpg.config.distributedVirtualSwitch = dvs
     dvs.FetchDVPorts.return_value = []
-    return VirtualNetworkModel(dpg, vnc_vn_1)
+    return VirtualNetworkModel(dpg, vnc_vn_1, VlanIdPool(0, 100))
 
 
 @pytest.fixture(scope='module')

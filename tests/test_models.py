@@ -160,7 +160,7 @@ class TestVirtualMachineInterfaceModel(TestCase):
         vmware_vn = create_dpg_mock(name='VM Network', key='123')
         vnc_vn = Mock(uuid='d376b6b4-943d-4599-862f-d852fd6ba425')
         vnc_vn.name = 'VM Network'
-        self.vn_model = VirtualNetworkModel(vmware_vn, vnc_vn)
+        self.vn_model = VirtualNetworkModel(vmware_vn, vnc_vn, VlanIdPool(0, 100))
 
     def test_to_vnc(self):
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, self.project, self.security_group)
@@ -246,7 +246,7 @@ class TestVirtualNetworkVlans(TestCase):
         self.ports.append(create_port_mock(2))
         self.dvs.FetchDVPorts.side_effect = self._check_criteria
 
-        vn_model = VirtualNetworkModel(self.dpg, None)
+        vn_model = VirtualNetworkModel(self.dpg, None, VlanIdPool(0, 100))
 
         self.assertNotIn(1, vn_model.vlan_id_pool._available_ids)
         self.assertNotIn(2, vn_model.vlan_id_pool._available_ids)
