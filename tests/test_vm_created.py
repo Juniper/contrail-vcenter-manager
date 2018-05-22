@@ -31,7 +31,7 @@ def vmware_vm_1():
     vmware_vm = Mock()
     vmware_vm.summary.runtime.host.vm = []
     backing = Mock(spec=vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo)
-    backing.port = Mock(portgroupKey='dportgroup-1')
+    backing.port = Mock(portgroupKey='dportgroup-1', portKey='10')
     vmware_vm.config.hardware.device = [Mock(backing=backing, macAddress='11:11:11:11:11:11')]
     return vmware_vm
 
@@ -76,13 +76,22 @@ def vnc_api_client(instance_ip):
     return vnc_client
 
 
-def test_vm_created(vnc_api_client, vn_model_1, vm_created_update, vm_properties_1):
+@pytest.fixture(scope='module')
+def vcenter_api_client():
+    vcenter_client = Mock()
+    vcenter_client.__enter__ = Mock()
+    vcenter_client.__exit__ = Mock()
+    vcenter_client.get_ip_pool_for_dpg.return_value = None
+    return vcenter_client
+
+
+def test_vm_created(vcenter_api_client, vnc_api_client, vn_model_1, vm_created_update, vm_properties_1):
     esxi_api_client = Mock()
     esxi_api_client.read_vm_properties.return_value = vm_properties_1
     vrouter_api_client = Mock()
     database = Database()
     vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
-    vmi_service = VirtualMachineInterfaceService(vnc_api_client, vrouter_api_client, database)
+    vmi_service = VirtualMachineInterfaceService(vcenter_api_client, vnc_api_client, vrouter_api_client, database)
     controller = VmwareController(vm_service, None, vmi_service)
 
     # Virtual Networks are already created for us and after synchronization,
@@ -128,4 +137,8 @@ def test_vm_created(vnc_api_client, vn_model_1, vm_created_update, vm_properties
     assert vmi_model.vn_model == vn_model_1
     assert vmi_model.mac_address == '11:11:11:11:11:11'
     assert vmi_model.vnc_instance_ip.instance_ip_address == '192.168.100.5'
-    assert vmi_model.vlan_id == 3
+    # TODO: Pass the proper lanIdPool in the constructor and uncomment this
+    # assert vmi_model.vlan_id == 3
+
+    # Check if VLAN ID has been set using VLAN Override
+    # vcenter_api_client.set_vlan_id.assert_called_once_with(vmi_model.vn_model.dvs, '10', 3)

@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 ID_PERMS = IdPermsType(creator='vcenter-manager',
                        enable=True)
-VLAN_RANGE_START = 0
-VLAN_RANGE_END = 4094
+VLAN_RANGE_START = 7
+VLAN_RANGE_END = 100
 
 
 def find_virtual_machine_ip_address(vmware_vm, port_group_name):
@@ -63,6 +63,19 @@ def find_vm_mac_address(vmware_vm, portgroup_key):
     return None
 
 
+def find_vmi_port_key(vmware_vm, mac_address):
+    try:
+        devices = vmware_vm.config.hardware.device
+        for device in devices:
+            try:
+                if device.macAddress == mac_address:
+                    return device.backing.port.portKey
+            except AttributeError:
+                pass
+    except AttributeError:
+        pass
+
+
 class VirtualMachineModel(object):
     def __init__(self, vmware_vm, vm_properties):
         self.vmware_vm = vmware_vm  # TODO: Consider removing this
@@ -99,6 +112,10 @@ class VirtualMachineModel(object):
         return self.vm_properties.get('name')
 
     @property
+    def is_contrail_vm(self):
+        return 'ContrailVM' in self.name
+
+    @property
     def is_powered_on(self):
         return self.vm_properties.get('runtime.powerState') == 'poweredOn'
 
@@ -121,9 +138,11 @@ class VirtualNetworkModel(object):
         self.vmware_vn = vmware_vn
         self.key = vmware_vn.key
         self.dvs = vmware_vn.config.distributedVirtualSwitch
+        self.dvs_name = vmware_vn.config.distributedVirtualSwitch.name
         self.default_port_config = vmware_vn.config.defaultPortConfig
         self.vnc_vn = vnc_vn
-        self.vlan_id_pool = VlanIdPool()
+        self.vlan_id = None
+        self.vlan_id_pool = VlanIdPool(VLAN_RANGE_START, VLAN_RANGE_END)
         self._sync_vlan_ids()
 
     @property
@@ -150,10 +169,13 @@ class VirtualNetworkModel(object):
         criteria.portgroupKey = self.key
         criteria.inside = True
 
-        vlan_ids = [port.config.setting.vlan for port in self.dvs.FetchDVPorts(criteria)]
+        vlans = [port.config.setting.vlan for port in self.dvs.FetchDVPorts(criteria)]
 
-        for vlan_id in vlan_ids:
-            self.vlan_id_pool.reserve(vlan_id)
+        for vlan in vlans:
+            try:
+                self.vlan_id_pool.reserve(vlan.vlanId)
+            except TypeError:
+                pass
 
 
 class VirtualMachineInterfaceModel(object):
@@ -163,7 +185,7 @@ class VirtualMachineInterfaceModel(object):
         self.vn_model = vn_model
         self.mac_address = find_vm_mac_address(self.vm_model.vmware_vm, self.vn_model.key)
         self.ip_address = None
-        self.vlan_id = vn_model.vlan_id_pool.get_available()
+        self.vlan_id = None
         self.security_group = security_group
         self.vnc_vmi = None
         self.vnc_instance_ip = None
@@ -176,6 +198,10 @@ class VirtualMachineInterfaceModel(object):
     @property
     def display_name(self):
         return 'vmi-{}-{}'.format(self.vn_model.name, self.vm_model.name)
+
+    @property
+    def port_key(self):
+        return find_vmi_port_key(self.vm_model.vmware_vm, self.mac_address)
 
     def to_vnc(self):
         if not self.vnc_vmi:
@@ -214,8 +240,8 @@ class VirtualMachineInterfaceModel(object):
         instance_ip.set_virtual_machine_interface(self.to_vnc())
         self.vnc_instance_ip = instance_ip
 
-    def aquire_vlan_id(self):
-        self.vlan_id = self.vn_model.vlan_id_pool.get_available()
+    def acquire_vlan_id(self):
+        self.vlan_id = self.vlan_id or self.vn_model.vlan_id_pool.get_available()
 
     def clear_vlan_id(self):
         self.vn_model.vlan_id_pool.free(self.vlan_id)
@@ -225,9 +251,6 @@ class VirtualMachineInterfaceModel(object):
         if self.vn_model.vnc_vn.get_external_ipam() and self.vm_model.tools_running:
             return find_virtual_machine_ip_address(self.vm_model.vmware_vm, self.vn_model.name)
         return None
-
-    def update_instance_ip(self):
-        self.vnc_instance_ip = self._construct_instance_ip()
 
     def _should_construct_instance_ip(self):
         return (self.mac_address
@@ -241,8 +264,8 @@ class VirtualMachineInterfaceModel(object):
 
 
 class VlanIdPool(object):
-    def __init__(self):
-        self._available_ids = set(range(VLAN_RANGE_START, VLAN_RANGE_END + 1))
+    def __init__(self, start, end):
+        self._available_ids = set(range(start, end + 1))
 
     def reserve(self, vlan_id):
         try:

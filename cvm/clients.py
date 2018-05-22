@@ -6,7 +6,7 @@ from contrail_vrouter_api.vrouter_api import ContrailVRouterApi
 from pyVim.connect import Disconnect, SmartConnectNoSSL
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
-from vnc_api.exceptions import NoIdError, RefsExistError
+from vnc_api.exceptions import NoIdError
 
 from cvm.constants import (VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
@@ -168,11 +168,29 @@ class VCenterAPIClient(VSphereAPIClient):
                 return ip_pool
         return None
 
-    @staticmethod
-    def set_vlan_id(dvs, key, vlan_id):
-        dv_port = [port for port in dvs.FetchDVPorts() if port.key == key][0]
+    def set_vlan_id(self, dvs_name, key, vlan_id):
+        dvs = self._get_object([vim.dvs.VmwareDistributedVirtualSwitch], dvs_name)
+        try:
+            dv_port = next(port for port in dvs.FetchDVPorts() if port.key == key)
+        except StopIteration:
+            return
         dv_port_spec = make_dv_port_spec(dv_port, vlan_id)
+        logger.info('Setting VLAN ID of port %s to %d' % (key, vlan_id))
         dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
+
+    def restore_vlan_id(self, dvs_name, key):
+        dvs = self._get_object([vim.dvs.VmwareDistributedVirtualSwitch], dvs_name)
+        dv_port = [port for port in dvs.FetchDVPorts() if port.key == key][0]
+        dv_port_config_spec = vim.dvs.DistributedVirtualPort.ConfigSpec()
+        dv_port_config_spec.key = dv_port.key
+        dv_port_config_spec.operation = 'edit'
+        dv_port_config_spec.configVersion = dv_port.config.configVersion
+        vlan_spec = vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec()
+        vlan_spec.inherited = True
+        dv_port_setting = vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy()
+        dv_port_setting.vlan = vlan_spec
+        dv_port_config_spec.setting = dv_port_setting
+        dvs.ReconfigureDVPort_Task(port=[dv_port_config_spec])
 
     @staticmethod
     def enable_vlan_override(portgroup):

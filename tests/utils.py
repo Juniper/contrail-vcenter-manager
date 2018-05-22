@@ -1,5 +1,5 @@
 from mock import Mock
-from pyVmomi import vim, vmodl # pylint: disable=no-name-in-module
+from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 
 from cvm.clients import make_filter_spec
@@ -65,5 +65,5 @@ def create_vn_model(name, key):
 
 def create_port_mock(vlan_id):
     port = Mock()
-    port.config.setting.vlan = vlan_id
+    port.config.setting.vlan.vlanId = vlan_id
     return port

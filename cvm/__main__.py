@@ -50,6 +50,7 @@ def main():
     )
 
     vmi_service = VirtualMachineInterfaceService(
+        vcenter_api_client=vcenter_api_client,
         vnc_api_client=vnc_api_client,
         vrouter_api_client=VRouterAPIClient(),
         database=database

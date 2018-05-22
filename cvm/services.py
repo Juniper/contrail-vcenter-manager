@@ -47,7 +47,8 @@ class VirtualMachineService(Service):
 
     def sync_vms(self):
         self._get_vms_from_vmware()
-        self._delete_unused_vms_in_vnc()
+        # TODO: Find a way to determine which VMs are safe to delete
+        # self._delete_unused_vms_in_vnc()
 
     def _get_vms_from_vmware(self):
         vmware_vms = self._esxi_api_client.get_all_vms()
@@ -88,23 +89,29 @@ class VirtualNetworkService(Service):
                 dpg = self._vcenter_api_client.get_dpg_by_name(vn.name)
                 if vn and dpg:
                     vn_model = VirtualNetworkModel(dpg, vn)
+                    self._vcenter_api_client.enable_vlan_override(vn_model.vmware_vn)
                     self._database.save(vn_model)
 
 
 class VirtualMachineInterfaceService(Service):
-    def __init__(self, vnc_api_client, vrouter_api_client, database):
+    def __init__(self, vcenter_api_client, vnc_api_client, vrouter_api_client, database):
         super(VirtualMachineInterfaceService, self).__init__(vnc_api_client, database)
         self.vrouter_api_client = vrouter_api_client
+        self._vcenter_api_client = vcenter_api_client
 
     def sync_vmis(self):
         self._create_new_vmis()
-        self._delete_unused_vmis()
+        # TODO: Find a way to determine which VMIs are safe to delete.
+        # self._delete_unused_vmis()
 
     def _create_new_vmis(self):
         for vm_model in self._database.get_all_vm_models():
             self.update_vmis_for_vm_model(vm_model)
 
     def update_vmis_for_vm_model(self, vm_model):
+        if vm_model.is_contrail_vm:
+            return
+
         existing_vmi_models = {vmi_model.mac_address: vmi_model
                                for vmi_model in self._database.get_vmi_models_by_vm_uuid(vm_model.uuid)}
         for mac_address, portgroup_key in vm_model.interfaces.iteritems():
@@ -132,7 +139,10 @@ class VirtualMachineInterfaceService(Service):
         self._vnc_api_client.delete_instance_ip(vmi_model.vnc_instance_ip)
 
     def _create_or_update(self, vmi_model):
-        vmi_model.aquire_vlan_id()
+        with self._vcenter_api_client:
+            self._vcenter_api_client.restore_vlan_id(vmi_model.vn_model.dvs_name, vmi_model.port_key)
+            vmi_model.acquire_vlan_id()
+            self._vcenter_api_client.set_vlan_id(vmi_model.vn_model.dvs_name, vmi_model.port_key, vmi_model.vlan_id)
         vmi_model.construct_instance_ip()
         instance_ip = self._vnc_api_client.create_and_read_instance_ip(vmi_model.vnc_instance_ip)
         vmi_model.vnc_instance_ip = instance_ip
@@ -172,6 +182,8 @@ class VirtualMachineInterfaceService(Service):
     def _delete(self, vmi_model):
         if vmi_model.vnc_instance_ip:
             self._vnc_api_client.delete_instance_ip(vmi_model.vnc_instance_ip.uuid)
+        with self._vcenter_api_client:
+            self._vcenter_api_client.restore_vlan_id(vmi_model.vn_model.dvs_name, vmi_model.port_key)
         vmi_model.clear_vlan_id()
         self._vnc_api_client.delete_vmi(vmi_model.uuid)
         self._database.delete_vmi_model(vmi_model.uuid)
@@ -191,7 +203,8 @@ class VirtualMachineInterfaceService(Service):
             vmi_model = self._database.get_vmi_model_by_uuid(
                 VirtualMachineInterfaceModel.get_uuid(mac_address)
             )
-            self._delete(vmi_model)
+            if vmi_model:
+                self._delete(vmi_model)
 
     @staticmethod
     def _get_vn_from_vmi(vnc_vmi):

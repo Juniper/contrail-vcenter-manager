@@ -36,11 +36,13 @@ class TestVCenterAPIClient(TestCase):
     def test_set_vlan_id(self):
         dv_port = Mock(key='8')
         dv_port.config.configVersion = '1'
-        dvs = Mock()
+        dvs = Mock(name='DSwitch')
         dvs.FetchDVPorts.return_value = [dv_port]
-        with patch('cvm.clients.SmartConnectNoSSL'):
-            with self.vcenter_client:
-                self.vcenter_client.set_vlan_id(dvs=dvs, key='8', vlan_id=10)
+        with patch('cvm.clients.VSphereAPIClient._get_object') as get_obj_mock:
+            get_obj_mock.return_value = dvs
+            with patch('cvm.clients.SmartConnectNoSSL'):
+                with self.vcenter_client:
+                    self.vcenter_client.set_vlan_id(dvs_name=dvs.name, key='8', vlan_id=10)
 
         dvs.ReconfigureDVPort_Task.assert_called_once()
         spec = dvs.ReconfigureDVPort_Task.call_args[1].get('port', [None])[0]
