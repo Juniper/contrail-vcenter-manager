@@ -14,8 +14,6 @@ logger = logging.getLogger(__name__)
 
 ID_PERMS = IdPermsType(creator='vcenter-manager',
                        enable=True)
-VLAN_RANGE_START = 7
-VLAN_RANGE_END = 100
 
 
 def find_virtual_machine_ip_address(vmware_vm, port_group_name):
@@ -134,7 +132,7 @@ class VirtualMachineModel(object):
 
 
 class VirtualNetworkModel(object):
-    def __init__(self, vmware_vn, vnc_vn):
+    def __init__(self, vmware_vn, vnc_vn, vlan_id_pool):
         self.vmware_vn = vmware_vn
         self.key = vmware_vn.key
         self.dvs = vmware_vn.config.distributedVirtualSwitch
@@ -142,7 +140,7 @@ class VirtualNetworkModel(object):
         self.default_port_config = vmware_vn.config.defaultPortConfig
         self.vnc_vn = vnc_vn
         self.vlan_id = None
-        self.vlan_id_pool = VlanIdPool(VLAN_RANGE_START, VLAN_RANGE_END)
+        self.vlan_id_pool = vlan_id_pool
         self._sync_vlan_ids()
 
     @property

@@ -3,7 +3,7 @@ from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 
 from cvm.clients import make_filter_spec
-from cvm.models import VirtualNetworkModel, VirtualMachineModel
+from cvm.models import VirtualMachineModel, VirtualNetworkModel, VlanIdPool
 
 
 def create_vmware_vm_mock(network=None, uuid=None):
@@ -66,7 +66,7 @@ def create_vn_model(name, key, uuid=None):
     vnc_vn.name = name
     vnc_vn.uuid = uuid or 'uuid'
     vmware_dpg = create_dpg_mock(name=name, key=key)
-    return VirtualNetworkModel(vmware_dpg, vnc_vn)
+    return VirtualNetworkModel(vmware_dpg, vnc_vn, VlanIdPool(0, 100))
 
 
 def create_port_mock(vlan_id):
