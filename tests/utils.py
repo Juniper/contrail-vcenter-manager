@@ -3,15 +3,15 @@ from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 
 from cvm.clients import make_filter_spec
-from cvm.models import VirtualNetworkModel
+from cvm.models import VirtualNetworkModel, VirtualMachineModel
 
 
-def create_vmware_vm_mock(network=None):
+def create_vmware_vm_mock(network=None, uuid=None):
     vmware_vm = Mock(spec=vim.VirtualMachine)
     vmware_vm.summary.runtime.host = Mock(vm=[vmware_vm])
     vmware_vm.config.hardware.device = []
     vm_properties = {
-        'config.instanceUuid': 'd376b6b4-943d-4599-862f-d852fd6ba425',
+        'config.instanceUuid': uuid or 'd376b6b4-943d-4599-862f-d852fd6ba425',
         'name': 'VM',
         'runtime.powerState': 'poweredOn',
         'guest.toolsRunningStatus': 'guestToolsRunning',
@@ -56,9 +56,15 @@ def create_property_filter(obj, filters):
     return vmodl.query.PropertyCollector.Filter(filter_spec)
 
 
-def create_vn_model(name, key):
+def create_vm_model(network=None, uuid=None):
+    vmware_vm, vm_properties = create_vmware_vm_mock(network=network, uuid=uuid)
+    return VirtualMachineModel(vmware_vm, vm_properties)
+
+
+def create_vn_model(name, key, uuid=None):
     vnc_vn = Mock()
     vnc_vn.name = name
+    vnc_vn.uuid = uuid or 'uuid'
     vmware_dpg = create_dpg_mock(name=name, key=key)
     return VirtualNetworkModel(vmware_dpg, vnc_vn)
 

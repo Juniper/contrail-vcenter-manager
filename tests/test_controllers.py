@@ -56,6 +56,12 @@ class TestVmwareController(TestCase):
 
         self.assertFalse(mocked_handle_change.called)
 
+    def test_handle_update_delete_vm(self):
+        update_set = construct_update_set('latestPage', Mock(spec=vim.event.VmRemovedEvent()))
+        self.vmware_controller.handle_update(update_set)
+        self.assertTrue(self.vmware_controller._vmi_service.remove_vmis_for_vm_model.called)
+        self.assertTrue(self.vmware_controller._vm_service.remove_vm.called)
+
     def test_handle_update_deleted_vm(self):
         """
         When an event for an already deleted VM is received,
