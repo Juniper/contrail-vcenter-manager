@@ -4,7 +4,7 @@ from unittest import TestCase
 from mock import Mock, patch
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 
-from cvm.controllers import VmwareController
+from cvm.controllers import VmRenamedHandler, VmwareController
 
 logging.disable(logging.CRITICAL)
 
@@ -23,7 +23,10 @@ class TestVmwareController(TestCase):
         self.database = Mock()
         self.vm_service = Mock(database=self.database)
         self.vmi_service = Mock()
-        self.vmware_controller = VmwareController(self.vm_service, None, self.vmi_service)
+
+        vm_renamed_handler = VmRenamedHandler(self.vm_service, self.vmi_service)
+        self.vmware_controller = VmwareController(self.vm_service, None, self.vmi_service,
+                                                  [vm_renamed_handler])
 
     @patch.object(VmwareController, '_handle_change')
     def test_handle_update_no_fltr_set(self, mocked_handle_change):
@@ -95,3 +98,11 @@ class TestVmwareController(TestCase):
         self.vm_service.set_tools_running_status.side_effect = vmodl.fault.ManagedObjectNotFound
 
         self.vmware_controller.handle_update(update_set)
+
+    def test_vm_renamed(self):
+        update_set = construct_update_set('latestPage', Mock(spec=vim.event.VmRenamedEvent()))
+
+        self.vmware_controller.handle_update(update_set)
+
+        self.vm_service.rename_vm.assert_called_once()
+        self.vmi_service.rename_vmis.assert_called_once()

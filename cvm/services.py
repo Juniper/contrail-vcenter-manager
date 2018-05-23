@@ -78,6 +78,12 @@ class VirtualMachineService(Service):
         logger.info('Tools running status of %s set to %s', vm_model.name, value)
         self._database.save(vm_model)
 
+    def rename_vm(self, vmware_vm):
+        vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
+        vm_model.rename(vmware_vm)
+        self._vnc_api_client.update_or_create_vm(vm_model.vnc_vm)
+        self._database.save(vm_model)
+
 
 class VirtualNetworkService(Service):
     def __init__(self, vcenter_api_client, vnc_api_client, database):
@@ -144,10 +150,10 @@ class VirtualMachineInterfaceService(Service):
             self._vcenter_api_client.restore_vlan_id(vmi_model.vn_model.dvs_name, vmi_model.port_key)
             vmi_model.acquire_vlan_id()
             self._vcenter_api_client.set_vlan_id(vmi_model.vn_model.dvs_name, vmi_model.port_key, vmi_model.vlan_id)
+        self._vnc_api_client.update_or_create_vmi(vmi_model.to_vnc())
         vmi_model.construct_instance_ip()
         instance_ip = self._vnc_api_client.create_and_read_instance_ip(vmi_model.vnc_instance_ip)
         vmi_model.vnc_instance_ip = instance_ip
-        self._vnc_api_client.update_or_create_vmi(vmi_model.to_vnc())
         self._add_or_update_vrouter_port(vmi_model)
         self._database.save(vmi_model)
 
@@ -206,6 +212,14 @@ class VirtualMachineInterfaceService(Service):
             )
             if vmi_model:
                 self._delete(vmi_model)
+
+    def rename_vmis(self, vmware_vm):
+        vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
+        vmi_models = self._database.get_vmi_models_by_vm_uuid(vm_model.uuid)
+        for vmi_model in vmi_models:
+            vmi_model.vm_model = vm_model
+            self._vnc_api_client.update_or_create_vmi(vmi_model.to_vnc())
+            self._add_or_update_vrouter_port(vmi_model)
 
     @staticmethod
     def _get_vn_from_vmi(vnc_vmi):
