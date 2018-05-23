@@ -89,6 +89,10 @@ class VirtualMachineModel(object):
         self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
         self.interfaces = self._read_interfaces()
 
+    def rename(self, vmware_vm):
+        self.vmware_vm = vmware_vm
+        self.vm_properties['name'] = vmware_vm.name
+
     def _read_interfaces(self):
         try:
             return {device.macAddress: device.backing.port.portgroupKey

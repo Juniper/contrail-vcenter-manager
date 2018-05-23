@@ -6,16 +6,17 @@ from cvm.clients import make_filter_spec
 from cvm.models import VirtualMachineModel, VirtualNetworkModel, VlanIdPool
 
 
-def create_vmware_vm_mock(network=None, uuid=None):
+def create_vmware_vm_mock(network=None, uuid=None, name=None):
     vmware_vm = Mock(spec=vim.VirtualMachine)
     vmware_vm.summary.runtime.host = Mock(vm=[vmware_vm])
     vmware_vm.config.hardware.device = []
     vm_properties = {
         'config.instanceUuid': uuid or 'd376b6b4-943d-4599-862f-d852fd6ba425',
-        'name': 'VM',
+        'name': name or 'VM',
         'runtime.powerState': 'poweredOn',
         'guest.toolsRunningStatus': 'guestToolsRunning',
     }
+    vmware_vm.config.instanceUuid = uuid or 'd376b6b4-943d-4599-862f-d852fd6ba425'
     vmware_vm.network = network
     vmware_vm.guest.net = []
     if network:

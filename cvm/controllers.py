@@ -7,10 +7,11 @@ logger = logging.getLogger(__name__)
 
 
 class VmwareController(object):
-    def __init__(self, vm_service, vn_service, vmi_service):
+    def __init__(self, vm_service, vn_service, vmi_service, handlers):
         self._vm_service = vm_service
         self._vn_service = vn_service
         self._vmi_service = vmi_service
+        self._handlers = handlers
 
     def initialize_database(self):
         logger.info('Initializing database...')
@@ -20,6 +21,8 @@ class VmwareController(object):
 
     def handle_update(self, update_set):
         logger.info('Handling ESXi update.')
+        for handler in self._handlers:
+            handler.handle_update(update_set)
 
         for property_filter_update in update_set.filterSet:
             for object_update in property_filter_update.objectSet:
@@ -33,9 +36,9 @@ class VmwareController(object):
             if name.startswith('latestPage'):
                 if isinstance(value, vim.event.Event):
                     self._handle_event(value)
-                elif isinstance(value, list):
-                    for event in sorted(value, key=lambda e: e.key):
-                        self._handle_event(event)
+                # elif isinstance(value, list):
+                #     for event in sorted(value, key=lambda e: e.key):
+                #         self._handle_event(event)
             elif name.startswith('guest.toolsRunningStatus'):
                 self._handle_tools_status(obj, value)
             elif name.startswith('guest.net'):
@@ -45,11 +48,9 @@ class VmwareController(object):
         logger.info('Handling event: %s', event.fullFormattedMessage)
         if isinstance(event, (
                 vim.event.VmCreatedEvent,
-                vim.event.VmPoweredOnEvent,
                 vim.event.VmClonedEvent,
                 vim.event.VmDeployedEvent,
                 vim.event.VmReconfiguredEvent,
-                vim.event.VmRenamedEvent,
                 vim.event.VmMacChangedEvent,
                 vim.event.VmMacAssignedEvent,
                 vim.event.DrsVmMigratedEvent,
@@ -88,3 +89,28 @@ class VmwareController(object):
         logger.info('Handling NicInfo update.')
         for nic_info in nic_infos:
             self._vmi_service.update_nic(nic_info)
+
+
+class VmRenamedHandler(object):
+    def __init__(self, vm_service, vmi_service):
+        self._vm_service = vm_service
+        self._vmi_service = vmi_service
+
+    def handle_update(self, update_set):
+        for property_filter_update in update_set.filterSet:
+            for object_update in property_filter_update.objectSet:
+                for property_change in object_update.changeSet:
+                    self._handle_change(property_change)
+
+    def _handle_change(self, property_change):
+        name = getattr(property_change, 'name', None)
+        value = getattr(property_change, 'val', None)
+        if value:
+            if name.startswith('latestPage'):
+                if isinstance(value, vim.event.VmRenamedEvent):
+                    self._handle_event(value)
+
+    def _handle_event(self, event):
+        vmware_vm = event.vm.vm
+        self._vm_service.rename_vm(vmware_vm)
+        self._vmi_service.rename_vmis(vmware_vm)

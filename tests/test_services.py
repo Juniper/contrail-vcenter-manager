@@ -136,6 +136,19 @@ class TestVirtualMachineService(TestCase):
         self.assertEqual(value, vm_model.tools_running_status)
         self.database.save.assert_called_once_with(vm_model)
 
+    def test_rename_vm(self):
+        vm_model = Mock()
+        vm_model.configure_mock(name='VM')
+        self.database.get_vm_model_by_uuid.return_value = vm_model
+        vmware_vm = Mock()
+        vmware_vm.configure_mock(name='VM-renamed')
+
+        self.vm_service.rename_vm(vmware_vm)
+
+        vm_model.rename.assert_called_once_with(vmware_vm)
+        self.vnc_client.update_or_create_vm.assert_called_once()
+        self.database.save.assert_called_once_with(vm_model)
+
 
 class TestVirtualMachineInterfaceService(TestCase):
 
@@ -277,6 +290,23 @@ class TestVirtualMachineInterfaceService(TestCase):
 
         database_del_mock.assert_not_called()
         self.vnc_client.delete_vmi.assert_not_called()
+
+    def test_rename_vmis(self):
+        vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
+                                                 vnc_api.Project(), vnc_api.SecurityGroup())
+        vmi_model.vrouter_port_added = True
+        self.database.save(vmi_model)
+        self.vm_model.update(*create_vmware_vm_mock(name='VM-renamed'))
+        self.database.save(self.vm_model)
+
+        self.vmi_service.rename_vmis(self.vm_model.vmware_vm)
+
+        self.assertEqual('vmi-VM Portgroup-VM-renamed', vmi_model.display_name)
+        self.assertEqual(0, self.vnc_client.create_and_read_instance_ip.call_count)
+        self.vnc_client.update_or_create_vmi.assert_called_once()
+        self.vrouter_api_client.delete_port.assert_called_once_with(vmi_model.uuid)
+        self.vrouter_api_client.add_port.assert_called_once_with(vmi_model)
+        self.vrouter_api_client.enable_port.assert_called_once_with(vmi_model.uuid)
 
 
 class TestVirtualNetworkService(TestCase):
