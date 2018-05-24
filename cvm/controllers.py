@@ -129,15 +129,15 @@ class VmRenamedHandler(AbstractEventHandler):
 class VmReconfiguredHandler(AbstractEventHandler):
     EVENTS = (vim.event.VmReconfiguredEvent,)
 
-    def __init__(self, vm_service, vn_service, vmi_service):
+    def __init__(self, vm_service, vmi_service):
         self._vm_service = vm_service
         self._vmi_service = vmi_service
-        self._vn_service = vn_service
 
     def _handle_event(self, event):
         logger.info('Detected VmReconfiguredEvent')
         vmware_vm = event.vm.vm
-        for device in event.configSpec.deviceChange:
+        for device_spec in event.configSpec.deviceChange:
+            device = device_spec.device
             if isinstance(device, vim.vm.device.VirtualVmxnet3):
                 logger.info('Detected VmReconfiguredEvent with %s device', type(device))
                 mac_address = device.macAddress
@@ -145,4 +145,4 @@ class VmReconfiguredHandler(AbstractEventHandler):
                 self._vm_service.update_vm_models_interface(vmware_vm, mac_address, portgroup_key)
                 self._vmi_service.update_vmis_vn(vmware_vm, mac_address, portgroup_key)
             else:
-                logger.info('Detected VmReconfiguredEvent with unsupported device')
+                logger.info('Detected VmReconfiguredEvent with unsupported %s device', type(device))

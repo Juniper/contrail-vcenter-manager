@@ -204,6 +204,9 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.database.save(second_vn_model)
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
                                                  vnc_api.Project(), vnc_api.SecurityGroup())
+        vnc_instance_ip = Mock()
+        vnc_instance_ip.uuid = 'uuid'
+        vmi_model.vnc_instance_ip = vnc_instance_ip
         vmi_model.vrouter_port_added = True
         self.database.save(vmi_model)
         self.vm_model.interfaces['c8:5b:76:53:0f:f5'] = 'dportgroup-51'

@@ -127,7 +127,8 @@ def vm_reconfigure_update(vmware_vm_1):
     device = Mock(spec=vim.vm.device.VirtualVmxnet3())
     device.backing.port = port
     device.macAddress = '11:11:11:11:11:11'
-    event.configSpec.deviceChange = [device]
+    device_spec = Mock(spec=vim.vm.device.VirtualDeviceSpec(), device=device)
+    event.configSpec.deviceChange = [device_spec]
     return wrap_into_update_set(event)
 
 
@@ -295,7 +296,7 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
         vrouter_api_client,
         database
     )
-    vm_reconfigure_handler = VmReconfiguredHandler(vm_service, vn_service, vmi_service)
+    vm_reconfigure_handler = VmReconfiguredHandler(vm_service, vmi_service)
     controller = VmwareController(vm_service, vn_service, vmi_service, [vm_reconfigure_handler])
 
     # Virtual Networks are already created for us and after synchronization,
@@ -332,7 +333,6 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
     # Check if VMI Model has been saved properly:
     # - in VNC
     vnc_api_client.update_or_create_vmi.call_count == 2
-    # print(vnc_api_client.update_or_create_vmi.call_args[0])
     vnc_vmi = vnc_api_client.update_or_create_vmi.call_args[0][0]
     assert vnc_vmi.get_virtual_machine_interface_mac_addresses().mac_address == ['11:11:11:11:11:11']
     assert vnc_vn_2.uuid in [ref['uuid'] for ref in vnc_vmi.get_virtual_network_refs()]
@@ -345,7 +345,7 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
     assert vmi_model.vn_model == vn_model_2
 
     # Check if VMI Model's Instance IP has been updated in VNC:
-    vnc_api_client.delete_instance_ip.assert_called_once_with(old_instance_ip)
+    vnc_api_client.delete_instance_ip.assert_called_once_with(old_instance_ip.uuid)
     assert vnc_api_client.create_and_read_instance_ip.call_count == 2
     new_instance_ip = vmi_model.vnc_instance_ip
     assert vnc_api_client.create_and_read_instance_ip.call_args[0][0] == new_instance_ip
@@ -357,6 +357,7 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
     assert vrouter_api_client.add_port.call_args[0][0] == vmi_model
     assert vmi_model.mac_address == '11:11:11:11:11:11'
     assert vmi_model.vnc_instance_ip.instance_ip_address == '192.168.100.5'
+
     assert vmi_model.vlan_id == 4
 
     # Check if VLAN ID has been set using VLAN Override
