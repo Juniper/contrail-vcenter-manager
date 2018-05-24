@@ -1,3 +1,4 @@
+from abc import abstractmethod, ABCMeta
 import logging
 
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
@@ -50,7 +51,6 @@ class VmwareController(object):
                 vim.event.VmCreatedEvent,
                 vim.event.VmClonedEvent,
                 vim.event.VmDeployedEvent,
-                vim.event.VmReconfiguredEvent,
                 vim.event.VmMacChangedEvent,
                 vim.event.VmMacAssignedEvent,
                 vim.event.DrsVmMigratedEvent,
@@ -91,10 +91,8 @@ class VmwareController(object):
             self._vmi_service.update_nic(nic_info)
 
 
-class VmRenamedHandler(object):
-    def __init__(self, vm_service, vmi_service):
-        self._vm_service = vm_service
-        self._vmi_service = vmi_service
+class AbstractEventHandler(object):
+    __metaclass__ = ABCMeta
 
     def handle_update(self, update_set):
         for property_filter_update in update_set.filterSet:
@@ -107,10 +105,44 @@ class VmRenamedHandler(object):
         value = getattr(property_change, 'val', None)
         if value:
             if name.startswith('latestPage'):
-                if isinstance(value, vim.event.VmRenamedEvent):
+                if isinstance(value, self.EVENTS):
                     self._handle_event(value)
+
+    @abstractmethod
+    def _handle_event(self, event):
+        pass
+
+
+class VmRenamedHandler(AbstractEventHandler):
+    EVENTS = (vim.event.VmRenamedEvent,)
+
+    def __init__(self, vm_service, vmi_service):
+        self._vm_service = vm_service
+        self._vmi_service = vmi_service
 
     def _handle_event(self, event):
         vmware_vm = event.vm.vm
         self._vm_service.rename_vm(vmware_vm)
         self._vmi_service.rename_vmis(vmware_vm)
+
+
+class VmReconfiguredHandler(AbstractEventHandler):
+    EVENTS = (vim.event.VmReconfiguredEvent,)
+
+    def __init__(self, vm_service, vn_service, vmi_service):
+        self._vm_service = vm_service
+        self._vmi_service = vmi_service
+        self._vn_service = vn_service
+
+    def _handle_event(self, event):
+        logger.info('Detected VmReconfiguredEvent')
+        vmware_vm = event.vm.vm
+        for device in event.configSpec.deviceChange:
+            if isinstance(device, vim.vm.device.VirtualVmxnet3):
+                logger.info('Detected VmReconfiguredEvent with %s device', type(device))
+                mac_address = device.macAddress
+                portgroup_key = device.backing.port.portgroupKey
+                self._vm_service.update_vm_models_interface(vmware_vm, mac_address, portgroup_key)
+                self._vmi_service.update_vmis_vn(vmware_vm, mac_address, portgroup_key)
+            else:
+                logger.info('Detected VmReconfiguredEvent with unsupported device')
