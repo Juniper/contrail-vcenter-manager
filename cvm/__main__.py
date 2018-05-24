@@ -10,7 +10,7 @@ from cvm.clients import (ESXiAPIClient, VCenterAPIClient, VNCAPIClient,
                          VRouterAPIClient)
 from cvm.controllers import VmRenamedHandler, VmwareController
 from cvm.database import Database
-from cvm.monitors import VCenterMonitor
+from cvm.monitors import VMwareMonitor
 from cvm.services import (VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService)
 
@@ -57,7 +57,7 @@ def main():
     )
     vm_renamed_handler = VmRenamedHandler(vm_service, vmi_service)
     vmware_controller = VmwareController(vm_service, vn_service, vmi_service, [vm_renamed_handler])
-    vmware_monitor = VCenterMonitor(esxi_api_client, vmware_controller)
+    vmware_monitor = VMwareMonitor(esxi_api_client, vmware_controller)
 
     greenlets = [
         gevent.spawn(vmware_monitor.start()),
