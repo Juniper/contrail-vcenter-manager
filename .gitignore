@@ -105,3 +105,6 @@ config.yaml
 
 # idea files
 .idea/
+
+# pytest
+.pytest_cache/
