@@ -148,7 +148,7 @@ class VirtualMachineInterfaceService(Service):
                 self._vcenter_api_client.restore_vlan_id(vmi_model.vn_model.dvs_name, vmi_model.port_key)
             vmi_model.clear_vlan_id()
             vmi_model.vn_model = vn_model
-            self._vnc_api_client.delete_instance_ip(vmi_model.vnc_instance_ip.uuid)
+            self._delete(vmi_model)
         self._create_or_update(vmi_model)
 
     def _create_or_update(self, vmi_model):
