@@ -2,7 +2,7 @@ import pytest
 from mock import Mock
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
-from vnc_api.vnc_api import InstanceIp, Project, VirtualNetwork
+from vnc_api.vnc_api import Project, VirtualNetwork
 
 from cvm.controllers import VmRenamedHandler, VmReconfiguredHandler, VmwareController
 from cvm.database import Database
@@ -156,6 +156,22 @@ def esxi_api_client(vm_properties_1):
     return esxi_api_client
 
 
+def assert_vmi_model_state(vmi_model, mac_address=None, ip_address=None,
+                           vlan_id=None, display_name=None, vn_model=None, vm_model=None):
+    if mac_address is not None:
+        assert vmi_model.mac_address == mac_address
+    if ip_address is not None:
+        assert vmi_model.vnc_instance_ip.instance_ip_address == ip_address
+    if vlan_id is not None:
+        assert vmi_model.vlan_id == vlan_id
+    if display_name is not None:
+        assert vmi_model.display_name == display_name
+    if vn_model is not None:
+        assert vmi_model.vn_model == vn_model
+    if vm_model is not None:
+        assert vmi_model.vm_model == vm_model
+
+
 def test_vm_created(vcenter_api_client, vn_model_1, vm_created_update,
                     esxi_api_client, vnc_api_client, vnc_vn_1):
     vrouter_api_client = Mock()
@@ -195,24 +211,28 @@ def test_vm_created(vcenter_api_client, vn_model_1, vm_created_update,
     assert vnc_vm.uuid in [ref['uuid'] for ref in vnc_vmi.get_virtual_machine_refs()]
     assert vnc_vn_1.uuid in [ref['uuid'] for ref in vnc_vmi.get_virtual_network_refs()]
 
-
     # - in Database
     vmi_model = database.get_all_vmi_models()[0]
-    assert vmi_model.display_name == 'vmi-DPG1-VM1'
 
     # Check if VMI Model's Instance IP has been created in VNC:
     vnc_api_client.create_and_read_instance_ip.assert_called_once()
 
     # Check if VMI's vRouter Port has been added:
     vmi_model = vrouter_api_client.add_port.call_args[0][0]
-    assert vmi_model.vm_model == vm_model
-    assert vmi_model.vn_model == vn_model_1
-    assert vmi_model.mac_address == '11:11:11:11:11:11'
-    assert vmi_model.vnc_instance_ip.instance_ip_address == '192.168.100.5'
-    assert vmi_model.vlan_id == 2
 
     # Check if VLAN ID has been set using VLAN Override
     vcenter_api_client.set_vlan_id.assert_called_once_with(vmi_model.vn_model.dvs_name, '10', 2)
+
+    # Check inner VMI model state
+    assert_vmi_model_state(
+        vmi_model,
+        mac_address='11:11:11:11:11:11',
+        ip_address='192.168.100.5',
+        vlan_id=2,
+        display_name='vmi-DPG1-VM1',
+        vn_model=vn_model_1,
+        vm_model=vm_model
+    )
 
 
 def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
@@ -266,21 +286,27 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
 
     # - in Database
     vmi_model = database.get_all_vmi_models()[0]
-    assert vmi_model.display_name == 'vmi-DPG1-VM1-renamed'
 
     # Check if VMI Model's Instance IP has been created in VNC:
     vnc_api_client.create_and_read_instance_ip.assert_called_once()
 
     # Check if VMI's vRouter Port has been added:
-    vmi_model = vrouter_api_client.add_port.call_args[0][0]
-    assert vmi_model.vm_model == vm_model
-    assert vmi_model.vn_model == vn_model_1
-    assert vmi_model.mac_address == '11:11:11:11:11:11'
-    assert vmi_model.vnc_instance_ip.instance_ip_address == '192.168.100.5'
-    assert vmi_model.vlan_id == 2
+    vrouter_api_client.add_port.called_with(vmi_model)
+    assert vrouter_api_client.add_port.call_count == 2
 
     # Check if VLAN ID has been set using VLAN Override
     vcenter_api_client.set_vlan_id.assert_called_once_with(vmi_model.vn_model.dvs_name, '10', 2)
+
+    # Check inner VMI model state
+    assert_vmi_model_state(
+        vmi_model,
+        mac_address='11:11:11:11:11:11',
+        ip_address='192.168.100.5',
+        vlan_id=2,
+        display_name='vmi-DPG1-VM1-renamed',
+        vn_model=vn_model_1,
+        vm_model=vm_model
+    )
 
 
 def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_update,
@@ -331,18 +357,18 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
     vnc_api_client.update_or_create_vm.assert_called_once()
 
     # Check if VMI Model has been saved properly:
-    # - in VNC
-    vnc_api_client.update_or_create_vmi.call_count == 2
-    vnc_vmi = vnc_api_client.update_or_create_vmi.call_args[0][0]
-    assert vnc_vmi.get_virtual_machine_interface_mac_addresses().mac_address == ['11:11:11:11:11:11']
-    assert vnc_vn_2.uuid in [ref['uuid'] for ref in vnc_vmi.get_virtual_network_refs()]
 
     # - in Database
     vmi_models = database.get_vmi_models_by_vm_uuid('12345678-1234-1234-1234-123456789012')
     assert len(vmi_models) == 1
     vmi_model = vmi_models[0]
-    assert vmi_model.display_name == 'vmi-DPG2-VM1'
-    assert vmi_model.vn_model == vn_model_2
+
+    # - in VNC
+    vnc_api_client.delete_vmi.assert_called_once_with(vmi_model.uuid)
+    vnc_api_client.update_or_create_vmi.call_count == 2
+    vnc_vmi = vnc_api_client.update_or_create_vmi.call_args[0][0]
+    assert vnc_vmi.get_virtual_machine_interface_mac_addresses().mac_address == ['11:11:11:11:11:11']
+    assert vnc_vn_2.uuid in [ref['uuid'] for ref in vnc_vmi.get_virtual_network_refs()]
 
     # Check if VMI Model's Instance IP has been updated in VNC:
     vnc_api_client.delete_instance_ip.assert_called_once_with(old_instance_ip.uuid)
@@ -355,11 +381,17 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
     vrouter_api_client.delete_port.assert_called_once_with(vmi_model.uuid)
     assert vrouter_api_client.add_port.call_count == 2
     assert vrouter_api_client.add_port.call_args[0][0] == vmi_model
-    assert vmi_model.mac_address == '11:11:11:11:11:11'
-    assert vmi_model.vnc_instance_ip.instance_ip_address == '192.168.100.5'
-
-    assert vmi_model.vlan_id == 4
 
     # Check if VLAN ID has been set using VLAN Override
     assert vcenter_api_client.set_vlan_id.call_count == 2
     assert vcenter_api_client.set_vlan_id.call_args[0] == (vmi_model.vn_model.dvs_name, '11', 4)
+
+    # Check inner VMI model state
+    assert_vmi_model_state(
+        vmi_model,
+        mac_address='11:11:11:11:11:11',
+        ip_address='192.168.100.5',
+        vlan_id=4,
+        display_name='vmi-DPG2-VM1',
+        vn_model=vn_model_2
+    )
