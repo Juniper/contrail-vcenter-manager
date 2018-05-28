@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import argparse
 import sys
 
 import gevent
@@ -15,8 +16,8 @@ from cvm.services import (VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService)
 
 
-def load_config():
-    with open('config.yaml', 'r') as ymlfile:
+def load_config(config_file):
+    with open(config_file, 'r') as ymlfile:
         cfg = yaml.load(ymlfile)
         esxi_cfg = cfg['esxi']
         vcenter_cfg = cfg['vcenter']
@@ -24,8 +25,8 @@ def load_config():
     return esxi_cfg, vcenter_cfg, vnc_cfg
 
 
-def main():
-    esxi_cfg, vcenter_cfg, vnc_cfg = load_config()
+def main(args):
+    esxi_cfg, vcenter_cfg, vnc_cfg = load_config(args.config_file)
 
     esxi_api_client = ESXiAPIClient(esxi_cfg)
     event_history_collector = esxi_api_client.create_event_history_collector(const.EVENTS_TO_OBSERVE)
@@ -66,8 +67,12 @@ def main():
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-c", action="store", dest="config_file",
+                        default='/etc/contrail/contrail-vcenter-manager/config.yaml')
+    parsed_args = parser.parse_args()
     try:
-        main()
+        main(parsed_args)
         sys.exit(0)
     except KeyboardInterrupt:
         sys.exit(0)
