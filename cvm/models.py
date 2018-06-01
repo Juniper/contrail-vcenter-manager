@@ -4,7 +4,7 @@ import uuid
 
 from pyVmomi import vim  # pylint: disable=no-name-in-module
 from vnc_api.vnc_api import (IdPermsType, InstanceIp, MacAddressesType,
-                             VirtualMachine, VirtualMachineInterface)
+                             VirtualMachine, VirtualMachineInterface, KeyValuePairs, KeyValuePair)
 
 from cvm.constants import (CONTRAIL_NETWORK, CONTRAIL_VM_NAME, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_PROJECT)
@@ -37,11 +37,11 @@ def is_nic_info_valid(info):
     return hasattr(info, 'ipAddress') and hasattr(info, 'network')
 
 
-def find_vrouter_ip_address(host):
+def find_vrouter_uuid(host):
     try:
         for vmware_vm in host.vm:
             if vmware_vm.name.startswith(CONTRAIL_VM_NAME):
-                return find_virtual_machine_ip_address(vmware_vm, CONTRAIL_NETWORK)
+                return vmware_vm.config.instanceUuid
     except AttributeError:
         pass
     return None
@@ -78,7 +78,7 @@ class VirtualMachineModel(object):
     def __init__(self, vmware_vm, vm_properties):
         self.vmware_vm = vmware_vm  # TODO: Consider removing this
         self.vm_properties = vm_properties
-        self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
+        self.vrouter_uuid = find_vrouter_uuid(vmware_vm.summary.runtime.host)
         self.property_filter = None
         self.interfaces = self._read_interfaces()
         self._vnc_vm = None
@@ -86,12 +86,11 @@ class VirtualMachineModel(object):
     def update(self, vmware_vm, vm_properties):
         self.vmware_vm = vmware_vm  # TODO: Consider removing this
         self.vm_properties = vm_properties
-        self.vrouter_ip_address = find_vrouter_ip_address(vmware_vm.summary.runtime.host)
+        self.vrouter_uuid = find_vrouter_uuid(vmware_vm.summary.runtime.host)
         self.interfaces = self._read_interfaces()
 
-    def rename(self, vmware_vm):
-        self.vmware_vm = vmware_vm
-        self.vm_properties['name'] = vmware_vm.name
+    def rename(self, name):
+        self.vm_properties['name'] = name
 
     def update_interface_portgroup_key(self, mac_address, portgroup_key):
         self.interfaces[mac_address] = portgroup_key
@@ -132,9 +131,13 @@ class VirtualMachineModel(object):
     def vnc_vm(self):
         if not self._vnc_vm:
             self._vnc_vm = VirtualMachine(name=self.uuid,
-                                          display_name=self.vrouter_ip_address,
+                                          display_name=self.name,
                                           id_perms=ID_PERMS)
             self._vnc_vm.set_uuid(self.uuid)
+            self._vnc_vm.annotations = self.vnc_vm.annotations or KeyValuePairs()
+            self._vnc_vm.annotations.add_key_value_pair(
+                KeyValuePair('vrouter-uuid', self.vrouter_uuid)
+            )
         return self._vnc_vm
 
 
@@ -189,6 +192,7 @@ class VirtualMachineInterfaceModel(object):
         self.vm_model = vm_model
         self.vn_model = vn_model
         self.mac_address = find_vm_mac_address(self.vm_model.vmware_vm, self.vn_model.key)
+        self.port_key = find_vmi_port_key(self.vm_model.vmware_vm, self.mac_address)
         self.ip_address = None
         self.port_key = None
         self.vlan_id = None
@@ -209,17 +213,22 @@ class VirtualMachineInterfaceModel(object):
         self.port_key = find_vmi_port_key(self.vm_model.vmware_vm, self.mac_address)
 
     def to_vnc(self):
-        vnc_vmi = VirtualMachineInterface(name=self.uuid,
-                                          display_name=self.display_name,
-                                          parent_obj=self.parent,
-                                          id_perms=ID_PERMS)
-        vnc_vmi.set_uuid(self.uuid)
-        vnc_vmi.add_virtual_machine(self.vm_model.vnc_vm)
-        vnc_vmi.set_virtual_network(self.vn_model.vnc_vn)
-        vnc_vmi.set_virtual_machine_interface_mac_addresses(MacAddressesType([self.mac_address]))
-        vnc_vmi.set_port_security_enabled(True)
-        vnc_vmi.set_security_group(self.security_group)
-        return vnc_vmi
+        if not self.vnc_vmi:
+            self.vnc_vmi = VirtualMachineInterface(name=self.uuid,
+                                                   display_name=self.display_name,
+                                                   parent_obj=self.parent,
+                                                   id_perms=ID_PERMS)
+            self.vnc_vmi.set_uuid(self.uuid)
+            self.vnc_vmi.add_virtual_machine(self.vm_model.vnc_vm)
+            self.vnc_vmi.set_virtual_network(self.vn_model.vnc_vn)
+            self.vnc_vmi.set_virtual_machine_interface_mac_addresses(MacAddressesType([self.mac_address]))
+            self.vnc_vmi.set_port_security_enabled(True)
+            self.vnc_vmi.set_security_group(self.security_group)
+            self.vnc_vmi.annotations = self.vnc_vmi.annotations or KeyValuePairs()
+            self.vnc_vmi.annotations.add_key_value_pair(
+                KeyValuePair('vrouter-uuid', self.vm_model.vrouter_uuid)
+            )
+        return self.vnc_vmi
 
     def construct_instance_ip(self):
         if not self._should_construct_instance_ip():
@@ -242,6 +251,10 @@ class VirtualMachineInterfaceModel(object):
         instance_ip.set_uuid(instance_ip_uuid)
         instance_ip.set_virtual_network(self.vn_model.vnc_vn)
         instance_ip.set_virtual_machine_interface(self.to_vnc())
+        instance_ip.annotations = instance_ip.annotations or KeyValuePairs()
+        instance_ip.annotations.add_key_value_pair(
+            KeyValuePair('vrouter-uuid', self.vm_model.vrouter_uuid)
+        )
         self.vnc_instance_ip = instance_ip
 
     def acquire_vlan_id(self):
