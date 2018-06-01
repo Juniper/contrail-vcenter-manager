@@ -62,8 +62,6 @@ class VmwareController(object):
                 vim.event.VmSuspendedEvent,
         )):
             self._handle_vm_updated_event(event)
-        elif isinstance(event, vim.event.VmRemovedEvent):
-            self._handle_vm_removed_event(event)
 
     def _handle_vm_updated_event(self, event):
         vmware_vm = event.vm.vm
@@ -72,11 +70,6 @@ class VmwareController(object):
             self._vmi_service.update_vmis_for_vm_model(vm_model)
         except vmodl.fault.ManagedObjectNotFound:
             logger.info('Skipping event for a non-existent VM.')
-
-    def _handle_vm_removed_event(self, event):
-        vm_name = event.vm.name
-        self._vmi_service.remove_vmis_for_vm_model(vm_name)
-        self._vm_service.remove_vm(vm_name)
 
     def _handle_tools_status(self, vmware_vm, value):
         try:
@@ -121,9 +114,10 @@ class VmRenamedHandler(AbstractEventHandler):
         self._vmi_service = vmi_service
 
     def _handle_event(self, event):
-        vmware_vm = event.vm.vm
-        self._vm_service.rename_vm(vmware_vm)
-        self._vmi_service.rename_vmis(vmware_vm)
+        old_name = event.oldName
+        new_name = event.newName
+        self._vm_service.rename_vm(old_name, new_name)
+        self._vmi_service.rename_vmis(new_name)
 
 
 class VmReconfiguredHandler(AbstractEventHandler):
@@ -146,3 +140,16 @@ class VmReconfiguredHandler(AbstractEventHandler):
                 self._vmi_service.update_vmis_vn(vmware_vm, mac_address, portgroup_key)
             else:
                 logger.info('Detected VmReconfiguredEvent with unsupported %s device', type(device))
+
+
+class VmRemovedHandler(AbstractEventHandler):
+    EVENTS = (vim.event.VmRemovedEvent,)
+
+    def __init__(self, vm_service, vmi_service):
+        self._vm_service = vm_service
+        self._vmi_service = vmi_service
+
+    def _handle_event(self, event):
+        vm_name = event.vm.name
+        self._vmi_service.remove_vmis_for_vm_model(vm_name)
+        self._vm_service.remove_vm(vm_name)

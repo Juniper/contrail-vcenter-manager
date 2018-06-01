@@ -213,12 +213,21 @@ class VNCAPIClient(object):
         self.id_perms.set_creator('vcenter-manager')
         self.id_perms.set_enable(True)
 
-    def delete_vm(self, uuid):
+    def delete_vm(self, vnc_vm):
         try:
-            self.vnc_lib.virtual_machine_delete(id=uuid)
-            logger.info('Virtual Machine removed: %s', uuid)
+            existing_vm = self.read_vm(vnc_vm.uuid)
+            vrouter_uuid = next(pair.value
+                                for pair in vnc_vm.get_annotations().key_value_pair
+                                if pair.key == 'vrouter-uuid')
+            if any([pair.key == 'vrouter-uuid' and pair.value == vrouter_uuid
+                    for pair in existing_vm.get_annotations().key_value_pair]):
+                self.vnc_lib.virtual_machine_delete(id=vnc_vm.uuid)
+                logger.info('Virtual Machine removed: %s', vnc_vm.name)
+            else:
+                logger.error('Virtual Machine %s is managed by vRouter %s and cannot be deleted from VNC.' %
+                             (vnc_vm.name, vrouter_uuid))
         except NoIdError:
-            logger.error('Virtual Machine not found: %s', uuid)
+            logger.error('Virtual Machine not found: %s', vnc_vm.name)
 
     def update_or_create_vm(self, vnc_vm):
         try:
@@ -237,10 +246,10 @@ class VNCAPIClient(object):
 
     def get_all_vms(self):
         vms = self.vnc_lib.virtual_machines_list().get('virtual-machines')
-        return [self._read_vm(vm['fq_name']) for vm in vms]
+        return [self.read_vm(vm['uuid']) for vm in vms]
 
-    def _read_vm(self, fq_name):
-        return self.vnc_lib.virtual_machine_read(fq_name)
+    def read_vm(self, uuid):
+        return self.vnc_lib.virtual_machine_read(id=uuid)
 
     def update_or_create_vmi(self, vnc_vmi):
         try:
@@ -272,10 +281,14 @@ class VNCAPIClient(object):
         vmis = self.vnc_lib.virtual_machine_interfaces_list(
             back_ref_id=vm_model.uuid
         ).get('virtual-machine-interfaces')
-        return [self._read_vmi(vmi['fq_name']) for vmi in vmis]
+        return [self.read_vmi(vmi['uuid']) for vmi in vmis]
 
-    def _read_vmi(self, fq_name):
-        return self.vnc_lib.virtual_machine_interface_read(fq_name)
+    def read_vmi(self, uuid):
+        try:
+            return self.vnc_lib.virtual_machine_interface_read(id=uuid)
+        except NoIdError:
+            logger.error('Virtual Machine Interface not found %s' % uuid)
+            return None
 
     def get_vns_by_project(self, project):
         vns = self.vnc_lib.virtual_networks_list(parent_id=project.uuid).get('virtual-networks')
@@ -338,17 +351,23 @@ class VNCAPIClient(object):
 
     def create_and_read_instance_ip(self, instance_ip):
         if not instance_ip:
-            return
+            return None
         try:
-            return self.vnc_lib.instance_ip_read([instance_ip.uuid])
+            return self._read_instance_ip(instance_ip.uuid)
             # TODO: Refactor this
         except NoIdError:
             self.vnc_lib.instance_ip_create(instance_ip)
             logger.debug("Created instanceIP: " + instance_ip.name)
-            return self.vnc_lib.instance_ip_read([instance_ip.uuid])
+        return self._read_instance_ip(instance_ip.uuid)
 
     def delete_instance_ip(self, uuid):
-        self.vnc_lib.instance_ip_delete(id=uuid)
+        try:
+            self.vnc_lib.instance_ip_delete(id=uuid)
+        except NoIdError:
+            logger.error('Instance IP not found: %s', uuid)
+
+    def _read_instance_ip(self, uuid):
+        return self.vnc_lib.instance_ip_read(id=uuid)
 
 
 def construct_ipam(project):

@@ -113,13 +113,13 @@ class TestVirtualMachineModel(TestCase):
     def test_to_vnc(self):
         vm_model = VirtualMachineModel(self.vmware_vm, self.vm_properties)
         vm_model.vm_properties['config.instanceUuid'] = 'd376b6b4-943d-4599-862f-d852fd6ba425'
-        vm_model.vrouter_ip_address = '192.168.0.10'
+        vm_model.vrouter_uuid = '192.168.0.10'
 
         vnc_vm = vm_model.vnc_vm
 
         self.assertEqual(vnc_vm.name, vm_model.uuid)
         self.assertEqual(vnc_vm.uuid, vm_model.uuid)
-        self.assertEqual(vnc_vm.display_name, vm_model.vrouter_ip_address)
+        self.assertEqual(vnc_vm.display_name, vm_model.vrouter_uuid)
         self.assertEqual(vnc_vm.fq_name, [vm_model.uuid])
 
     def test_update(self):
@@ -155,7 +155,7 @@ class TestVirtualMachineInterfaceModel(TestCase):
         vmware_vm.config.hardware.device = [device]
         self.vm_model = VirtualMachineModel(vmware_vm, vm_properties)
         self.vm_model.vm_properties['config.instanceUuid'] = 'd376b6b4-943d-4599-862f-d852fd6ba425'
-        self.vm_model.vrouter_ip_address = '192.168.0.10'
+        self.vm_model.vrouter_uuid = '192.168.0.10'
 
         vmware_vn = create_dpg_mock(name='VM Network', key='123')
         vnc_vn = Mock(uuid='d376b6b4-943d-4599-862f-d852fd6ba425')

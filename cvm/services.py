@@ -62,25 +62,41 @@ class VirtualMachineService(Service):
             vm_model = self._database.get_vm_model_by_uuid(vnc_vm.uuid)
             if not vm_model:
                 logger.info('Deleting %s from VNC', vnc_vm.name)
-                self._vnc_api_client.delete_vm(vnc_vm.uuid)
+                self._vnc_api_client.delete_vm(vnc_vm)
 
     def remove_vm(self, name):
         vm_model = self._database.get_vm_model_by_name(name)
-        if vm_model:
-            self._database.delete_vm_model(vm_model.uuid)
-            self._vnc_api_client.delete_vm(vm_model.uuid)
-            vm_model.destroy_property_filter()
+        if not vm_model:
+            return None
+        if self._can_delete_from_vnc(vm_model):
+            self._vnc_api_client.delete_vm(vm_model.vnc_vm)
+        self._database.delete_vm_model(vm_model.uuid)
+        vm_model.destroy_property_filter()
         return vm_model
+
+    def _can_delete_from_vnc(self, vm_model):
+        existing_vm = self._vnc_api_client.read_vm(vm_model.uuid)
+        vrouter_uuid = next(pair.value
+                            for pair in vm_model.vnc_vm.get_annotations().key_value_pair
+                            if pair.key == 'vrouter-uuid')
+        if any([pair.key == 'vrouter-uuid' and pair.value == vrouter_uuid
+                for pair in existing_vm.get_annotations().key_value_pair]):
+            return True
+        logger.error('Virtual Machine %s is managed by vRouter %s and cannot be deleted from VNC.' %
+                     (vm_model.name, vrouter_uuid))
+        return False
 
     def set_tools_running_status(self, vmware_vm, value):
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
+        if not vm_model:
+            return
         vm_model.tools_running_status = value
         logger.info('Tools running status of %s set to %s', vm_model.name, value)
         self._database.save(vm_model)
 
-    def rename_vm(self, vmware_vm):
-        vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
-        vm_model.rename(vmware_vm)
+    def rename_vm(self, old_name, new_name):
+        vm_model = self._database.get_vm_model_by_name(old_name)
+        vm_model.rename(new_name)
         self._vnc_api_client.update_or_create_vm(vm_model.vnc_vm)
         self._database.save(vm_model)
 
@@ -158,8 +174,10 @@ class VirtualMachineInterfaceService(Service):
             self._vcenter_api_client.set_vlan_id(vmi_model.vn_model.dvs_name, vmi_model.port_key, vmi_model.vlan_id)
         self._vnc_api_client.update_or_create_vmi(vmi_model.to_vnc())
         vmi_model.construct_instance_ip()
-        instance_ip = self._vnc_api_client.create_and_read_instance_ip(vmi_model.vnc_instance_ip)
-        vmi_model.vnc_instance_ip = instance_ip
+        if vmi_model.vnc_instance_ip:
+            self._vnc_api_client.delete_instance_ip(uuid=vmi_model.vnc_instance_ip.uuid)
+            instance_ip = self._vnc_api_client.create_and_read_instance_ip(vmi_model.vnc_instance_ip)
+            vmi_model.vnc_instance_ip = instance_ip
         self._add_or_update_vrouter_port(vmi_model)
         self._database.save(vmi_model)
 
@@ -193,14 +211,32 @@ class VirtualMachineInterfaceService(Service):
             pass
 
     def _delete(self, vmi_model):
+        self._delete_from_vnc(vmi_model)
+        self._restore_vlan_id(vmi_model)
+        self._database.delete_vmi_model(vmi_model.uuid)
+        self._delete_vrouter_port(vmi_model)
+
+    def _delete_from_vnc(self, vmi_model):
         if vmi_model.vnc_instance_ip:
             self._vnc_api_client.delete_instance_ip(vmi_model.vnc_instance_ip.uuid)
+        self._vnc_api_client.delete_vmi(vmi_model.uuid)
+
+    def _restore_vlan_id(self, vmi_model):
         with self._vcenter_api_client:
             self._vcenter_api_client.restore_vlan_id(vmi_model.vn_model.dvs_name, vmi_model.port_key)
         vmi_model.clear_vlan_id()
-        self._vnc_api_client.delete_vmi(vmi_model.uuid)
-        self._database.delete_vmi_model(vmi_model.uuid)
-        self._delete_vrouter_port(vmi_model)
+
+    def _can_delete_from_vnc(self, vmi_model):
+        existing_vmi = self._vnc_api_client.read_vmi(vmi_model.uuid)
+        vrouter_uuid = next(pair.value
+                            for pair in vmi_model.vnc_vmi.get_annotations().key_value_pair
+                            if pair.key == 'vrouter-uuid')
+        if any([pair.key == 'vrouter-uuid' and pair.value == vrouter_uuid
+                for pair in existing_vmi.get_annotations().key_value_pair]):
+            return True
+        logger.error('Virtual Machine Interface %s is managed by vRouter %s and cannot be deleted from VNC.' %
+                     (vmi_model.vnc_vmi.display_name, vrouter_uuid))
+        return False
 
     def _delete_vrouter_port(self, vmi_model):
         if vmi_model.vrouter_port_added:
@@ -212,15 +248,16 @@ class VirtualMachineInterfaceService(Service):
         vm_model = self._database.get_vm_model_by_name(vm_name)
         if not vm_model:
             return
-        for mac_address in vm_model.interfaces.keys():
-            vmi_model = self._database.get_vmi_model_by_uuid(
-                VirtualMachineInterfaceModel.get_uuid(mac_address)
-            )
-            if vmi_model:
-                self._delete(vmi_model)
+        vmi_models = self._database.get_vmi_models_by_vm_uuid(vm_model.uuid)
+        for vmi_model in vmi_models:
+            if self._can_delete_from_vnc(vmi_model):
+                self._delete_from_vnc(vmi_model)
+                self._restore_vlan_id(vmi_model)
+            self._database.delete_vmi_model(vmi_model.uuid)
+            self._delete_vrouter_port(vmi_model)
 
-    def rename_vmis(self, vmware_vm):
-        vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
+    def rename_vmis(self, new_name):
+        vm_model = self._database.get_vm_model_by_name(new_name)
         vmi_models = self._database.get_vmi_models_by_vm_uuid(vm_model.uuid)
         for vmi_model in vmi_models:
             vmi_model.vm_model = vm_model
