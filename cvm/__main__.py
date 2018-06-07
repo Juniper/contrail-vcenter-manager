@@ -9,7 +9,8 @@ import yaml
 import cvm.constants as const
 from cvm.clients import (ESXiAPIClient, VCenterAPIClient, VNCAPIClient,
                          VRouterAPIClient)
-from cvm.controllers import VmRenamedHandler, VmReconfiguredHandler, VmwareController
+from cvm.controllers import (VmReconfiguredHandler, VmRemovedHandler,
+                             VmRenamedHandler, VmwareController)
 from cvm.database import Database
 from cvm.monitors import VMwareMonitor
 from cvm.services import (VirtualMachineInterfaceService,
@@ -58,7 +59,8 @@ def main(args):
     )
     vm_renamed_handler = VmRenamedHandler(vm_service, vmi_service)
     vm_reconfigured_handler = VmReconfiguredHandler(vm_service, vmi_service)
-    handlers = [vm_renamed_handler, vm_reconfigured_handler]
+    vm_removed_handler = VmRemovedHandler(vm_service, vmi_service)
+    handlers = [vm_renamed_handler, vm_reconfigured_handler, vm_removed_handler]
     vmware_controller = VmwareController(vm_service, vn_service, vmi_service, handlers)
     vmware_monitor = VMwareMonitor(esxi_api_client, vmware_controller)
 
