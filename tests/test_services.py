@@ -172,7 +172,8 @@ class TestVirtualMachineInterfaceService(TestCase):
 
     def test_create_vmis_proper_vm_dpg(self):
         """ A new VMI is being created with proper VM/DPG pair. """
-        other_vn_model = create_vn_model(name='DPortGroup', key='dportgroup-51')
+        self.database.save(self.vm_model)
+        other_vn_model = create_vn_model(name='DPortGroup', key='dportgroup-51', uuid='uuid_2')
         self.database.save(other_vn_model)
 
         self.vmi_service.update_vmis_for_vm_model(self.vm_model)
@@ -183,7 +184,8 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.assertEqual(self.vn_model, saved_vmi.vn_model)
         self.vrouter_api_client.add_port.assert_called_once_with(saved_vmi)
         self.vrouter_api_client.enable_port.assert_called_once_with(saved_vmi.uuid)
-        self.vnc_client.update_or_create_vmi.assert_called_once_with(saved_vmi.to_vnc())
+        vnc_vmi = self.vnc_client.update_or_create_vmi.call_args[0][0]
+        self.assertIn(self.vn_model.uuid, [ref['uuid'] for ref in vnc_vmi.get_virtual_network_refs()])
         self.assertTrue(saved_vmi.vrouter_port_added)
 
     def test_no_update_for_no_dpgs(self):
@@ -202,6 +204,9 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.database.save(second_vn_model)
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
                                                  vnc_api.Project(), vnc_api.SecurityGroup())
+        vnc_instance_ip = Mock()
+        vnc_instance_ip.uuid = 'uuid'
+        vmi_model.vnc_instance_ip = vnc_instance_ip
         vmi_model.vrouter_port_added = True
         self.database.save(vmi_model)
         self.vm_model.interfaces['c8:5b:76:53:0f:f5'] = 'dportgroup-51'
@@ -213,7 +218,8 @@ class TestVirtualMachineInterfaceService(TestCase):
         saved_vmi = self.database.get_all_vmi_models()[0]
         self.assertEqual(self.vm_model, saved_vmi.vm_model)
         self.assertEqual(second_vn_model, saved_vmi.vn_model)
-        self.vnc_client.update_or_create_vmi.assert_called_once_with(saved_vmi.to_vnc())
+        vnc_vmi = self.vnc_client.update_or_create_vmi.call_args[0][0]
+        self.assertIn(second_vn_model.uuid, [ref['uuid'] for ref in vnc_vmi.get_virtual_network_refs()])
         self.assertTrue(saved_vmi.vrouter_port_added)
         self.vrouter_api_client.delete_port.assert_called_once_with(vmi_model.uuid)
         self.vrouter_api_client.add_port.assert_called_once()

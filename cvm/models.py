@@ -93,6 +93,9 @@ class VirtualMachineModel(object):
         self.vmware_vm = vmware_vm
         self.vm_properties['name'] = vmware_vm.name
 
+    def update_interface_portgroup_key(self, mac_address, portgroup_key):
+        self.interfaces[mac_address] = portgroup_key
+
     def _read_interfaces(self):
         try:
             return {device.macAddress: device.backing.port.portgroupKey
@@ -187,6 +190,7 @@ class VirtualMachineInterfaceModel(object):
         self.vn_model = vn_model
         self.mac_address = find_vm_mac_address(self.vm_model.vmware_vm, self.vn_model.key)
         self.ip_address = None
+        self.port_key = None
         self.vlan_id = None
         self.security_group = security_group
         self.vnc_vmi = None
@@ -201,23 +205,21 @@ class VirtualMachineInterfaceModel(object):
     def display_name(self):
         return 'vmi-{}-{}'.format(self.vn_model.name, self.vm_model.name)
 
-    @property
-    def port_key(self):
-        return find_vmi_port_key(self.vm_model.vmware_vm, self.mac_address)
+    def refresh_port_key(self):
+        self.port_key = find_vmi_port_key(self.vm_model.vmware_vm, self.mac_address)
 
     def to_vnc(self):
-        if not self.vnc_vmi:
-            self.vnc_vmi = VirtualMachineInterface(name=self.uuid,
-                                                   display_name=self.display_name,
-                                                   parent_obj=self.parent,
-                                                   id_perms=ID_PERMS)
-            self.vnc_vmi.set_uuid(self.uuid)
-            self.vnc_vmi.add_virtual_machine(self.vm_model.vnc_vm)
-            self.vnc_vmi.set_virtual_network(self.vn_model.vnc_vn)
-            self.vnc_vmi.set_virtual_machine_interface_mac_addresses(MacAddressesType([self.mac_address]))
-            self.vnc_vmi.set_port_security_enabled(True)
-            self.vnc_vmi.set_security_group(self.security_group)
-        return self.vnc_vmi
+        vnc_vmi = VirtualMachineInterface(name=self.uuid,
+                                          display_name=self.display_name,
+                                          parent_obj=self.parent,
+                                          id_perms=ID_PERMS)
+        vnc_vmi.set_uuid(self.uuid)
+        vnc_vmi.add_virtual_machine(self.vm_model.vnc_vm)
+        vnc_vmi.set_virtual_network(self.vn_model.vnc_vn)
+        vnc_vmi.set_virtual_machine_interface_mac_addresses(MacAddressesType([self.mac_address]))
+        vnc_vmi.set_port_security_enabled(True)
+        vnc_vmi.set_security_group(self.security_group)
+        return vnc_vmi
 
     def construct_instance_ip(self):
         if not self._should_construct_instance_ip():
