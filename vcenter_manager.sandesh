@@ -1,0 +1,16 @@
+request sandesh VirtualMachineRequest {
+  1: string uuid;
+}
+
+struct VirtualMachineData {
+    1: string uuid;
+    2: string name;
+}
+
+response sandesh VirtualMachineResponse {
+    1: list<VirtualMachineData> machines;
+}
+
+uve sandesh UveVirtualMachine {
+    1: VirtualMachineData data;
+}
