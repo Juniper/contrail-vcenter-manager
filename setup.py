@@ -10,6 +10,7 @@ setup(
     name="contrail-vcenter-manager",
     version="0.1dev",
     packages=find_packages(),
+    package_data={'': ['*.html', '*.css', '*.xml', '*.yml']},
     zip_safe=False,
     long_description="Contrail vCenter Manager",
     install_requires=requirements('requirements.txt'),

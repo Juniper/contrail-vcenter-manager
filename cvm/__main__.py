@@ -4,7 +4,14 @@ import argparse
 import sys
 
 import gevent
+from gevent import monkey; monkey.patch_all()
+import socket
+
 import yaml
+
+from pysandesh.sandesh_base import Sandesh, SandeshLevel
+from pysandesh.connection_info import ConnectionState
+from cvm.sandesh.vcenter_manager.ttypes import *
 
 import cvm.constants as const
 from cvm.clients import (ESXiAPIClient, VCenterAPIClient, VNCAPIClient,
@@ -15,6 +22,7 @@ from cvm.database import Database
 from cvm.monitors import VMwareMonitor
 from cvm.services import (VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService)
+from cvm.sandesh_handler import SandeshHandler
 
 
 def load_config(config_file):
@@ -26,8 +34,8 @@ def load_config(config_file):
     return esxi_cfg, vcenter_cfg, vnc_cfg
 
 
-def main(args):
-    esxi_cfg, vcenter_cfg, vnc_cfg = load_config(args.config_file)
+def build_monitor(config_file, database):
+    esxi_cfg, vcenter_cfg, vnc_cfg = load_config(config_file)
 
     esxi_api_client = ESXiAPIClient(esxi_cfg)
     event_history_collector = esxi_api_client.create_event_history_collector(const.EVENTS_TO_OBSERVE)
@@ -37,7 +45,6 @@ def main(args):
     vcenter_api_client = VCenterAPIClient(vcenter_cfg)
 
     vnc_api_client = VNCAPIClient(vnc_cfg)
-    database = Database()
 
     vm_service = VirtualMachineService(
         esxi_api_client=esxi_api_client,
@@ -62,8 +69,22 @@ def main(args):
     vm_removed_handler = VmRemovedHandler(vm_service, vmi_service)
     handlers = [vm_renamed_handler, vm_reconfigured_handler, vm_removed_handler]
     vmware_controller = VmwareController(vm_service, vn_service, vmi_service, handlers)
-    vmware_monitor = VMwareMonitor(esxi_api_client, vmware_controller)
+    return VMwareMonitor(esxi_api_client, vmware_controller)
 
+
+def run_introspect(args, database):
+    sandesh = Sandesh()
+    sandesh_handler = SandeshHandler(database)
+    sandesh_handler.bind_handlers()
+    sandesh.init_generator('cvm', socket.gethostname(),
+                           'contrail-vcenter-manager', '0', [],
+                           'cvm_context', args.introspect_port, ['cvm'])
+
+
+def main(args):
+    database = Database()
+    vmware_monitor = build_monitor(args.config_file, database)
+    run_introspect(args, database)
     greenlets = [
         gevent.spawn(vmware_monitor.start()),
     ]
@@ -74,6 +95,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", action="store", dest="config_file",
                         default='/etc/contrail/contrail-vcenter-manager/config.yaml')
+    parser.add_argument("-p", type=int, action="store", dest="introspect_port",
+                        default=9090)
     parsed_args = parser.parse_args()
     try:
         main(parsed_args)
