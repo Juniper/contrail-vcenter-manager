@@ -1,0 +1,50 @@
+struct VirtualMachineInterfaceData {
+    1: string uuid;
+    2: string display_name;
+    3: string mac_address;
+    4: string port_key;
+    5: string ip_address;
+    6: string vm_uuid (link="VirtualMachineRequest");
+    7: string vn_uuid (link="VirtualNetworkRequest");
+    8: i32 vlan_id;
+}
+
+struct VirtualNetworkData {
+    1: string uuid;
+    2: string name;
+    3: string key;
+    4: list<VirtualMachineInterfaceData> interfaces;
+}
+
+struct VirtualMachineData {
+    1: string uuid;
+    2: string name;
+    3: string vrouter_uuid;
+    4: list<VirtualMachineInterfaceData> interfaces;
+}
+
+request sandesh VirtualMachineRequest {
+    1: string uuid;
+    2: string name;
+}
+
+response sandesh VirtualMachineResponse {
+    1: list<VirtualMachineData> machines;
+}
+
+request sandesh VirtualNetworkRequest {
+    1: string uuid;
+    2: string key;
+}
+
+response sandesh VirtualNetworkResponse {
+    1: list<VirtualNetworkData> networks;
+}
+
+request sandesh VirtualMachineInterfaceRequest {
+    1: string uuid;
+}
+
+response sandesh VirtualMachineInterfaceResponse {
+    1: list<VirtualMachineInterfaceData> interfaces;
+}
