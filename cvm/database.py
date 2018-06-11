@@ -58,6 +58,9 @@ class Database(object):
             logger.error('Could not find VN with UUID %s.', uuid)
             return None
 
+    def get_all_vn_models(self):
+        return self.vn_models.values()
+
     def get_all_vmi_models(self):
         return self.vmi_models.values()
 
@@ -66,6 +69,9 @@ class Database(object):
 
     def get_vmi_models_by_vm_uuid(self, uuid):
         return [vmi_model for vmi_model in self.vmi_models.values() if vmi_model.vm_model.uuid == uuid]
+
+    def get_vmi_models_by_vn_uuid(self, uuid):
+        return [vmi_model for vmi_model in self.vmi_models.values() if vmi_model.vn_model.uuid == uuid]
 
     def delete_vm_model(self, uid):
         try:
