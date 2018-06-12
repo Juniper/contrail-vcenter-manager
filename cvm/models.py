@@ -1,12 +1,14 @@
 import ipaddress
 import logging
 import uuid
+from collections import deque
 
 from pyVmomi import vim  # pylint: disable=no-name-in-module
-from vnc_api.vnc_api import (IdPermsType, InstanceIp, MacAddressesType,
-                             VirtualMachine, VirtualMachineInterface, KeyValuePairs, KeyValuePair)
+from vnc_api.vnc_api import (IdPermsType, InstanceIp, KeyValuePair,
+                             KeyValuePairs, MacAddressesType, VirtualMachine,
+                             VirtualMachineInterface)
 
-from cvm.constants import (CONTRAIL_NETWORK, CONTRAIL_VM_NAME, VNC_ROOT_DOMAIN,
+from cvm.constants import (CONTRAIL_VM_NAME, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_PROJECT)
 
 logging.basicConfig(level=logging.INFO)
@@ -72,6 +74,7 @@ def find_vmi_port_key(vmware_vm, mac_address):
                 pass
     except AttributeError:
         pass
+    return None
 
 
 class VirtualMachineModel(object):
@@ -282,19 +285,19 @@ class VirtualMachineInterfaceModel(object):
 
 class VlanIdPool(object):
     def __init__(self, start, end):
-        self._available_ids = set(range(start, end + 1))
+        self._available_ids = deque(range(start, end + 1))
 
     def reserve(self, vlan_id):
         try:
             self._available_ids.remove(vlan_id)
-        except KeyError:
+        except ValueError:
             pass
 
     def get_available(self):
         try:
-            return self._available_ids.pop()
-        except KeyError:
+            return self._available_ids.popleft()
+        except IndexError:
             return None
 
     def free(self, vlan_id):
-        self._available_ids.add(vlan_id)
+        self._available_ids.append(vlan_id)
