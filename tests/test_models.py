@@ -1,5 +1,5 @@
 import uuid
-from unittest import TestCase, skip
+from unittest import TestCase
 
 from mock import Mock, patch
 from vnc_api.vnc_api import Project, SecurityGroup
@@ -234,6 +234,14 @@ class TestVlanIdPool(TestCase):
 
         self.assertIn(0, self.vlan_id_pool._available_ids)
 
+    def test_free_and_get(self):
+        self.vlan_id_pool.reserve(0)
+
+        self.vlan_id_pool.free(0)
+        next_id = self.vlan_id_pool.get_available()
+
+        self.assertEqual(1, next_id)
+
 
 class TestVirtualNetworkVlans(TestCase):
     def setUp(self):
@@ -241,28 +249,24 @@ class TestVirtualNetworkVlans(TestCase):
         self.ports = []
         self.dvs = Mock()
         self.dpg.config.distributedVirtualSwitch = self.dvs
+        self.dvs.FetchDVPorts.side_effect = self._check_criteria
 
     def test_sync_vlan_ids(self):
         self.ports.append(create_port_mock(1))
         self.ports.append(create_port_mock(2))
-        self.dvs.FetchDVPorts.side_effect = self._check_criteria
 
         vn_model = VirtualNetworkModel(self.dpg, None, VlanIdPool(0, 100))
 
         self.assertNotIn(1, vn_model.vlan_id_pool._available_ids)
         self.assertNotIn(2, vn_model.vlan_id_pool._available_ids)
 
-    @skip
     def test_vmi_vlan_id_aquisition(self):
         self.ports.append(create_port_mock(0))
         self.ports.append(create_port_mock(1))
-        self.dvs.FetchDVPorts.side_effect = self._check_criteria
-        vn_model = VirtualNetworkModel(self.dpg, None)
-        # TODO: Pass VlanIdPool in the constructor
-        vn_model.vlan_id_pool = VlanIdPool(0, 100)
+        vn_model = VirtualNetworkModel(self.dpg, None, VlanIdPool(0, 100))
         vm_model = VirtualMachineModel(*create_vmware_vm_mock([self.dpg]))
-
         vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, None, None)
+
         vmi_model.acquire_vlan_id()
 
         self.assertEqual(2, vmi_model.vlan_id)
