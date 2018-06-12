@@ -114,10 +114,10 @@ def vm_created_update(vmware_vm_1):
 
 
 @pytest.fixture()
-def vm_renamed_update(vmware_vm_1):
+def vm_renamed_update():
     event = Mock(spec=vim.event.VmRenamedEvent())
-    vmware_vm_1.name = 'VM1-renamed'
-    event.vm.vm = vmware_vm_1
+    event.oldName = 'VM1'
+    event.newName = 'VM1-renamed'
     return wrap_into_update_set(event)
 
 

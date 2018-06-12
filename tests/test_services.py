@@ -61,7 +61,9 @@ class TestVirtualMachineService(TestCase):
         vm_model = Mock()
         self.database.get_vm_model_by_name.return_value = vm_model
 
-        self.vm_service.remove_vm('VM')
+        with patch('cvm.services.VirtualMachineService._can_delete_from_vnc') as can_delete:
+            can_delete.return_value = True
+            self.vm_service.remove_vm('VM')
 
         vm_model.destroy_property_filter.assert_called_once()
 
@@ -111,10 +113,12 @@ class TestVirtualMachineService(TestCase):
         vm_model = Mock(uuid='d376b6b4-943d-4599-862f-d852fd6ba425')
         self.database.get_vm_model_by_name.return_value = vm_model
 
-        self.vm_service.remove_vm('VM')
+        with patch('cvm.services.VirtualMachineService._can_delete_from_vnc') as can_delete:
+            can_delete.return_value = True
+            self.vm_service.remove_vm('VM')
 
         self.database.delete_vm_model.assert_called_once_with(vm_model.uuid)
-        self.vnc_client.delete_vm.assert_called_once_with(vm_model.uuid)
+        self.vnc_client.delete_vm.assert_called_once_with(vm_model.vnc_vm)
 
     def test_remove_no_vm(self):
         """ Remove VM should do nothing when VM doesn't exist in database. """
@@ -139,13 +143,13 @@ class TestVirtualMachineService(TestCase):
     def test_rename_vm(self):
         vm_model = Mock()
         vm_model.configure_mock(name='VM')
-        self.database.get_vm_model_by_uuid.return_value = vm_model
+        self.database.get_vm_model_by_name.return_value = vm_model
         vmware_vm = Mock()
         vmware_vm.configure_mock(name='VM-renamed')
 
-        self.vm_service.rename_vm(vmware_vm)
+        self.vm_service.rename_vm('VM', 'VM-renamed')
 
-        vm_model.rename.assert_called_once_with(vmware_vm)
+        vm_model.rename.assert_called_once_with('VM-renamed')
         self.vnc_client.update_or_create_vm.assert_called_once()
         self.database.save.assert_called_once_with(vm_model)
 
@@ -280,10 +284,11 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.database.save(vmi_model)
         self.database.save(self.vm_model)
 
-        with patch.object(self.database, 'delete_vmi_model') as database_del_mock:
+        with patch('cvm.services.VirtualMachineInterfaceService._can_delete_from_vnc') as can_delete:
+            can_delete.return_value = True
             self.vmi_service.remove_vmis_for_vm_model(self.vm_model.name)
 
-        database_del_mock.assert_called_once_with(vmi_model.uuid)
+        self.assertNotIn(vmi_model, self.database.get_all_vmi_models())
         self.vnc_client.delete_vmi.assert_called_once_with(vmi_model.uuid)
 
     def test_remove_vmis_no_vm_model(self):
@@ -305,7 +310,7 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.vm_model.update(*create_vmware_vm_mock(name='VM-renamed'))
         self.database.save(self.vm_model)
 
-        self.vmi_service.rename_vmis(self.vm_model.vmware_vm)
+        self.vmi_service.rename_vmis('VM-renamed')
 
         self.assertEqual('vmi-VM Portgroup-VM-renamed', vmi_model.display_name)
         self.assertEqual(0, self.vnc_client.create_and_read_instance_ip.call_count)

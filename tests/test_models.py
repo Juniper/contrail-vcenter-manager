@@ -113,14 +113,15 @@ class TestVirtualMachineModel(TestCase):
     def test_to_vnc(self):
         vm_model = VirtualMachineModel(self.vmware_vm, self.vm_properties)
         vm_model.vm_properties['config.instanceUuid'] = 'd376b6b4-943d-4599-862f-d852fd6ba425'
-        vm_model.vrouter_uuid = '192.168.0.10'
+        vm_model.vrouter_uuid = 'vrouter_uuid'
 
         vnc_vm = vm_model.vnc_vm
 
-        self.assertEqual(vnc_vm.name, vm_model.uuid)
-        self.assertEqual(vnc_vm.uuid, vm_model.uuid)
-        self.assertEqual(vnc_vm.display_name, vm_model.vrouter_uuid)
-        self.assertEqual(vnc_vm.fq_name, [vm_model.uuid])
+        self.assertEqual(vm_model.uuid, vnc_vm.name)
+        self.assertEqual(vm_model.uuid, vnc_vm.uuid)
+        self.assertEqual([vm_model.uuid], vnc_vm.fq_name)
+        vrouter_annotation = vnc_vm.get_annotations().get_key_value_pair()[0]
+        self.assertEqual('vrouter_uuid', vrouter_annotation.value)
 
     def test_update(self):
         vm_model = VirtualMachineModel(self.vmware_vm, self.vm_properties)

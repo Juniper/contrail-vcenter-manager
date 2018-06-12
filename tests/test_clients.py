@@ -127,5 +127,5 @@ class TestVNCAPIClient(TestCase):
 
         all_vms = self.vnc_client.get_all_vms()
 
-        self.vnc_lib.virtual_machine_read.assert_called_once_with(['5027a82e-fbc7-0898-b64c-4bf9f5b9d07c'])
+        self.vnc_lib.virtual_machine_read.assert_called_once_with(id=u'5027a82e-fbc7-0898-b64c-4bf9f5b9d07c')
         self.assertEqual([vnc_vm], all_vms)

@@ -175,7 +175,7 @@ class VCenterAPIClient(VSphereAPIClient):
         except StopIteration:
             return
         dv_port_spec = make_dv_port_spec(dv_port, vlan_id)
-        logger.info('Setting VLAN ID of port %s to %d' % (key, vlan_id))
+        logger.info('Setting VLAN ID of port %s to %d', key, vlan_id)
         dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
 
     def restore_vlan_id(self, dvs_name, key):
@@ -214,6 +214,7 @@ class VNCAPIClient(object):
         self.id_perms.set_enable(True)
 
     def delete_vm(self, vnc_vm):
+        # TODO: Remove code duplication -- see VirtualMachineService._can_delete_from_vnc
         try:
             existing_vm = self.read_vm(vnc_vm.uuid)
             vrouter_uuid = next(pair.value
@@ -224,8 +225,8 @@ class VNCAPIClient(object):
                 self.vnc_lib.virtual_machine_delete(id=vnc_vm.uuid)
                 logger.info('Virtual Machine removed: %s', vnc_vm.name)
             else:
-                logger.error('Virtual Machine %s is managed by vRouter %s and cannot be deleted from VNC.' %
-                             (vnc_vm.name, vrouter_uuid))
+                logger.error('Virtual Machine %s is managed by vRouter %s and cannot be deleted from VNC.',
+                             vnc_vm.name, vrouter_uuid)
         except NoIdError:
             logger.error('Virtual Machine not found: %s', vnc_vm.name)
 
@@ -287,7 +288,7 @@ class VNCAPIClient(object):
         try:
             return self.vnc_lib.virtual_machine_interface_read(id=uuid)
         except NoIdError:
-            logger.error('Virtual Machine Interface not found %s' % uuid)
+            logger.error('Virtual Machine Interface not found %s', uuid)
             return None
 
     def get_vns_by_project(self, project):
@@ -357,7 +358,7 @@ class VNCAPIClient(object):
             # TODO: Refactor this
         except NoIdError:
             self.vnc_lib.instance_ip_create(instance_ip)
-            logger.debug("Created instanceIP: " + instance_ip.name)
+            logger.debug("Created instanceIP: %s", instance_ip.name)
         return self._read_instance_ip(instance_ip.uuid)
 
     def delete_instance_ip(self, uuid):
@@ -440,17 +441,17 @@ class VRouterAPIClient(object):
                 vm_project_id=vmi_model.vn_model.vnc_vn.parent_uuid,
             )
         except Exception, e:
-            logger.error('There was a problem with vRouter API Client: %s' % e)
+            logger.error('There was a problem with vRouter API Client: %s', e)
 
     def delete_port(self, vmi_uuid):
         """ Delete port from VRouter Agent. """
         try:
             self.vrouter_api.delete_port(vmi_uuid)
         except Exception, e:
-            logger.error('There was a problem with vRouter API Client: %s' % e)
+            logger.error('There was a problem with vRouter API Client: %s', e)
 
     def enable_port(self, vmi_uuid):
         try:
             self.vrouter_api.enable_port(vmi_uuid)
         except Exception, e:
-            logger.error('There was a problem with vRouter API Client: %s' % e)
+            logger.error('There was a problem with vRouter API Client: %s', e)

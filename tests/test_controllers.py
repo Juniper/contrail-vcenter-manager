@@ -4,7 +4,8 @@ from unittest import TestCase
 from mock import Mock, patch
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 
-from cvm.controllers import VmRenamedHandler, VmwareController
+from cvm.controllers import (VmRemovedHandler, VmRenamedHandler,
+                             VmwareController)
 
 logging.disable(logging.CRITICAL)
 
@@ -25,8 +26,10 @@ class TestVmwareController(TestCase):
         self.vmi_service = Mock()
 
         vm_renamed_handler = VmRenamedHandler(self.vm_service, self.vmi_service)
+        vm_removed_handler = VmRemovedHandler(self.vm_service, self.vmi_service)
+        handlers = [vm_renamed_handler, vm_removed_handler]
         self.vmware_controller = VmwareController(self.vm_service, None, self.vmi_service,
-                                                  [vm_renamed_handler])
+                                                  handlers)
 
     @patch.object(VmwareController, '_handle_change')
     def test_handle_update_no_fltr_set(self, mocked_handle_change):

@@ -82,8 +82,8 @@ class VirtualMachineService(Service):
         if any([pair.key == 'vrouter-uuid' and pair.value == vrouter_uuid
                 for pair in existing_vm.get_annotations().key_value_pair]):
             return True
-        logger.error('Virtual Machine %s is managed by vRouter %s and cannot be deleted from VNC.' %
-                     (vm_model.name, vrouter_uuid))
+        logger.error('Virtual Machine %s is managed by vRouter %s and cannot be deleted from VNC.',
+                     vm_model.name, vrouter_uuid)
         return False
 
     def set_tools_running_status(self, vmware_vm, value):
@@ -175,7 +175,6 @@ class VirtualMachineInterfaceService(Service):
         self._vnc_api_client.update_or_create_vmi(vmi_model.to_vnc())
         vmi_model.construct_instance_ip()
         if vmi_model.vnc_instance_ip:
-            self._vnc_api_client.delete_instance_ip(uuid=vmi_model.vnc_instance_ip.uuid)
             instance_ip = self._vnc_api_client.create_and_read_instance_ip(vmi_model.vnc_instance_ip)
             vmi_model.vnc_instance_ip = instance_ip
         self._add_or_update_vrouter_port(vmi_model)
@@ -220,6 +219,7 @@ class VirtualMachineInterfaceService(Service):
         if vmi_model.vnc_instance_ip:
             self._vnc_api_client.delete_instance_ip(vmi_model.vnc_instance_ip.uuid)
         self._vnc_api_client.delete_vmi(vmi_model.uuid)
+        vmi_model.vnc_vmi = None
 
     def _restore_vlan_id(self, vmi_model):
         with self._vcenter_api_client:
@@ -234,8 +234,8 @@ class VirtualMachineInterfaceService(Service):
         if any([pair.key == 'vrouter-uuid' and pair.value == vrouter_uuid
                 for pair in existing_vmi.get_annotations().key_value_pair]):
             return True
-        logger.error('Virtual Machine Interface %s is managed by vRouter %s and cannot be deleted from VNC.' %
-                     (vmi_model.vnc_vmi.display_name, vrouter_uuid))
+        logger.error('Virtual Machine Interface %s is managed by vRouter %s and cannot be deleted from VNC.',
+                     vmi_model.vnc_vmi.display_name, vrouter_uuid)
         return False
 
     def _delete_vrouter_port(self, vmi_model):
