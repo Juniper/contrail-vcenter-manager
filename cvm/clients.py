@@ -214,19 +214,9 @@ class VNCAPIClient(object):
         self.id_perms.set_enable(True)
 
     def delete_vm(self, vnc_vm):
-        # TODO: Remove code duplication -- see VirtualMachineService._can_delete_from_vnc
         try:
-            existing_vm = self.read_vm(vnc_vm.uuid)
-            vrouter_uuid = next(pair.value
-                                for pair in vnc_vm.get_annotations().key_value_pair
-                                if pair.key == 'vrouter-uuid')
-            if any([pair.key == 'vrouter-uuid' and pair.value == vrouter_uuid
-                    for pair in existing_vm.get_annotations().key_value_pair]):
-                self.vnc_lib.virtual_machine_delete(id=vnc_vm.uuid)
-                logger.info('Virtual Machine removed: %s', vnc_vm.name)
-            else:
-                logger.error('Virtual Machine %s is managed by vRouter %s and cannot be deleted from VNC.',
-                             vnc_vm.name, vrouter_uuid)
+            self.vnc_lib.virtual_machine_delete(id=vnc_vm.uuid)
+            logger.info('Virtual Machine removed: %s', vnc_vm.name)
         except NoIdError:
             logger.error('Virtual Machine not found: %s', vnc_vm.name)
 

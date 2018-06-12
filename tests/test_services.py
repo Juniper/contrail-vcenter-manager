@@ -1,8 +1,9 @@
-from unittest import TestCase, skip
+from unittest import TestCase
 
 from mock import Mock, patch
 from pyVmomi import vim  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
+from vnc_api.gen.resource_xsd import KeyValuePair, KeyValuePairs
 
 from cvm.clients import VNCAPIClient
 from cvm.constants import (VNC_ROOT_DOMAIN, VNC_VCENTER_DEFAULT_SG,
@@ -97,14 +98,15 @@ class TestVirtualMachineService(TestCase):
         self.database.save.assert_not_called()
         self.vnc_client.update_vm.assert_not_called()
 
-    @skip('We need to figure out a way to determine which VMs are to be deleted')
     def test_delete_unused_vms(self):
         self.esxi_api_client.get_all_vms.return_value = []
         vnc_vm = vnc_api.VirtualMachine('d376b6b4-943d-4599-862f-d852fd6ba425')
         vnc_vm.set_uuid('d376b6b4-943d-4599-862f-d852fd6ba425')
         self.vnc_client.get_all_vms.return_value = [vnc_vm]
 
-        self.vm_service.sync_vms()
+        with patch('cvm.services.VirtualMachineService._can_delete_from_vnc') as can_delete:
+            can_delete.return_value = True
+            self.vm_service.sync_vms()
 
         self.database.save.assert_not_called()
         self.vnc_client.delete_vm.assert_called_once_with('d376b6b4-943d-4599-862f-d852fd6ba425')
@@ -269,11 +271,12 @@ class TestVirtualMachineInterfaceService(TestCase):
 
         self.assertEqual(0, len(self.database.get_all_vmi_models()))
 
-    @skip('We need to figure out a way to determine which VMIs are to be deleted')
     def test_sync_deletes_unused_vmis(self):
         self.vnc_client.get_vmis_by_project.return_value = [Mock()]
 
-        self.vmi_service.sync_vmis()
+        with patch('cvm.services.VirtualMachineInterfaceService._can_delete_from_vnc') as can_delete:
+            can_delete.return_value = True
+            self.vmi_service.sync_vmis()
 
         self.vnc_client.delete_vmi.assert_called_once()
 
@@ -478,3 +481,56 @@ class TestVNCEnvironmentSetup(TestCase):
             [VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, VNC_VCENTER_IPAM],
             ipam.fq_name
         )
+
+
+class TestCanDeleteFromVnc(TestCase):
+    def setUp(self):
+        self.vnc_api_client = Mock()
+        self.vm_service = VirtualMachineService(None, self.vnc_api_client, None)
+        self.vmi_service = VirtualMachineInterfaceService(None, self.vnc_api_client, None, None)
+
+    def test_vnc_vm_true(self):
+        vnc_vm = Mock()
+        vnc_vm.get_annotations.return_value = KeyValuePairs(
+            [KeyValuePair('vrouter-uuid', 'vrouter_uuid_1')])
+        self.vnc_api_client.read_vm.return_value = vnc_vm
+
+        result = self.vm_service._can_delete_from_vnc(vnc_vm)
+
+        self.assertTrue(result)
+
+    def test_vnc_vm_false(self):
+        vnc_vm_1 = Mock()
+        vnc_vm_1.get_annotations.return_value = KeyValuePairs(
+            [KeyValuePair('vrouter-uuid', 'vrouter_uuid_1')])
+        vnc_vm_2 = Mock()
+        vnc_vm_2.get_annotations.return_value = KeyValuePairs(
+            [KeyValuePair('vrouter-uuid', 'vrouter_uuid_2')])
+        self.vnc_api_client.read_vm.return_value = vnc_vm_1
+
+        result = self.vm_service._can_delete_from_vnc(vnc_vm_2)
+
+        self.assertFalse(result)
+
+    def test_vnc_vmi_true(self):
+        vnc_vmi = Mock()
+        vnc_vmi.get_annotations.return_value = KeyValuePairs(
+            [KeyValuePair('vrouter-uuid', 'vrouter_uuid_1')])
+        self.vnc_api_client.read_vmi.return_value = vnc_vmi
+
+        result = self.vmi_service._can_delete_from_vnc(vnc_vmi)
+
+        self.assertTrue(result)
+
+    def test_vnc_vmi_false(self):
+        vnc_vmi_1 = Mock()
+        vnc_vmi_1.get_annotations.return_value = KeyValuePairs(
+            [KeyValuePair('vrouter-uuid', 'vrouter_uuid_1')])
+        vnc_vmi_2 = Mock()
+        vnc_vmi_2.get_annotations.return_value = KeyValuePairs(
+            [KeyValuePair('vrouter-uuid', 'vrouter_uuid_2')])
+        self.vnc_api_client.read_vmi.return_value = vnc_vmi_1
+
+        result = self.vmi_service._can_delete_from_vnc(vnc_vmi_2)
+
+        self.assertFalse(result)
