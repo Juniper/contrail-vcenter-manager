@@ -14,7 +14,8 @@ from cvm.controllers import (VmReconfiguredHandler, VmRemovedHandler,
 from cvm.database import Database
 from cvm.monitors import VMwareMonitor
 from cvm.services import (VirtualMachineInterfaceService,
-                          VirtualMachineService, VirtualNetworkService)
+                          VirtualMachineService, VirtualNetworkService,
+                          VRouterPortService)
 
 
 def load_config(config_file):
@@ -54,15 +55,18 @@ def main(args):
     vmi_service = VirtualMachineInterfaceService(
         vcenter_api_client=vcenter_api_client,
         vnc_api_client=vnc_api_client,
-        vrouter_api_client=VRouterAPIClient(),
         database=database,
         esxi_api_client=esxi_api_client
     )
-    vm_renamed_handler = VmRenamedHandler(vm_service, vmi_service)
-    vm_reconfigured_handler = VmReconfiguredHandler(vm_service, vmi_service)
-    vm_removed_handler = VmRemovedHandler(vm_service, vmi_service)
+    vrouter_port_service = VRouterPortService(
+        vrouter_api_client=VRouterAPIClient(),
+        database=database
+    )
+    vm_renamed_handler = VmRenamedHandler(vm_service, vmi_service, vrouter_port_service)
+    vm_reconfigured_handler = VmReconfiguredHandler(vm_service, vmi_service, vrouter_port_service)
+    vm_removed_handler = VmRemovedHandler(vm_service, vmi_service, vrouter_port_service)
     handlers = [vm_renamed_handler, vm_reconfigured_handler, vm_removed_handler]
-    vmware_controller = VmwareController(vm_service, vn_service, vmi_service, handlers)
+    vmware_controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, handlers)
     vmware_monitor = VMwareMonitor(esxi_api_client, vmware_controller)
 
     greenlets = [
