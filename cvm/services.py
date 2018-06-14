@@ -10,18 +10,35 @@ logger = logging.getLogger(__name__)
 
 
 class Service(object):
-    def __init__(self, vnc_api_client, database):
+    def __init__(self, vnc_api_client, database, esxi_api_client=None, vcenter_api_client=None):
         self._vnc_api_client = vnc_api_client
         self._database = database
+        self._esxi_api_client = esxi_api_client
+        self._vcenter_api_client = vcenter_api_client
         self._project = self._vnc_api_client.read_or_create_project()
         self._default_security_group = self._vnc_api_client.read_or_create_security_group()
         self._ipam = self._vnc_api_client.read_or_create_ipam()
+        if self._esxi_api_client:
+            self._vrouter_uuid = esxi_api_client.read_vrouter_uuid()
+
+    def _can_delete_from_vnc(self, vnc_obj):
+        if vnc_obj.get_type() == 'virtual-machine':
+            existing_obj = self._vnc_api_client.read_vm(vnc_obj.uuid)
+        if vnc_obj.get_type() == 'virtual-machine-interface':
+            existing_obj = self._vnc_api_client.read_vmi(vnc_obj.uuid)
+        existing_obj_vrouter_uuid = next(pair.value
+                                         for pair in existing_obj.get_annotations().key_value_pair
+                                         if pair.key == 'vrouter-uuid')
+        if existing_obj_vrouter_uuid == self._vrouter_uuid:
+            return True
+        logger.error('%s %s is managed by vRouter %s and cannot be deleted from VNC.',
+                     vnc_obj.get_type(), vnc_obj.name, existing_obj_vrouter_uuid)
+        return False
 
 
 class VirtualMachineService(Service):
     def __init__(self, esxi_api_client, vnc_api_client, database):
-        super(VirtualMachineService, self).__init__(vnc_api_client, database)
-        self._esxi_api_client = esxi_api_client
+        super(VirtualMachineService, self).__init__(vnc_api_client, database, esxi_api_client=esxi_api_client)
 
     def update(self, vmware_vm):
         vm_properties = self._esxi_api_client.read_vm_properties(vmware_vm)
@@ -46,16 +63,12 @@ class VirtualMachineService(Service):
         property_filter = self._esxi_api_client.add_filter(vm_model.vmware_vm, filters)
         vm_model.property_filter = property_filter
 
-    def sync_vms(self):
-        self._get_vms_from_vmware()
-        self._delete_unused_vms_in_vnc()
-
-    def _get_vms_from_vmware(self):
+    def get_vms_from_vmware(self):
         vmware_vms = self._esxi_api_client.get_all_vms()
         for vmware_vm in vmware_vms:
             self.update(vmware_vm)
 
-    def _delete_unused_vms_in_vnc(self):
+    def delete_unused_vms_in_vnc(self):
         vnc_vms = self._vnc_api_client.get_all_vms()
         for vnc_vm in vnc_vms:
             vm_model = self._database.get_vm_model_by_uuid(vnc_vm.uuid)
@@ -74,18 +87,6 @@ class VirtualMachineService(Service):
         self._database.delete_vm_model(vm_model.uuid)
         vm_model.destroy_property_filter()
         return vm_model
-
-    def _can_delete_from_vnc(self, vnc_vm):
-        existing_vm = self._vnc_api_client.read_vm(vnc_vm.uuid)
-        vrouter_uuid = next(pair.value
-                            for pair in vnc_vm.get_annotations().key_value_pair
-                            if pair.key == 'vrouter-uuid')
-        if any([pair.key == 'vrouter-uuid' and pair.value == vrouter_uuid
-                for pair in existing_vm.get_annotations().key_value_pair]):
-            return True
-        logger.error('Virtual Machine %s is managed by vRouter %s and cannot be deleted from VNC.',
-                     vnc_vm.name, vrouter_uuid)
-        return False
 
     def set_tools_running_status(self, vmware_vm, value):
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
@@ -122,10 +123,11 @@ class VirtualNetworkService(Service):
 
 
 class VirtualMachineInterfaceService(Service):
-    def __init__(self, vcenter_api_client, vnc_api_client, vrouter_api_client, database):
-        super(VirtualMachineInterfaceService, self).__init__(vnc_api_client, database)
+    def __init__(self, vcenter_api_client, vnc_api_client, vrouter_api_client, database, esxi_api_client=None):
+        super(VirtualMachineInterfaceService, self).__init__(vnc_api_client, database,
+                                                             esxi_api_client=esxi_api_client,
+                                                             vcenter_api_client=vcenter_api_client)
         self.vrouter_api_client = vrouter_api_client
-        self._vcenter_api_client = vcenter_api_client
 
     def sync_vmis(self):
         self._create_new_vmis()
@@ -227,18 +229,6 @@ class VirtualMachineInterfaceService(Service):
         with self._vcenter_api_client:
             self._vcenter_api_client.restore_vlan_id(vmi_model.vn_model.dvs_name, vmi_model.port_key)
         vmi_model.clear_vlan_id()
-
-    def _can_delete_from_vnc(self, vnc_vmi):
-        existing_vmi = self._vnc_api_client.read_vmi(vnc_vmi.uuid)
-        vrouter_uuid = next(pair.value
-                            for pair in vnc_vmi.get_annotations().key_value_pair
-                            if pair.key == 'vrouter-uuid')
-        if any([pair.key == 'vrouter-uuid' and pair.value == vrouter_uuid
-                for pair in existing_vmi.get_annotations().key_value_pair]):
-            return True
-        logger.error('Virtual Machine Interface %s is managed by vRouter %s and cannot be deleted from VNC.',
-                     vnc_vmi.display_name, vrouter_uuid)
-        return False
 
     def _delete_vrouter_port(self, vmi_model):
         if vmi_model.vrouter_port_added:

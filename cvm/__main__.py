@@ -55,7 +55,8 @@ def main(args):
         vcenter_api_client=vcenter_api_client,
         vnc_api_client=vnc_api_client,
         vrouter_api_client=VRouterAPIClient(),
-        database=database
+        database=database,
+        esxi_api_client=esxi_api_client
     )
     vm_renamed_handler = VmRenamedHandler(vm_service, vmi_service)
     vm_reconfigured_handler = VmReconfiguredHandler(vm_service, vmi_service)
