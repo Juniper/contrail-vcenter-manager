@@ -8,10 +8,11 @@ logger = logging.getLogger(__name__)
 
 
 class VmwareController(object):
-    def __init__(self, vm_service, vn_service, vmi_service, handlers):
+    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service, handlers):
         self._vm_service = vm_service
         self._vn_service = vn_service
         self._vmi_service = vmi_service
+        self._vrouter_port_service = vrouter_port_service
         self._handlers = handlers
 
     def initialize_database(self):
@@ -20,6 +21,7 @@ class VmwareController(object):
         self._vm_service.get_vms_from_vmware()
         self._vmi_service.sync_vmis()
         self._vm_service.delete_unused_vms_in_vnc()
+        self._vrouter_port_service.sync_ports()
 
     def handle_update(self, update_set):
         logger.info('Handling ESXi update.')
@@ -69,6 +71,7 @@ class VmwareController(object):
         try:
             vm_model = self._vm_service.update(vmware_vm)
             self._vmi_service.update_vmis_for_vm_model(vm_model)
+            self._vrouter_port_service.sync_ports()
         except vmodl.fault.ManagedObjectNotFound:
             logger.info('Skipping event for a non-existent VM.')
 
@@ -110,23 +113,26 @@ class AbstractEventHandler(object):
 class VmRenamedHandler(AbstractEventHandler):
     EVENTS = (vim.event.VmRenamedEvent,)
 
-    def __init__(self, vm_service, vmi_service):
+    def __init__(self, vm_service, vmi_service, vrouter_port_service):
         self._vm_service = vm_service
         self._vmi_service = vmi_service
+        self._vrouter_port_service = vrouter_port_service
 
     def _handle_event(self, event):
         old_name = event.oldName
         new_name = event.newName
         self._vm_service.rename_vm(old_name, new_name)
         self._vmi_service.rename_vmis(new_name)
+        self._vrouter_port_service.sync_ports()
 
 
 class VmReconfiguredHandler(AbstractEventHandler):
     EVENTS = (vim.event.VmReconfiguredEvent,)
 
-    def __init__(self, vm_service, vmi_service):
+    def __init__(self, vm_service, vmi_service, vrouter_port_service):
         self._vm_service = vm_service
         self._vmi_service = vmi_service
+        self._vrouter_port_service = vrouter_port_service
 
     def _handle_event(self, event):
         logger.info('Detected VmReconfiguredEvent')
@@ -139,6 +145,7 @@ class VmReconfiguredHandler(AbstractEventHandler):
                 portgroup_key = device.backing.port.portgroupKey
                 self._vm_service.update_vm_models_interface(vmware_vm, mac_address, portgroup_key)
                 self._vmi_service.update_vmis_vn(vmware_vm, mac_address, portgroup_key)
+                self._vrouter_port_service.sync_ports()
             else:
                 logger.info('Detected VmReconfiguredEvent with unsupported %s device', type(device))
 
@@ -146,11 +153,13 @@ class VmReconfiguredHandler(AbstractEventHandler):
 class VmRemovedHandler(AbstractEventHandler):
     EVENTS = (vim.event.VmRemovedEvent,)
 
-    def __init__(self, vm_service, vmi_service):
+    def __init__(self, vm_service, vmi_service, vrouter_port_service):
         self._vm_service = vm_service
         self._vmi_service = vmi_service
+        self._vrouter_port_service = vrouter_port_service
 
     def _handle_event(self, event):
         vm_name = event.vm.name
         self._vmi_service.remove_vmis_for_vm_model(vm_name)
         self._vm_service.remove_vm(vm_name)
+        self._vrouter_port_service.sync_ports()

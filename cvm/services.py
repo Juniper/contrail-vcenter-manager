@@ -123,11 +123,10 @@ class VirtualNetworkService(Service):
 
 
 class VirtualMachineInterfaceService(Service):
-    def __init__(self, vcenter_api_client, vnc_api_client, vrouter_api_client, database, esxi_api_client=None):
+    def __init__(self, vcenter_api_client, vnc_api_client, database, esxi_api_client=None):
         super(VirtualMachineInterfaceService, self).__init__(vnc_api_client, database,
                                                              esxi_api_client=esxi_api_client,
                                                              vcenter_api_client=vcenter_api_client)
-        self.vrouter_api_client = vrouter_api_client
 
     def sync_vmis(self):
         self._create_new_vmis()
@@ -192,14 +191,7 @@ class VirtualMachineInterfaceService(Service):
                 self._vnc_api_client.delete_vmi(vnc_vmi.get_uuid())
 
     def _add_or_update_vrouter_port(self, vmi_model):
-        if vmi_model.vrouter_port_added:
-            logger.info('vRouter port for %s already exists. Updating...', vmi_model.mac_address)
-            self.vrouter_api_client.delete_port(vmi_model.uuid)
-        else:
-            logger.info('Adding new vRouter port for %s...', vmi_model.mac_address)
-        self.vrouter_api_client.add_port(vmi_model)
-        self.vrouter_api_client.enable_port(vmi_model.uuid)
-        vmi_model.vrouter_port_added = True
+        self._database.ports_to_update.append(vmi_model)
 
     def update_nic(self, nic_info):
         vmi_model = self._database.get_vmi_model_by_uuid(VirtualMachineInterfaceModel.get_uuid(nic_info.macAddress))
@@ -229,10 +221,7 @@ class VirtualMachineInterfaceService(Service):
         vmi_model.clear_vlan_id()
 
     def _delete_vrouter_port(self, vmi_model):
-        if vmi_model.vrouter_port_added:
-            logger.info('Deleting vRouter port for %s...', vmi_model.display_name)
-            self.vrouter_api_client.delete_port(vmi_model.uuid)
-            vmi_model.vrouter_port_added = False
+        self._database.ports_to_delete.append(vmi_model.uuid)
 
     def remove_vmis_for_vm_model(self, vm_name):
         vm_model = self._database.get_vm_model_by_name(vm_name)
@@ -261,3 +250,37 @@ class VirtualMachineInterfaceService(Service):
     @staticmethod
     def _get_vm_from_vmi(vnc_vmi):
         return vnc_vmi.get_virtual_machine_refs()[0]
+
+
+class VRouterPortService(object):
+    def __init__(self, vrouter_api_client, database):
+        self._vrouter_api_client = vrouter_api_client
+        self._database = database
+
+    def sync_ports(self):
+        for uuid in self._database.ports_to_delete:
+            self._delete_port(uuid)
+
+        for vmi_model in self._database.ports_to_update:
+            if self._port_needs_an_update(vmi_model):
+                self._update_port(vmi_model)
+
+    def _port_needs_an_update(self, vmi_model):
+        vrouter_port = self._vrouter_api_client.read_port(vmi_model.uuid)
+        if not vrouter_port:
+            return True
+        return (vrouter_port.get('instance-id') != vmi_model.vm_model.uuid or
+                vrouter_port.get('vn-id') != vmi_model.vn_model.uuid or
+                vrouter_port.get('rx-vlan-id') != vmi_model.vlan_id or
+                vrouter_port.get('tx-vlan-id') != vmi_model.vlan_id or
+                vrouter_port.get('ip-address') != vmi_model.vnc_instance_ip.instance_ip_address)
+
+    def _update_port(self, vmi_model):
+        self._vrouter_api_client.delete_port(vmi_model.uuid)
+        self._vrouter_api_client.add_port(vmi_model)
+        self._vrouter_api_client.enable_port(vmi_model.uuid)
+        self._database.ports_to_update.remove(vmi_model)
+
+    def _delete_port(self, uuid):
+        self._vrouter_api_client.delete_port(uuid)
+        self._database.ports_to_delete.remove(uuid)

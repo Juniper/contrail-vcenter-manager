@@ -1,7 +1,9 @@
 import atexit
+import json
 import logging
 from uuid import uuid4
 
+import requests
 from contrail_vrouter_api.vrouter_api import ContrailVRouterApi
 from pyVim.connect import Disconnect, SmartConnectNoSSL
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
@@ -425,6 +427,8 @@ class VRouterAPIClient(object):
 
     def __init__(self):
         self.vrouter_api = ContrailVRouterApi()
+        self.vrouter_host = 'http://localhost/'
+        self.vrouter_port = '9091'
 
     def add_port(self, vmi_model):
         """ Add port to VRouter Agent. """
@@ -457,3 +461,13 @@ class VRouterAPIClient(object):
             self.vrouter_api.enable_port(vmi_uuid)
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
+
+    def read_port(self, vmi_uuid):
+        request_url = '{host}:{port}/port/{uuid}'.format(host=self.vrouter_host,
+                                                         port=self.vrouter_port,
+                                                         uuid=vmi_uuid)
+        response = requests.get(request_url)
+        if response.status_code != requests.codes.ok:
+            return None
+
+        return json.loads(response.content)

@@ -11,7 +11,7 @@ from cvm.controllers import (VmReconfiguredHandler, VmRenamedHandler,
 from cvm.database import Database
 from cvm.models import VirtualNetworkModel, VlanIdPool
 from cvm.services import (VirtualMachineInterfaceService,
-                          VirtualMachineService, VirtualNetworkService)
+                          VirtualMachineService, VirtualNetworkService, VRouterPortService)
 
 
 def create_ipam():
@@ -213,8 +213,9 @@ def test_vm_created(vcenter_api_client, vn_model_1, vm_created_update,
     vrouter_api_client = Mock()
     database = Database()
     vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
-    vmi_service = VirtualMachineInterfaceService(vcenter_api_client, vnc_api_client, vrouter_api_client, database)
-    controller = VmwareController(vm_service, None, vmi_service, [])
+    vmi_service = VirtualMachineInterfaceService(vcenter_api_client, vnc_api_client, database)
+    vrouter_port_service = VRouterPortService(vrouter_api_client, database)
+    controller = VmwareController(vm_service, None, vmi_service, vrouter_port_service, [])
 
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
@@ -277,11 +278,11 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
     vmi_service = VirtualMachineInterfaceService(
         vcenter_api_client,
         vnc_api_client,
-        vrouter_api_client,
         database
     )
-    vm_renamed_handler = VmRenamedHandler(vm_service, vmi_service)
-    controller = VmwareController(vm_service, None, vmi_service, [vm_renamed_handler])
+    vrouter_port_service = VRouterPortService(vrouter_api_client, database)
+    vm_renamed_handler = VmRenamedHandler(vm_service, vmi_service, vrouter_port_service)
+    controller = VmwareController(vm_service, None, vmi_service, vrouter_port_service, [vm_renamed_handler])
 
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
@@ -349,11 +350,11 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
     vmi_service = VirtualMachineInterfaceService(
         vcenter_api_client,
         vnc_api_client,
-        vrouter_api_client,
         database
     )
-    vm_reconfigure_handler = VmReconfiguredHandler(vm_service, vmi_service)
-    controller = VmwareController(vm_service, vn_service, vmi_service, [vm_reconfigure_handler])
+    vrouter_port_service = VRouterPortService(vrouter_api_client, database)
+    vm_reconfigure_handler = VmReconfiguredHandler(vm_service, vmi_service, vrouter_port_service)
+    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [vm_reconfigure_handler])
 
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
@@ -402,7 +403,8 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
     assert vnc_vn_2.uuid in [ref['uuid'] for ref in new_instance_ip.get_virtual_network_refs()]
 
     # Check if VMI's vRouter Port has been updated:
-    vrouter_api_client.delete_port.assert_called_once_with(vmi_model.uuid)
+    assert vrouter_api_client.delete_port.call_count == 3
+    assert vrouter_api_client.delete_port.call_args[0][0] == vmi_model.uuid
     assert vrouter_api_client.add_port.call_count == 2
     assert vrouter_api_client.add_port.call_args[0][0] == vmi_model
 
