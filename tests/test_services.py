@@ -109,7 +109,7 @@ class TestVirtualMachineService(TestCase):
             self.vm_service.sync_vms()
 
         self.database.save.assert_not_called()
-        self.vnc_client.delete_vm.assert_called_once_with('d376b6b4-943d-4599-862f-d852fd6ba425')
+        self.vnc_client.delete_vm.assert_called_once_with(vnc_vm)
 
     def test_remove_vm(self):
         vm_model = Mock(uuid='d376b6b4-943d-4599-862f-d852fd6ba425')

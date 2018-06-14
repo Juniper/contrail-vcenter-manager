@@ -63,7 +63,7 @@ class VirtualMachineService(Service):
                 continue
             if self._can_delete_from_vnc(vnc_vm):
                 logger.info('Deleting %s from VNC', vnc_vm.name)
-                self._vnc_api_client.delete_vm(vnc_vm.uuid)
+                self._vnc_api_client.delete_vm(vnc_vm)
 
     def remove_vm(self, name):
         vm_model = self._database.get_vm_model_by_name(name)
