@@ -82,7 +82,7 @@ class TestVirtualMachineService(TestCase):
         self.esxi_api_client.get_all_vms.return_value = [self.vmware_vm]
         self.vnc_client.get_all_vms.return_value = []
 
-        self.vm_service.sync_vms()
+        self.vm_service.get_vms_from_vmware()
 
         self.database.save.assert_called_once()
         self.vnc_client.update_or_create_vm.assert_called_once()
@@ -93,7 +93,7 @@ class TestVirtualMachineService(TestCase):
         self.esxi_api_client.get_all_vms.return_value = []
         self.vnc_client.get_all_vms.return_value = []
 
-        self.vm_service.sync_vms()
+        self.vm_service.get_vms_from_vmware()
 
         self.database.save.assert_not_called()
         self.vnc_client.update_vm.assert_not_called()
@@ -106,9 +106,8 @@ class TestVirtualMachineService(TestCase):
 
         with patch('cvm.services.VirtualMachineService._can_delete_from_vnc') as can_delete:
             can_delete.return_value = True
-            self.vm_service.sync_vms()
+            self.vm_service.delete_unused_vms_in_vnc()
 
-        self.database.save.assert_not_called()
         self.vnc_client.delete_vm.assert_called_once_with(vnc_vm)
 
     def test_remove_vm(self):
@@ -486,13 +485,16 @@ class TestVNCEnvironmentSetup(TestCase):
 class TestCanDeleteFromVnc(TestCase):
     def setUp(self):
         self.vnc_api_client = Mock()
-        self.vm_service = VirtualMachineService(None, self.vnc_api_client, None)
-        self.vmi_service = VirtualMachineInterfaceService(None, self.vnc_api_client, None, None)
+        esxi_api_client = Mock()
+        esxi_api_client.read_vrouter_uuid.return_value = 'vrouter_uuid_1'
+        self.vm_service = VirtualMachineService(esxi_api_client, self.vnc_api_client, None)
+        self.vmi_service = VirtualMachineInterfaceService(esxi_api_client, self.vnc_api_client,
+                                                          None, None, esxi_api_client=esxi_api_client)
 
     def test_vnc_vm_true(self):
-        vnc_vm = Mock()
-        vnc_vm.get_annotations.return_value = KeyValuePairs(
-            [KeyValuePair('vrouter-uuid', 'vrouter_uuid_1')])
+        vnc_vm = vnc_api.VirtualMachine('VM', vnc_api.Project())
+        vnc_vm.set_annotations(KeyValuePairs(
+            [KeyValuePair('vrouter-uuid', 'vrouter_uuid_1')]))
         self.vnc_api_client.read_vm.return_value = vnc_vm
 
         result = self.vm_service._can_delete_from_vnc(vnc_vm)
@@ -500,22 +502,19 @@ class TestCanDeleteFromVnc(TestCase):
         self.assertTrue(result)
 
     def test_vnc_vm_false(self):
-        vnc_vm_1 = Mock()
-        vnc_vm_1.get_annotations.return_value = KeyValuePairs(
-            [KeyValuePair('vrouter-uuid', 'vrouter_uuid_1')])
-        vnc_vm_2 = Mock()
-        vnc_vm_2.get_annotations.return_value = KeyValuePairs(
-            [KeyValuePair('vrouter-uuid', 'vrouter_uuid_2')])
-        self.vnc_api_client.read_vm.return_value = vnc_vm_1
+        vnc_vm = vnc_api.VirtualMachine('VM', vnc_api.Project())
+        vnc_vm.set_annotations(KeyValuePairs(
+            [KeyValuePair('vrouter-uuid', 'vrouter_uuid_2')]))
+        self.vnc_api_client.read_vm.return_value = vnc_vm
 
-        result = self.vm_service._can_delete_from_vnc(vnc_vm_2)
+        result = self.vm_service._can_delete_from_vnc(vnc_vm)
 
         self.assertFalse(result)
 
     def test_vnc_vmi_true(self):
-        vnc_vmi = Mock()
-        vnc_vmi.get_annotations.return_value = KeyValuePairs(
-            [KeyValuePair('vrouter-uuid', 'vrouter_uuid_1')])
+        vnc_vmi = vnc_api.VirtualMachineInterface('VMI', vnc_api.Project())
+        vnc_vmi.set_annotations(KeyValuePairs(
+            [KeyValuePair('vrouter-uuid', 'vrouter_uuid_1')]))
         self.vnc_api_client.read_vmi.return_value = vnc_vmi
 
         result = self.vmi_service._can_delete_from_vnc(vnc_vmi)
@@ -523,14 +522,11 @@ class TestCanDeleteFromVnc(TestCase):
         self.assertTrue(result)
 
     def test_vnc_vmi_false(self):
-        vnc_vmi_1 = Mock()
-        vnc_vmi_1.get_annotations.return_value = KeyValuePairs(
-            [KeyValuePair('vrouter-uuid', 'vrouter_uuid_1')])
-        vnc_vmi_2 = Mock()
-        vnc_vmi_2.get_annotations.return_value = KeyValuePairs(
-            [KeyValuePair('vrouter-uuid', 'vrouter_uuid_2')])
-        self.vnc_api_client.read_vmi.return_value = vnc_vmi_1
+        vnc_vmi = vnc_api.VirtualMachineInterface('VMI', vnc_api.Project())
+        vnc_vmi.set_annotations(KeyValuePairs(
+            [KeyValuePair('vrouter-uuid', 'vrouter_uuid_2')]))
+        self.vnc_api_client.read_vmi.return_value = vnc_vmi
 
-        result = self.vmi_service._can_delete_from_vnc(vnc_vmi_2)
+        result = self.vmi_service._can_delete_from_vnc(vnc_vmi)
 
         self.assertFalse(result)

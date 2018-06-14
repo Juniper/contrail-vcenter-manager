@@ -12,6 +12,7 @@ from cvm.constants import (VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
                            VNC_VCENTER_IPAM, VNC_VCENTER_IPAM_FQN,
                            VNC_VCENTER_PROJECT)
+from cvm.models import find_vrouter_uuid
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -133,6 +134,10 @@ class ESXiAPIClient(VSphereAPIClient):
         object_set = self._property_collector.RetrievePropertiesEx([filter_spec], options=options).objects
         prop_set = object_set[0].propSet
         return {prop.name: prop.val for prop in prop_set}
+
+    def read_vrouter_uuid(self):
+        host = self._datacenter.hostFolder.childEntity[0].host[0]
+        return find_vrouter_uuid(host)
 
 
 class VCenterAPIClient(VSphereAPIClient):

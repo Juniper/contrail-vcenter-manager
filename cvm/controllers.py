@@ -17,8 +17,9 @@ class VmwareController(object):
     def initialize_database(self):
         logger.info('Initializing database...')
         self._vn_service.sync_vns()
-        self._vm_service.sync_vms()
+        self._vm_service.get_vms_from_vmware()
         self._vmi_service.sync_vmis()
+        self._vm_service.delete_unused_vms_in_vnc()
 
     def handle_update(self, update_set):
         logger.info('Handling ESXi update.')
