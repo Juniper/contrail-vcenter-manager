@@ -83,28 +83,32 @@ class VirtualMachineModel(object):
         self.vm_properties = vm_properties
         self.vrouter_uuid = find_vrouter_uuid(vmware_vm.summary.runtime.host)
         self.property_filter = None
-        self.interfaces = self._read_interfaces()
+        self.ports = self._read_ports()
         self._vnc_vm = None
 
     def update(self, vmware_vm, vm_properties):
         self.vmware_vm = vmware_vm  # TODO: Consider removing this
         self.vm_properties = vm_properties
         self.vrouter_uuid = find_vrouter_uuid(vmware_vm.summary.runtime.host)
-        self.interfaces = self._read_interfaces()
+        self.ports = self._read_ports()
 
     def rename(self, name):
         self.vm_properties['name'] = name
 
-    def update_interface_portgroup_key(self, mac_address, portgroup_key):
-        self.interfaces[mac_address] = portgroup_key
+    def update_ports(self):
+        self.ports = self._read_ports()
+        # port = next(port for port in self.ports if port.mac_address == mac_address)
+        # port.portgroup_key = portgroup_key
 
-    def _read_interfaces(self):
+    def _read_ports(self):
         try:
-            return {device.macAddress: device.backing.port.portgroupKey
+            return [VCenterPort(mac_address=device.macAddress,
+                                port_key=device.backing.port.portKey,
+                                portgroup_key=device.backing.port.portgroupKey)
                     for device in self.vmware_vm.config.hardware.device
-                    if isinstance(device.backing, vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo)}
+                    if isinstance(device.backing, vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo)]
         except AttributeError:
-            logger.error('Could not read Virtual Machine Interfaces for %s.', self.name)
+            logger.error('Could not read ports for %s.', self.name)
         return None
 
     def destroy_property_filter(self):
@@ -190,30 +194,26 @@ class VirtualNetworkModel(object):
 
 
 class VirtualMachineInterfaceModel(object):
-    def __init__(self, vm_model, vn_model, parent, security_group):
-        self.parent = parent
+    def __init__(self, vm_model, vn_model, vcenter_port):
         self.vm_model = vm_model
         self.vn_model = vn_model
-        self.mac_address = find_vm_mac_address(self.vm_model.vmware_vm, self.vn_model.key)
-        self.port_key = find_vmi_port_key(self.vm_model.vmware_vm, self.mac_address)
+        self.vcenter_port = vcenter_port
         self.ip_address = None
-        self.port_key = None
-        self.vlan_id = None
-        self.security_group = security_group
         self.vnc_vmi = None
         self.vnc_instance_ip = None
-        self.vrouter_port_added = False
+        self.parent = None
+        self.security_group = None
 
     @property
     def uuid(self):
-        return self.get_uuid(self.mac_address)
+        return self.get_uuid(self.vcenter_port.mac_address)
 
     @property
     def display_name(self):
         return 'vmi-{}-{}'.format(self.vn_model.name, self.vm_model.name)
 
     def refresh_port_key(self):
-        self.port_key = find_vmi_port_key(self.vm_model.vmware_vm, self.mac_address)
+        self.vcenter_port.port_key = find_vmi_port_key(self.vm_model.vmware_vm, self.vcenter_port.mac_address)
 
     def to_vnc(self):
         if not self.vnc_vmi:
@@ -224,7 +224,7 @@ class VirtualMachineInterfaceModel(object):
             self.vnc_vmi.set_uuid(self.uuid)
             self.vnc_vmi.add_virtual_machine(self.vm_model.vnc_vm)
             self.vnc_vmi.set_virtual_network(self.vn_model.vnc_vn)
-            self.vnc_vmi.set_virtual_machine_interface_mac_addresses(MacAddressesType([self.mac_address]))
+            self.vnc_vmi.set_virtual_machine_interface_mac_addresses(MacAddressesType([self.vcenter_port.mac_address]))
             self.vnc_vmi.set_port_security_enabled(True)
             self.vnc_vmi.set_security_group(self.security_group)
             self.vnc_vmi.annotations = self.vnc_vmi.annotations or KeyValuePairs()
@@ -260,12 +260,15 @@ class VirtualMachineInterfaceModel(object):
         )
         self.vnc_instance_ip = instance_ip
 
-    def acquire_vlan_id(self):
-        self.vlan_id = self.vlan_id or self.vn_model.vlan_id_pool.get_available()
+    def acquire_vlan_id(self, vlan_id):
+        if not vlan_id:
+            self.vcenter_port.vlan_id = self.vn_model.vlan_id_pool.get_available()
+            return
+        self.vcenter_port.vlan_id = vlan_id
 
     def clear_vlan_id(self):
-        self.vn_model.vlan_id_pool.free(self.vlan_id)
-        self.vlan_id = None
+        self.vn_model.vlan_id_pool.free(self.vcenter_port.vlan_id)
+        self.vcenter_port.vlan_id = None
 
     def _find_ip_address(self):
         if self.vn_model.vnc_vn.get_external_ipam() and self.vm_model.tools_running:
@@ -273,7 +276,7 @@ class VirtualMachineInterfaceModel(object):
         return None
 
     def _should_construct_instance_ip(self):
-        return (self.mac_address
+        return (self.vcenter_port.mac_address
                 and self.vn_model.subnet_info_is_set()
                 and (self.ip_address
                      or not self.vn_model.vnc_vn.get_external_ipam()))
@@ -301,3 +304,11 @@ class VlanIdPool(object):
 
     def free(self, vlan_id):
         self._available_ids.append(vlan_id)
+
+
+class VCenterPort(object):
+    def __init__(self, mac_address, port_key, portgroup_key):
+        self.mac_address = mac_address
+        self.port_key = port_key
+        self.portgroup_key = portgroup_key
+        self.vlan_id = None

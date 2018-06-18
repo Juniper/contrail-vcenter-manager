@@ -142,9 +142,8 @@ class VmReconfiguredHandler(AbstractEventHandler):
             if isinstance(device, vim.vm.device.VirtualVmxnet3):
                 logger.info('Detected VmReconfiguredEvent with %s device', type(device))
                 mac_address = device.macAddress
-                portgroup_key = device.backing.port.portgroupKey
-                self._vm_service.update_vm_models_interface(vmware_vm, mac_address, portgroup_key)
-                self._vmi_service.update_vmis_vn(vmware_vm, mac_address, portgroup_key)
+                self._vm_service.update_vm_models_interface(vmware_vm)
+                self._vmi_service.update_vmis_vn(vmware_vm, mac_address)
                 self._vrouter_port_service.sync_ports()
             else:
                 logger.info('Detected VmReconfiguredEvent with unsupported %s device', type(device))

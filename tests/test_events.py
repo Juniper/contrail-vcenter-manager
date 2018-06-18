@@ -11,7 +11,8 @@ from cvm.controllers import (VmReconfiguredHandler, VmRenamedHandler,
 from cvm.database import Database
 from cvm.models import VirtualNetworkModel, VlanIdPool
 from cvm.services import (VirtualMachineInterfaceService,
-                          VirtualMachineService, VirtualNetworkService, VRouterPortService)
+                          VirtualMachineService, VirtualNetworkService,
+                          VRouterPortService)
 
 
 def create_ipam():
@@ -162,11 +163,11 @@ def esxi_api_client(vm_properties_1):
 def assert_vmi_model_state(vmi_model, mac_address=None, ip_address=None,
                            vlan_id=None, display_name=None, vn_model=None, vm_model=None):
     if mac_address is not None:
-        assert vmi_model.mac_address == mac_address
+        assert vmi_model.vcenter_port.mac_address == mac_address
     if ip_address is not None:
         assert vmi_model.vnc_instance_ip.instance_ip_address == ip_address
     if vlan_id is not None:
-        assert vmi_model.vlan_id == vlan_id
+        assert vmi_model.vcenter_port.vlan_id == vlan_id
     if display_name is not None:
         assert vmi_model.display_name == display_name
     if vn_model is not None:
@@ -175,16 +176,16 @@ def assert_vmi_model_state(vmi_model, mac_address=None, ip_address=None,
         assert vmi_model.vm_model == vm_model
 
 
-def assert_vm_model_state(vm_model, uuid=None, name=None, has_interfaces=None):
+def assert_vm_model_state(vm_model, uuid=None, name=None, has_ports=None):
     if uuid is not None:
         assert vm_model.uuid == uuid
     if name is not None:
         assert vm_model.name == name
-    if has_interfaces is None:
-        has_interfaces = {}
-    for mac_address, portgroup_key in has_interfaces.items():
-        assert mac_address in vm_model.interfaces
-        assert vm_model.interfaces[mac_address] == portgroup_key
+    if has_ports is None:
+        has_ports = {}
+    for mac_address, portgroup_key in has_ports.items():
+        assert mac_address in [port.mac_address for port in vm_model.ports]
+        assert next(port.portgroup_key for port in vm_model.ports if port.mac_address == mac_address) == portgroup_key
 
 
 def assert_vnc_vmi_state(vnc_vmi, mac_address=None, vnc_vm_uuid=None, vnc_vn_uuid=None):
@@ -222,6 +223,7 @@ def test_vm_created(vcenter_api_client, vn_model_1, vm_created_update,
     database.save(vn_model_1)
 
     # Some vlan ids should be already reserved
+    vcenter_api_client.get_vlan_id.return_value = None
     reserve_vlan_ids(vn_model_1, [0, 1])
 
     # A new update containing VmCreatedEvent arrives and is being handled by the controller
@@ -289,6 +291,7 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
     database.save(vn_model_1)
 
     # Some vlan ids should be already reserved
+    vcenter_api_client.get_vlan_id.return_value = None
     reserve_vlan_ids(vn_model_1, [0, 1])
 
     # A new update containing VmCreatedEvent arrives and is being handled by the controller
@@ -362,6 +365,7 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
     database.save(vn_model_2)
 
     # Some vlan ids should be already reserved
+    vcenter_api_client.get_vlan_id.return_value = None
     reserve_vlan_ids(vn_model_1, [0, 1])
     reserve_vlan_ids(vn_model_2, [0, 1, 2, 3])
 
@@ -371,6 +375,7 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
     old_instance_ip = old_vmi_model.vnc_instance_ip
 
     # After a portgroup is changed, the port key is also changed
+    vmware_vm_1.config.hardware.device[0].backing.port.portgroupKey = 'dvportgroup-2'
     vmware_vm_1.config.hardware.device[0].backing.port.portKey = '11'
 
     # Then VmReconfiguredEvent is being handled
@@ -378,7 +383,7 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
 
     # Check if VM Model has been saved properly in Database:
     vm_model = database.get_vm_model_by_uuid('12345678-1234-1234-1234-123456789012')
-    assert_vm_model_state(vm_model, has_interfaces={'11:11:11:11:11:11': 'dvportgroup-2'})
+    assert_vm_model_state(vm_model, has_ports={'11:11:11:11:11:11': 'dvportgroup-2'})
 
     # Check that VM was not updated in VNC except VM create event
     vnc_api_client.update_or_create_vm.assert_called_once()
@@ -420,4 +425,48 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
         vlan_id=4,
         display_name='vmi-DPG2-VM1',
         vn_model=vn_model_2
+    )
+
+
+def test_vm_created_vlan_id(vcenter_api_client, vn_model_1, vm_created_update,
+                            esxi_api_client, vnc_api_client):
+    """
+    What happens when the created interface is already using an overriden VLAN ID?
+    We should keep it, not removing old/adding new VLAN ID, since it breaks the connectivity
+    for a moment.
+    """
+    vrouter_api_client = Mock()
+    database = Database()
+    vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
+    vmi_service = VirtualMachineInterfaceService(vcenter_api_client, vnc_api_client, database)
+    vrouter_port_service = VRouterPortService(vrouter_api_client, database)
+    controller = VmwareController(vm_service, None, vmi_service, vrouter_port_service, [])
+
+    # Virtual Networks are already created for us and after synchronization,
+    # their models are stored in our database
+    database.save(vn_model_1)
+
+    # Some vlan ids should be already reserved
+    reserve_vlan_ids(vn_model_1, [0, 1, 5])
+
+    # When we ask vCenter for the VLAN ID it turns out that the VLAN ID has already been overridden
+    vcenter_api_client.get_vlan_id.return_value = 5
+
+    # A new update containing VmCreatedEvent arrives and is being handled by the controller
+    controller.handle_update(vm_created_update)
+
+    # Check if VLAN ID has not been changed
+    assert vcenter_api_client.set_vlan_id.call_count == 0
+
+    # Check inner VMI model state
+    vm_model = database.get_vm_model_by_uuid('12345678-1234-1234-1234-123456789012')
+    vmi_model = database.get_all_vmi_models()[0]
+    assert_vmi_model_state(
+        vmi_model,
+        mac_address='11:11:11:11:11:11',
+        ip_address='192.168.100.5',
+        vlan_id=5,
+        display_name='vmi-DPG1-VM1',
+        vn_model=vn_model_1,
+        vm_model=vm_model
     )

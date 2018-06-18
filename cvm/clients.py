@@ -185,6 +185,17 @@ class VCenterAPIClient(VSphereAPIClient):
         logger.info('Setting VLAN ID of port %s to %d', key, vlan_id)
         dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
 
+    def get_vlan_id(self, vmi_model):
+        dvs = self._get_object([vim.dvs.VmwareDistributedVirtualSwitch], vmi_model.vn_model.dvs_name)
+        try:
+            # TODO: Use criteria to fetch single port
+            dv_port = next(port for port in dvs.FetchDVPorts() if port.key == vmi_model.vcenter_port.port_key)
+        except StopIteration:
+            return None
+        if not dv_port.config.setting.vlan.inherited:
+            return dv_port.config.setting.vlan.vlanId
+        return None
+
     def restore_vlan_id(self, dvs_name, key):
         dvs = self._get_object([vim.dvs.VmwareDistributedVirtualSwitch], dvs_name)
         dv_port = [port for port in dvs.FetchDVPorts() if port.key == key][0]
@@ -222,7 +233,7 @@ class VNCAPIClient(object):
 
     def delete_vm(self, uuid):
         vm = self.read_vm(uuid)
-        for vmi_ref in vm.get_virtual_machine_interface_back_refs():
+        for vmi_ref in vm.get_virtual_machine_interface_back_refs() or []:
             self.delete_vmi(vmi_ref.get('uuid'))
         try:
             self.vnc_lib.virtual_machine_delete(id=uuid)
@@ -269,7 +280,7 @@ class VNCAPIClient(object):
 
     def delete_vmi(self, uuid):
         vmi = self.read_vmi(uuid)
-        for instance_ip_ref in vmi.get_instance_ip_back_refs():
+        for instance_ip_ref in vmi.get_instance_ip_back_refs() or []:
             self.delete_instance_ip(instance_ip_ref.get('uuid'))
 
         try:
@@ -427,7 +438,7 @@ class VRouterAPIClient(object):
 
     def __init__(self):
         self.vrouter_api = ContrailVRouterApi()
-        self.vrouter_host = 'http://localhost/'
+        self.vrouter_host = 'http://localhost'
         self.vrouter_port = '9091'
 
     def add_port(self, vmi_model):
@@ -437,12 +448,12 @@ class VRouterAPIClient(object):
                 vm_uuid_str=vmi_model.vm_model.uuid,
                 vif_uuid_str=vmi_model.uuid,
                 interface_name=vmi_model.uuid,
-                mac_address=vmi_model.mac_address,
+                mac_address=vmi_model.vcenter_port.mac_address,
                 ip_address=vmi_model.vnc_instance_ip.instance_ip_address,
                 vn_id=vmi_model.vn_model.uuid,
                 display_name=vmi_model.vm_model.name,
-                vlan=vmi_model.vlan_id,
-                rx_vlan=vmi_model.vlan_id,
+                vlan=vmi_model.vcenter_port.vlan_id,
+                rx_vlan=vmi_model.vcenter_port.vlan_id,
                 port_type=2,
                 vm_project_id=vmi_model.vn_model.vnc_vn.parent_uuid,
             )
