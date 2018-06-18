@@ -65,6 +65,23 @@ class TestVCenterAPIClient(TestCase):
         self.assertTrue(config.policy.vlanOverrideAllowed)
         self.assertEqual('1', config.configVersion)
 
+    def test_get_vlan_id(self):
+        dv_port = Mock(key='20')
+        dv_port.config.setting.vlan.vlanId = 10
+        dv_port.config.setting.vlan.inherited = False
+        dvs = Mock(name='DSwitch')
+        dvs.FetchDVPorts.return_value = [dv_port]
+        vmi_model = Mock()
+        vmi_model.vcenter_port.port_key = '20'
+
+        with patch('cvm.clients.VSphereAPIClient._get_object') as get_obj_mock:
+            get_obj_mock.return_value = dvs
+            with patch('cvm.clients.SmartConnectNoSSL'):
+                with self.vcenter_client:
+                    result = self.vcenter_client.get_vlan_id(vmi_model)
+
+        self.assertEqual(10, result)
+
 
 class TestFunctions(TestCase):
     def test_make_dv_port_spec(self):
@@ -150,6 +167,15 @@ class TestBackRefs(TestCase):
         self.vnc_lib.instance_ip_delete.assert_called_once_with(id='instance_ip_uuid')
         self.vnc_lib.virtual_machine_interface_delete.assert_called_once_with(id='vmi_uuid')
 
+    def test_vmi_no_back_refs(self):
+        vmi = Mock(uuid='vmi_uuid')
+        vmi.get_instance_ip_back_refs.return_value = None
+        self.vnc_lib.virtual_machine_interface_read.return_value = vmi
+
+        self.vnc_client.delete_vmi('vmi_uuid')
+
+        self.assertEqual(0, self.vnc_lib.instance_ip_delete.call_count)
+
     def test_delete_vm(self):
         vm = Mock(uuid='vm_uuid')
         vm.get_virtual_machine_interface_back_refs.return_value = [{'uuid': 'vmi_uuid'}]
@@ -162,3 +188,12 @@ class TestBackRefs(TestCase):
 
         self.vnc_lib.virtual_machine_interface_delete.assert_called_once_with(id='vmi_uuid')
         self.vnc_lib.virtual_machine_delete.assert_called_once_with(id='vm_uuid')
+
+    def test_vm_no_back_refs(self):
+        vm = Mock(uuid='vm_uuid')
+        vm.get_virtual_machine_interface_back_refs.return_value = None
+        self.vnc_lib.virtual_machine_read.return_value = vm
+
+        self.vnc_client.delete_vm('vm_uuid')
+
+        self.assertEqual(0, self.vnc_lib.virtual_machine_interface_delete.call_count)

@@ -102,9 +102,9 @@ class VirtualMachineService(Service):
         self._vnc_api_client.update_or_create_vm(vm_model.vnc_vm)
         self._database.save(vm_model)
 
-    def update_vm_models_interface(self, vmware_vm, mac_address, portgroup_key):
+    def update_vm_models_interface(self, vmware_vm):
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
-        vm_model.update_interface_portgroup_key(mac_address, portgroup_key)
+        vm_model.update_ports()
 
 
 class VirtualNetworkService(Service):
@@ -140,39 +140,41 @@ class VirtualMachineInterfaceService(Service):
         if vm_model.is_contrail_vm:
             return
 
-        existing_vmi_models = {vmi_model.mac_address: vmi_model
+        existing_vmi_models = {vmi_model.vcenter_port.mac_address: vmi_model
                                for vmi_model in self._database.get_vmi_models_by_vm_uuid(vm_model.uuid)}
-        for mac_address, portgroup_key in vm_model.interfaces.iteritems():
-            existing_vmi_models.pop(mac_address, None)
-            self.update_vmis_vn(vm_model.vmware_vm, mac_address, portgroup_key)
+        for vcenter_port in vm_model.ports:
+            existing_vmi_models.pop(vcenter_port.mac_address, None)
+            self.update_vmis_vn(vm_model.vmware_vm, vcenter_port.mac_address)
 
         for unused_vmi_model in existing_vmi_models.values():
             self._delete(unused_vmi_model)
 
-    def update_vmis_vn(self, vmware_vm, mac_address, portgroup_key):
-        vmi_model = self._database.get_vmi_model_by_uuid(VirtualMachineInterfaceModel.get_uuid(mac_address))
-        vn_model = self._database.get_vn_model_by_key(portgroup_key)
+    def update_vmis_vn(self, vmware_vm, mac_address):
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
+        vcenter_port = next(port for port in vm_model.ports if port.mac_address == mac_address)
+        vmi_model = self._database.get_vmi_model_by_uuid(VirtualMachineInterfaceModel.get_uuid(mac_address))
+        vn_model = self._database.get_vn_model_by_key(vcenter_port.portgroup_key)
         if not vmi_model:
-            vmi_model = VirtualMachineInterfaceModel(
-                vm_model,
-                vn_model,
-                self._project,
-                self._default_security_group
-            )
+            vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, vcenter_port)
+            vmi_model.parent = self._project
+            vmi_model.security_group = self._default_security_group
         if vmi_model.vn_model != vn_model:
             with self._vcenter_api_client:
-                self._vcenter_api_client.restore_vlan_id(vmi_model.vn_model.dvs_name, vmi_model.port_key)
+                self._vcenter_api_client.restore_vlan_id(
+                    vmi_model.vn_model.dvs_name, vmi_model.vcenter_port.port_key)
             vmi_model.clear_vlan_id()
             vmi_model.vn_model = vn_model
+            vmi_model.vcenter_port = vcenter_port
             self._delete(vmi_model)
         self._create_or_update(vmi_model)
 
     def _create_or_update(self, vmi_model):
         with self._vcenter_api_client:
-            vmi_model.refresh_port_key()
-            vmi_model.acquire_vlan_id()
-            self._vcenter_api_client.set_vlan_id(vmi_model.vn_model.dvs_name, vmi_model.port_key, vmi_model.vlan_id)
+            current_vlan_id = self._vcenter_api_client.get_vlan_id(vmi_model)
+            vmi_model.acquire_vlan_id(current_vlan_id)
+            if not current_vlan_id:
+                self._vcenter_api_client.set_vlan_id(
+                    vmi_model.vn_model.dvs_name, vmi_model.vcenter_port.port_key, vmi_model.vcenter_port.vlan_id)
         self._vnc_api_client.update_or_create_vmi(vmi_model.to_vnc())
         vmi_model.construct_instance_ip()
         if vmi_model.vnc_instance_ip:
@@ -217,7 +219,8 @@ class VirtualMachineInterfaceService(Service):
 
     def _restore_vlan_id(self, vmi_model):
         with self._vcenter_api_client:
-            self._vcenter_api_client.restore_vlan_id(vmi_model.vn_model.dvs_name, vmi_model.port_key)
+            self._vcenter_api_client.restore_vlan_id(
+                vmi_model.vn_model.dvs_name, vmi_model.vcenter_port.port_key)
         vmi_model.clear_vlan_id()
 
     def _delete_vrouter_port(self, vmi_model):
@@ -271,8 +274,8 @@ class VRouterPortService(object):
             return True
         return (vrouter_port.get('instance-id') != vmi_model.vm_model.uuid or
                 vrouter_port.get('vn-id') != vmi_model.vn_model.uuid or
-                vrouter_port.get('rx-vlan-id') != vmi_model.vlan_id or
-                vrouter_port.get('tx-vlan-id') != vmi_model.vlan_id or
+                vrouter_port.get('rx-vlan-id') != vmi_model.vcenter_port.vlan_id or
+                vrouter_port.get('tx-vlan-id') != vmi_model.vcenter_port.vlan_id or
                 vrouter_port.get('ip-address') != vmi_model.vnc_instance_ip.instance_ip_address)
 
     def _update_port(self, vmi_model):

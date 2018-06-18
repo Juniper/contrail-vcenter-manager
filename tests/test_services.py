@@ -9,8 +9,8 @@ from cvm.clients import VNCAPIClient
 from cvm.constants import (VNC_ROOT_DOMAIN, VNC_VCENTER_DEFAULT_SG,
                            VNC_VCENTER_IPAM, VNC_VCENTER_PROJECT)
 from cvm.database import Database
-from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
-                        VirtualNetworkModel)
+from cvm.models import (VCenterPort, VirtualMachineInterfaceModel,
+                        VirtualMachineModel, VirtualNetworkModel)
 from cvm.services import (Service, VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService,
                           VRouterPortService)
@@ -41,7 +41,8 @@ class TestVirtualMachineService(TestCase):
         self.assertIsNotNone(vm_model)
         self.assertEqual(self.vm_properties, vm_model.vm_properties)
         self.assertEqual(self.vmware_vm, vm_model.vmware_vm)
-        self.assertEqual({'c8:5b:76:53:0f:f5': 'dportgroup-50'}, vm_model.interfaces)
+        self.assertEqual({'c8:5b:76:53:0f:f5': 'dportgroup-50'},
+                         {vm_model.ports[0].mac_address: vm_model.ports[0].portgroup_key})
         self.vnc_client.update_or_create_vm.assert_called_once_with(vm_model.vnc_vm)
         self.database.save.assert_called_once_with(vm_model)
 
@@ -193,7 +194,7 @@ class TestVirtualMachineInterfaceService(TestCase):
 
     def test_no_update_for_no_dpgs(self):
         """ No new VMIs are created for VM not connected to any DPG. """
-        self.vm_model.interfaces = {}
+        self.vm_model.ports = {}
 
         self.vmi_service.update_vmis_for_vm_model(self.vm_model)
 
@@ -203,17 +204,18 @@ class TestVirtualMachineInterfaceService(TestCase):
 
     def test_update_existing_vmi(self):
         """ Existing VMI is updated when VM changes the DPG to which it is connected. """
+        self.database.save(self.vm_model)
         second_vn_model = create_vn_model(name='DPortGroup', key='dportgroup-51')
         self.database.save(second_vn_model)
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
-                                                 vnc_api.Project(), vnc_api.SecurityGroup())
+                                                 VCenterPort('c8:5b:76:53:0f:f5', '', 'dportgroup-50'))
+        vmi_model.parent = vnc_api.Project()
+        vmi_model.security_group = vnc_api.SecurityGroup()
         vnc_instance_ip = Mock()
         vnc_instance_ip.uuid = 'uuid'
         vmi_model.vnc_instance_ip = vnc_instance_ip
-        vmi_model.vrouter_port_added = True
         self.database.save(vmi_model)
-        self.vm_model.interfaces['c8:5b:76:53:0f:f5'] = 'dportgroup-51'
-        self.vm_model.vmware_vm.config.hardware.device[0].backing.port.portgroupKey = 'dportgroup-51'
+        self.vm_model.ports[0] = VCenterPort('c8:5b:76:53:0f:f5', '', 'dportgroup-51')
 
         self.vmi_service.update_vmis_for_vm_model(self.vm_model)
 
@@ -228,12 +230,11 @@ class TestVirtualMachineInterfaceService(TestCase):
     def test_removes_unused_vmis(self):
         """ VMIs are deleted when the VM is no longer connected to corresponding DPG. """
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
-                                                 vnc_api.Project(), vnc_api.SecurityGroup())
+                                                 VCenterPort('c8:5b:76:53:0f:f5', '', ''))
         vmi_model.vnc_instance_ip = Mock()
-        vmi_model.vrouter_port_added = True
         self.database.save(vmi_model)
 
-        self.vm_model.interfaces = {}
+        self.vm_model.ports = {}
         self.vmi_service.update_vmis_for_vm_model(self.vm_model)
 
         self.assertFalse(self.database.get_all_vmi_models())
@@ -275,8 +276,7 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.vnc_client.delete_vmi.assert_called_once()
 
     def test_remove_vmis_for_vm_model(self):
-        vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
-                                                 vnc_api.Project(), vnc_api.SecurityGroup())
+        vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, VCenterPort('mac_addr', '', ''))
         vmi_model.vnc_instance_ip = Mock()
         self.database.save(vmi_model)
         self.database.save(self.vm_model)
@@ -300,9 +300,9 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.vnc_client.delete_vmi.assert_not_called()
 
     def test_rename_vmis(self):
-        vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
-                                                 vnc_api.Project(), vnc_api.SecurityGroup())
-        vmi_model.vrouter_port_added = True
+        vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, VCenterPort('mac_addr', '', ''))
+        vmi_model.parent = vnc_api.Project()
+        vmi_model.security_group = vnc_api.SecurityGroup()
         self.database.save(vmi_model)
         self.vm_model.update(*create_vmware_vm_mock(name='VM-renamed'))
         self.database.save(self.vm_model)
@@ -541,7 +541,7 @@ def construct_vmi_model():
     vmi.uuid = 'fe71b44d-0654-36aa-9841-ab9b78d628c5'
     vmi.vm_model.uuid = '502789bb-240a-841f-e24c-1564537218f7'
     vmi.vn_model.uuid = 'f94fe52e-cf19-48dd-9697-8c2085e7cbee'
-    vmi.vlan_id = 7
+    vmi.vcenter_port.vlan_id = 7
     vmi.vnc_instance_ip.instance_ip_address = '192.168.200.5'
     return vmi
 
