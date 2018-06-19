@@ -396,7 +396,6 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
     assert_vnc_vmi_state(vnc_vmi, mac_address='11:11:11:11:11:11', vnc_vn_uuid=vnc_vn_2.uuid)
 
     # Check if VMI Model's Instance IP has been updated in VNC:
-    vnc_api_client.delete_instance_ip.assert_called_once_with(old_instance_ip.uuid)
     assert vnc_api_client.create_and_read_instance_ip.call_count == 2
     new_instance_ip = vmi_model.vnc_instance_ip
     assert vnc_api_client.create_and_read_instance_ip.call_args[0][0] == new_instance_ip

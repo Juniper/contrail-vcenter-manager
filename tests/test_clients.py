@@ -129,3 +129,36 @@ class TestVNCAPIClient(TestCase):
 
         self.vnc_lib.virtual_machine_read.assert_called_once_with(id=u'5027a82e-fbc7-0898-b64c-4bf9f5b9d07c')
         self.assertEqual([vnc_vm], all_vms)
+
+
+class TestBackRefs(TestCase):
+    """ Deleting objects should also delete it's back-ref objects. """
+
+    def setUp(self):
+        self.vnc_lib = Mock()
+        with patch('cvm.clients.vnc_api.VncApi') as vnc_api_mock:
+            vnc_api_mock.return_value = self.vnc_lib
+            self.vnc_client = VNCAPIClient({})
+
+    def test_delete_vmi(self):
+        vmi = Mock(uuid='vmi_uuid')
+        vmi.get_instance_ip_back_refs.return_value = [{'uuid': 'instance_ip_uuid'}]
+        self.vnc_lib.virtual_machine_interface_read.return_value = vmi
+
+        self.vnc_client.delete_vmi('vmi_uuid')
+
+        self.vnc_lib.instance_ip_delete.assert_called_once_with(id='instance_ip_uuid')
+        self.vnc_lib.virtual_machine_interface_delete.assert_called_once_with(id='vmi_uuid')
+
+    def test_delete_vm(self):
+        vm = Mock(uuid='vm_uuid')
+        vm.get_virtual_machine_interface_back_refs.return_value = [{'uuid': 'vmi_uuid'}]
+        self.vnc_lib.virtual_machine_read.return_value = vm
+        vmi = Mock(uuid='vmi_uuid')
+        vmi.get_instance_ip_back_refs.return_value = [{'uuid': 'instance_ip_uuid'}]
+        self.vnc_lib.virtual_machine_interface_read.return_value = vmi
+
+        self.vnc_client.delete_vm('vm_uuid')
+
+        self.vnc_lib.virtual_machine_interface_delete.assert_called_once_with(id='vmi_uuid')
+        self.vnc_lib.virtual_machine_delete.assert_called_once_with(id='vm_uuid')

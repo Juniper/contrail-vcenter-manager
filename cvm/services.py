@@ -76,14 +76,14 @@ class VirtualMachineService(Service):
                 continue
             if self._can_delete_from_vnc(vnc_vm):
                 logger.info('Deleting %s from VNC', vnc_vm.name)
-                self._vnc_api_client.delete_vm(vnc_vm)
+                self._vnc_api_client.delete_vm(vnc_vm.uuid)
 
     def remove_vm(self, name):
         vm_model = self._database.get_vm_model_by_name(name)
         if not vm_model:
             return None
         if self._can_delete_from_vnc(vm_model.vnc_vm):
-            self._vnc_api_client.delete_vm(vm_model.vnc_vm)
+            self._vnc_api_client.delete_vm(vm_model.vnc_vm.uuid)
         self._database.delete_vm_model(vm_model.uuid)
         vm_model.destroy_property_filter()
         return vm_model
@@ -220,8 +220,6 @@ class VirtualMachineInterfaceService(Service):
         self._delete_vrouter_port(vmi_model)
 
     def _delete_from_vnc(self, vmi_model):
-        if vmi_model.vnc_instance_ip:
-            self._vnc_api_client.delete_instance_ip(vmi_model.vnc_instance_ip.uuid)
         self._vnc_api_client.delete_vmi(vmi_model.uuid)
         vmi_model.vnc_vmi = None
 

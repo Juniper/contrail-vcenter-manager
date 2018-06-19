@@ -108,10 +108,11 @@ class TestVirtualMachineService(TestCase):
             can_delete.return_value = True
             self.vm_service.delete_unused_vms_in_vnc()
 
-        self.vnc_client.delete_vm.assert_called_once_with(vnc_vm)
+        self.vnc_client.delete_vm.assert_called_once_with('d376b6b4-943d-4599-862f-d852fd6ba425')
 
     def test_remove_vm(self):
         vm_model = Mock(uuid='d376b6b4-943d-4599-862f-d852fd6ba425')
+        vm_model.vnc_vm.uuid = 'd376b6b4-943d-4599-862f-d852fd6ba425'
         self.database.get_vm_model_by_name.return_value = vm_model
 
         with patch('cvm.services.VirtualMachineService._can_delete_from_vnc') as can_delete:
@@ -119,7 +120,7 @@ class TestVirtualMachineService(TestCase):
             self.vm_service.remove_vm('VM')
 
         self.database.delete_vm_model.assert_called_once_with(vm_model.uuid)
-        self.vnc_client.delete_vm.assert_called_once_with(vm_model.vnc_vm)
+        self.vnc_client.delete_vm.assert_called_once_with('d376b6b4-943d-4599-862f-d852fd6ba425')
 
     def test_remove_no_vm(self):
         """ Remove VM should do nothing when VM doesn't exist in database. """
@@ -372,13 +373,6 @@ class TestVMIInstanceIp(TestCase):
         self.vmi_service._create_or_update(self.vmi_model)
 
         self.vnc_client.create_and_read_instance_ip.assert_called_once_with(self.instance_ip)
-
-    def test_delete_vmi(self):
-        self.instance_ip.uuid = '63f2594b-3c7d-4b8a-bb3d-cc6a098ad284'
-
-        self.vmi_service._delete(self.vmi_model)
-
-        self.vnc_client.delete_instance_ip.assert_called_once_with(self.instance_ip.uuid)
 
 
 class TestVNCEnvironmentSetup(TestCase):

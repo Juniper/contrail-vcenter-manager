@@ -218,12 +218,15 @@ class VNCAPIClient(object):
         self.id_perms.set_creator('vcenter-manager')
         self.id_perms.set_enable(True)
 
-    def delete_vm(self, vnc_vm):
+    def delete_vm(self, uuid):
+        vm = self.read_vm(uuid)
+        for vmi_ref in vm.get_virtual_machine_interface_back_refs():
+            self.delete_vmi(vmi_ref.get('uuid'))
         try:
-            self.vnc_lib.virtual_machine_delete(id=vnc_vm.uuid)
-            logger.info('Virtual Machine removed: %s', vnc_vm.name)
+            self.vnc_lib.virtual_machine_delete(id=uuid)
+            logger.info('Virtual Machine removed: %s', uuid)
         except NoIdError:
-            logger.error('Virtual Machine not found: %s', vnc_vm.name)
+            logger.error('Virtual Machine not found: %s', uuid)
 
     def update_or_create_vm(self, vnc_vm):
         try:
@@ -263,6 +266,10 @@ class VNCAPIClient(object):
         logger.info('Virtual Machine Interface created: %s', vmi.display_name)
 
     def delete_vmi(self, uuid):
+        vmi = self.read_vmi(uuid)
+        for instance_ip_ref in vmi.get_instance_ip_back_refs():
+            self.delete_instance_ip(instance_ip_ref.get('uuid'))
+
         try:
             self.vnc_lib.virtual_machine_interface_delete(id=uuid)
             logger.info('Virtual Machine Interface removed: %s', uuid)
