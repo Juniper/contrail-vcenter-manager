@@ -36,13 +36,14 @@ class TestVCenterAPIClient(TestCase):
     def test_set_vlan_id(self):
         dv_port = Mock(key='8')
         dv_port.config.configVersion = '1'
-        dvs = Mock(name='DSwitch')
+        dvs = Mock()
         dvs.FetchDVPorts.return_value = [dv_port]
-        with patch('cvm.clients.VSphereAPIClient._get_object') as get_obj_mock:
-            get_obj_mock.return_value = dvs
+        vcenter_port = Mock(port_key='8', vlan_id=10)
+        with patch('cvm.clients.VCenterAPIClient._get_dvs_by_uuid') as get_dvs_mock:
+            get_dvs_mock.return_value = dvs
             with patch('cvm.clients.SmartConnectNoSSL'):
                 with self.vcenter_client:
-                    self.vcenter_client.set_vlan_id(dvs_name=dvs.name, key='8', vlan_id=10)
+                    self.vcenter_client.set_vlan_id(vcenter_port)
 
         dvs.ReconfigureDVPort_Task.assert_called_once()
         spec = dvs.ReconfigureDVPort_Task.call_args[1].get('port', [None])[0]
@@ -71,16 +72,34 @@ class TestVCenterAPIClient(TestCase):
         dv_port.config.setting.vlan.inherited = False
         dvs = Mock(name='DSwitch')
         dvs.FetchDVPorts.return_value = [dv_port]
-        vmi_model = Mock()
-        vmi_model.vcenter_port.port_key = '20'
+        vcenter_port = Mock(port_key='20')
 
-        with patch('cvm.clients.VSphereAPIClient._get_object') as get_obj_mock:
-            get_obj_mock.return_value = dvs
+        with patch('cvm.clients.VCenterAPIClient._get_dvs_by_uuid') as get_dvs_mock:
+            get_dvs_mock.return_value = dvs
             with patch('cvm.clients.SmartConnectNoSSL'):
                 with self.vcenter_client:
-                    result = self.vcenter_client.get_vlan_id(vmi_model)
+                    result = self.vcenter_client.get_vlan_id(vcenter_port)
 
         self.assertEqual(10, result)
+
+    def test_restore_vlan_id(self):
+        dv_port = Mock(key='8')
+        dv_port.config.configVersion = '1'
+        dvs = Mock()
+        dvs.FetchDVPorts.return_value = [dv_port]
+        vcenter_port = Mock(port_key='8', vlan_id=10)
+        with patch('cvm.clients.VCenterAPIClient._get_dvs_by_uuid') as get_dvs_mock:
+            get_dvs_mock.return_value = dvs
+            with patch('cvm.clients.SmartConnectNoSSL'):
+                with self.vcenter_client:
+                    self.vcenter_client.restore_vlan_id(vcenter_port)
+
+        dvs.ReconfigureDVPort_Task.assert_called_once()
+        spec = dvs.ReconfigureDVPort_Task.call_args[1].get('port', [None])[0]
+        self.assertIsNotNone(spec)
+        self.assertEqual('8', spec.key)
+        self.assertEqual('1', spec.configVersion)
+        self.assertTrue(spec.setting.vlan.inherited)
 
 
 class TestFunctions(TestCase):
@@ -91,6 +110,16 @@ class TestFunctions(TestCase):
         self.assertEqual('8', spec.key)
         self.assertEqual('edit', spec.operation)
         self.assertEqual(10, spec.setting.vlan.vlanId)
+        self.assertFalse(spec.setting.vlan.inherited)
+        self.assertEqual('1', spec.configVersion)
+
+    def test_make_port_spec_restore(self):
+        dv_port = Mock(key='8')
+        dv_port.config.configVersion = '1'
+        spec = make_dv_port_spec(dv_port)
+        self.assertEqual('8', spec.key)
+        self.assertEqual('edit', spec.operation)
+        self.assertTrue(spec.setting.vlan.inherited)
         self.assertEqual('1', spec.configVersion)
 
 
