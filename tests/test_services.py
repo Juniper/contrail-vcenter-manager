@@ -12,7 +12,8 @@ from cvm.database import Database
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
 from cvm.services import (Service, VirtualMachineInterfaceService,
-                          VirtualMachineService, VirtualNetworkService)
+                          VirtualMachineService, VirtualNetworkService,
+                          VRouterPortService)
 from tests.utils import (create_dpg_mock, create_property_filter,
                          create_vcenter_client_mock, create_vmware_vm_mock,
                          create_vn_model, create_vnc_client_mock)
@@ -162,12 +163,10 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.database = Database()
 
         self.vnc_client = create_vnc_client_mock()
-        self.vrouter_api_client = Mock()
 
         self.vmi_service = VirtualMachineInterfaceService(
             create_vcenter_client_mock(),
             self.vnc_client,
-            self.vrouter_api_client,
             self.database
         )
 
@@ -188,11 +187,9 @@ class TestVirtualMachineInterfaceService(TestCase):
         saved_vmi = self.database.get_all_vmi_models()[0]
         self.assertEqual(self.vm_model, saved_vmi.vm_model)
         self.assertEqual(self.vn_model, saved_vmi.vn_model)
-        self.vrouter_api_client.add_port.assert_called_once_with(saved_vmi)
-        self.vrouter_api_client.enable_port.assert_called_once_with(saved_vmi.uuid)
+        self.assertIn(saved_vmi, self.database.ports_to_update)
         vnc_vmi = self.vnc_client.update_or_create_vmi.call_args[0][0]
         self.assertIn(self.vn_model.uuid, [ref['uuid'] for ref in vnc_vmi.get_virtual_network_refs()])
-        self.assertTrue(saved_vmi.vrouter_port_added)
 
     def test_no_update_for_no_dpgs(self):
         """ No new VMIs are created for VM not connected to any DPG. """
@@ -202,7 +199,7 @@ class TestVirtualMachineInterfaceService(TestCase):
 
         self.assertEqual(0, len(self.database.get_all_vmi_models()))
         self.vnc_client.update_or_create_vmi.assert_not_called()
-        self.vrouter_api_client.add_port.assert_not_called()
+        self.assertEqual([], self.database.ports_to_update)
 
     def test_update_existing_vmi(self):
         """ Existing VMI is updated when VM changes the DPG to which it is connected. """
@@ -226,10 +223,7 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.assertEqual(second_vn_model, saved_vmi.vn_model)
         vnc_vmi = self.vnc_client.update_or_create_vmi.call_args[0][0]
         self.assertIn(second_vn_model.uuid, [ref['uuid'] for ref in vnc_vmi.get_virtual_network_refs()])
-        self.assertTrue(saved_vmi.vrouter_port_added)
-        self.vrouter_api_client.delete_port.assert_called_once_with(vmi_model.uuid)
-        self.vrouter_api_client.add_port.assert_called_once()
-        self.vrouter_api_client.enable_port.assert_called_once_with(saved_vmi.uuid)
+        self.assertIn(saved_vmi, self.database.ports_to_update)
 
     def test_removes_unused_vmis(self):
         """ VMIs are deleted when the VM is no longer connected to corresponding DPG. """
@@ -245,7 +239,7 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.assertFalse(self.database.get_all_vmi_models())
         self.vnc_client.delete_vmi.assert_called_once_with(
             VirtualMachineInterfaceModel.get_uuid('c8:5b:76:53:0f:f5'))
-        self.vrouter_api_client.delete_port.assert_called_once_with(vmi_model.uuid)
+        self.assertIn(vmi_model.uuid, self.database.ports_to_delete)
 
     def test_sync_vmis(self):
         self.database.save(self.vm_model)
@@ -318,9 +312,7 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.assertEqual('vmi-VM Portgroup-VM-renamed', vmi_model.display_name)
         self.assertEqual(0, self.vnc_client.create_and_read_instance_ip.call_count)
         self.vnc_client.update_or_create_vmi.assert_called_once()
-        self.vrouter_api_client.delete_port.assert_called_once_with(vmi_model.uuid)
-        self.vrouter_api_client.add_port.assert_called_once_with(vmi_model)
-        self.vrouter_api_client.enable_port.assert_called_once_with(vmi_model.uuid)
+        self.assertIn(vmi_model, self.database.ports_to_update)
 
 
 class TestVirtualNetworkService(TestCase):
@@ -365,7 +357,6 @@ class TestVMIInstanceIp(TestCase):
         self.vmi_service = VirtualMachineInterfaceService(
             create_vcenter_client_mock(),
             self.vnc_client,
-            Mock(),
             self.database
         )
 
@@ -483,7 +474,7 @@ class TestCanDeleteFromVnc(TestCase):
         esxi_api_client.read_vrouter_uuid.return_value = 'vrouter_uuid_1'
         self.vm_service = VirtualMachineService(esxi_api_client, self.vnc_api_client, None)
         self.vmi_service = VirtualMachineInterfaceService(esxi_api_client, self.vnc_api_client,
-                                                          None, None, esxi_api_client=esxi_api_client)
+                                                          None, esxi_api_client=esxi_api_client)
 
     def test_vnc_vm_true(self):
         vnc_vm = vnc_api.VirtualMachine('VM', vnc_api.Project())
@@ -524,3 +515,91 @@ class TestCanDeleteFromVnc(TestCase):
         result = self.vmi_service._can_delete_from_vnc(vnc_vmi)
 
         self.assertFalse(result)
+
+
+def construct_vrouter_response():
+    return {'author': '/usr/bin/contrail-vrouter-agent',
+            'dns-server': '192.168.200.2',
+            'gateway': '192.168.200.254',
+            'id': 'fe71b44d-0654-36aa-9841-ab9b78d628c5',
+            'instance-id': '502789bb-240a-841f-e24c-1564537218f7',
+            'ip-address': '192.168.200.5',
+            'ip6-address': '::',
+            'mac-address': '00:50:56:bf:7d:a1',
+            'plen': 24,
+            'rx-vlan-id': 7,
+            'system-name': 'fe71b44d-0654-36aa-9841-ab9b78d628c5',
+            'time': '424716:04:42.065040',
+            'tx-vlan-id': 7,
+            'vhostuser-mode': 0,
+            'vm-project-id': '00000000-0000-0000-0000-000000000000',
+            'vn-id': 'f94fe52e-cf19-48dd-9697-8c2085e7cbee'}
+
+
+def construct_vmi_model():
+    vmi = Mock()
+    vmi.uuid = 'fe71b44d-0654-36aa-9841-ab9b78d628c5'
+    vmi.vm_model.uuid = '502789bb-240a-841f-e24c-1564537218f7'
+    vmi.vn_model.uuid = 'f94fe52e-cf19-48dd-9697-8c2085e7cbee'
+    vmi.vlan_id = 7
+    vmi.vnc_instance_ip.instance_ip_address = '192.168.200.5'
+    return vmi
+
+
+class TestPortNeedsUpdate(TestCase):
+    def setUp(self):
+        self.vrouter_api_client = Mock()
+        self.port_service = VRouterPortService(self.vrouter_api_client, None)
+        self.vmi_model = construct_vmi_model()
+
+    def test_false(self):
+        self.vrouter_api_client.read_port.return_value = construct_vrouter_response()
+
+        result = self.port_service._port_needs_an_update(self.vmi_model)
+
+        self.assertFalse(result)
+
+    def test_true(self):
+        self.vrouter_api_client.return_value = None
+
+        result = self.port_service._port_needs_an_update(self.vmi_model)
+
+        self.assertTrue(result)
+
+
+class TestPortService(TestCase):
+    def setUp(self):
+        self.vrouter_api_client = Mock()
+        self.database = Database()
+        self.port_service = VRouterPortService(self.vrouter_api_client, self.database)
+
+    def test_create_port(self):
+        vmi_model = construct_vmi_model()
+        self.database.ports_to_update.append(vmi_model)
+
+        with patch('cvm.services.VRouterPortService._port_needs_an_update') as port_check:
+            port_check.return_value = True
+            self.port_service.sync_ports()
+
+        self.vrouter_api_client.delete_port.assert_called_once_with('fe71b44d-0654-36aa-9841-ab9b78d628c5')
+        self.vrouter_api_client.add_port.assert_called_once_with(vmi_model)
+        self.vrouter_api_client.enable_port.assert_called_once_with('fe71b44d-0654-36aa-9841-ab9b78d628c5')
+
+    def test_no_update(self):
+        vmi_model = construct_vmi_model()
+        self.database.ports_to_update.append(vmi_model)
+
+        with patch('cvm.services.VRouterPortService._port_needs_an_update') as port_check:
+            port_check.return_value = False
+            self.port_service.sync_ports()
+
+        self.assertEqual(0, self.vrouter_api_client.delete_port.call_count)
+        self.assertEqual(0, self.vrouter_api_client.add_port.call_count)
+        self.assertEqual(0, self.vrouter_api_client.enable_port.call_count)
+
+    def test_delete_port(self):
+        self.database.ports_to_delete.append('fe71b44d-0654-36aa-9841-ab9b78d628c5')
+
+        self.port_service.sync_ports()
+
+        self.vrouter_api_client.delete_port.assert_called_once_with('fe71b44d-0654-36aa-9841-ab9b78d628c5')

@@ -24,11 +24,12 @@ class TestVmwareController(TestCase):
         self.database = Mock()
         self.vm_service = Mock(database=self.database)
         self.vmi_service = Mock()
+        self.vrouter_port_service = Mock()
 
-        vm_renamed_handler = VmRenamedHandler(self.vm_service, self.vmi_service)
-        vm_removed_handler = VmRemovedHandler(self.vm_service, self.vmi_service)
+        vm_renamed_handler = VmRenamedHandler(self.vm_service, self.vmi_service, self.vrouter_port_service)
+        vm_removed_handler = VmRemovedHandler(self.vm_service, self.vmi_service, Mock())
         handlers = [vm_renamed_handler, vm_removed_handler]
-        self.vmware_controller = VmwareController(self.vm_service, None, self.vmi_service,
+        self.vmware_controller = VmwareController(self.vm_service, None, self.vmi_service, None,
                                                   handlers)
 
     @patch.object(VmwareController, '_handle_change')
