@@ -42,13 +42,16 @@ def make_filter_spec(obj, filters):
     return filter_spec
 
 
-def make_dv_port_spec(dv_port, vlan_id):
+def make_dv_port_spec(dv_port, vlan_id=None):
     dv_port_config_spec = vim.dvs.DistributedVirtualPort.ConfigSpec()
     dv_port_config_spec.key = dv_port.key
     dv_port_config_spec.operation = 'edit'
     dv_port_config_spec.configVersion = dv_port.config.configVersion
     vlan_spec = vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec()
-    vlan_spec.vlanId = vlan_id
+    if vlan_id:
+        vlan_spec.vlanId = vlan_id
+    else:
+        vlan_spec.inherited = True
     dv_port_setting = vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy()
     dv_port_setting.vlan = vlan_spec
     dv_port_config_spec.setting = dv_port_setting
@@ -61,6 +64,15 @@ def make_pg_config_vlan_override(portgroup):
     pg_config_spec.policy.vlanOverrideAllowed = True
     pg_config_spec.configVersion = portgroup.config.configVersion
     return pg_config_spec
+
+
+def fetch_port_from_dvs(dvs, port_key):
+    criteria = vim.dvs.PortCriteria()
+    criteria.portKey = port_key
+    try:
+        return next(port for port in dvs.FetchDVPorts(criteria))
+    except StopIteration:
+        return None
 
 
 class VSphereAPIClient(object):
@@ -166,49 +178,31 @@ class VCenterAPIClient(VSphereAPIClient):
                 return dpg
         return None
 
-    def get_ip_pool_for_dpg(self, dpg):
-        return self._get_ip_pool_by_id(dpg.summary.ipPoolId)
-
-    def _get_ip_pool_by_id(self, pool_id):
-        for ip_pool in self._si.content.ipPoolManager.QueryIpPools(self._datacenter):
-            if ip_pool.id == pool_id:
-                return ip_pool
-        return None
-
-    def set_vlan_id(self, dvs_name, key, vlan_id):
-        dvs = self._get_object([vim.dvs.VmwareDistributedVirtualSwitch], dvs_name)
-        try:
-            dv_port = next(port for port in dvs.FetchDVPorts() if port.key == key)
-        except StopIteration:
+    def set_vlan_id(self, vcenter_port):
+        dvs = self._get_dvs_by_uuid(vcenter_port.dvs_uuid)
+        dv_port = fetch_port_from_dvs(dvs, vcenter_port.port_key)
+        if not dv_port:
             return
-        dv_port_spec = make_dv_port_spec(dv_port, vlan_id)
-        logger.info('Setting VLAN ID of port %s to %d', key, vlan_id)
+        dv_port_spec = make_dv_port_spec(dv_port, vcenter_port.vlan_id)
+        logger.info('Setting VLAN ID of port %s to %d', vcenter_port.key, vcenter_port.vlan_id)
         dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
 
-    def get_vlan_id(self, vmi_model):
-        dvs = self._get_object([vim.dvs.VmwareDistributedVirtualSwitch], vmi_model.vn_model.dvs_name)
-        try:
-            # TODO: Use criteria to fetch single port
-            dv_port = next(port for port in dvs.FetchDVPorts() if port.key == vmi_model.vcenter_port.port_key)
-        except StopIteration:
-            return None
+    def get_vlan_id(self, vcenter_port):
+        dvs = self._get_dvs_by_uuid(vcenter_port.dvs_uuid)
+        dv_port = fetch_port_from_dvs(dvs, vcenter_port.port_key)
         if not dv_port.config.setting.vlan.inherited:
             return dv_port.config.setting.vlan.vlanId
         return None
 
-    def restore_vlan_id(self, dvs_name, key):
-        dvs = self._get_object([vim.dvs.VmwareDistributedVirtualSwitch], dvs_name)
-        dv_port = [port for port in dvs.FetchDVPorts() if port.key == key][0]
-        dv_port_config_spec = vim.dvs.DistributedVirtualPort.ConfigSpec()
-        dv_port_config_spec.key = dv_port.key
-        dv_port_config_spec.operation = 'edit'
-        dv_port_config_spec.configVersion = dv_port.config.configVersion
-        vlan_spec = vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec()
-        vlan_spec.inherited = True
-        dv_port_setting = vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy()
-        dv_port_setting.vlan = vlan_spec
-        dv_port_config_spec.setting = dv_port_setting
+    def restore_vlan_id(self, vcenter_port):
+        dvs = self._get_dvs_by_uuid(vcenter_port.dvs_uuid)
+        dv_port = fetch_port_from_dvs(dvs, vcenter_port.port_key)
+        dv_port_config_spec = make_dv_port_spec(dv_port)
         dvs.ReconfigureDVPort_Task(port=[dv_port_config_spec])
+
+    def _get_dvs_by_uuid(self, uuid):
+        dvs_manager = self._si.content.dvSwitchManager
+        return dvs_manager.QueryDvsByUuid(uuid)
 
     @staticmethod
     def enable_vlan_override(portgroup):
@@ -366,11 +360,8 @@ class VNCAPIClient(object):
         return ipam
 
     def create_and_read_instance_ip(self, instance_ip):
-        if not instance_ip:
-            return None
         try:
             return self._read_instance_ip(instance_ip.uuid)
-            # TODO: Refactor this
         except NoIdError:
             self.vnc_lib.instance_ip_create(instance_ip)
             logger.debug("Created instanceIP: %s", instance_ip.name)

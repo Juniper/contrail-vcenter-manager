@@ -162,7 +162,7 @@ class TestVirtualMachineInterfaceModel(TestCase):
         vnc_vn = Mock(uuid='d376b6b4-943d-4599-862f-d852fd6ba425')
         vnc_vn.name = 'VM Network'
         self.vn_model = VirtualNetworkModel(vmware_vn, vnc_vn, VlanIdPool(0, 100))
-        self.vcenter_port = VCenterPort('c8:5b:76:53:0f:f5', None, '123')
+        self.vcenter_port = VCenterPort(device)
 
     def test_to_vnc(self):
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, self.vcenter_port)
@@ -269,7 +269,9 @@ class TestVirtualNetworkVlans(TestCase):
         self.ports.append(create_port_mock(1))
         vn_model = VirtualNetworkModel(self.dpg, None, VlanIdPool(0, 100))
         vm_model = VirtualMachineModel(*create_vmware_vm_mock([self.dpg]))
-        vcenter_port = VCenterPort('', 'dvportgroup-20', '')
+        device = Mock()
+        device.backing.port.portgroupKey = 'dvportgroup-20'
+        vcenter_port = VCenterPort(device)
         vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, vcenter_port)
 
         vmi_model.acquire_vlan_id(None)
