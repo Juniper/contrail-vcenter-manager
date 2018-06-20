@@ -257,7 +257,9 @@ def test_vm_created(vcenter_api_client, vn_model_1, vm_created_update,
     vrouter_api_client.add_port.assert_called_once_with(vmi_model)
 
     # Check if VLAN ID has been set using VLAN Override
-    vcenter_api_client.set_vlan_id.assert_called_once_with(vmi_model.vn_model.dvs_name, '10', 2)
+    vcenter_port = vcenter_api_client.set_vlan_id.call_args[0][0]
+    assert vcenter_port.port_key == '10'
+    assert vcenter_port.vlan_id == 2
 
     # Check inner VMI model state
     assert_vmi_model_state(
@@ -329,7 +331,9 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
     assert vrouter_api_client.add_port.call_count == 2
 
     # Check if VLAN ID has been set using VLAN Override
-    vcenter_api_client.set_vlan_id.assert_called_once_with(vmi_model.vn_model.dvs_name, '10', 2)
+    vcenter_port = vcenter_api_client.set_vlan_id.call_args[0][0]
+    assert vcenter_port.port_key == '10'
+    assert vcenter_port.vlan_id == 2
 
     # Check inner VMI model state
     assert_vmi_model_state(
@@ -415,7 +419,9 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
 
     # Check if VLAN ID has been set using VLAN Override
     assert vcenter_api_client.set_vlan_id.call_count == 2
-    assert vcenter_api_client.set_vlan_id.call_args[0] == (vmi_model.vn_model.dvs_name, '11', 4)
+    vcenter_port = vcenter_api_client.set_vlan_id.call_args[0][0]
+    assert vcenter_port.port_key == '11'
+    assert vcenter_port.vlan_id == 4
 
     # Check inner VMI model state
     assert_vmi_model_state(

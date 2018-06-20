@@ -207,15 +207,18 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.database.save(self.vm_model)
         second_vn_model = create_vn_model(name='DPortGroup', key='dportgroup-51')
         self.database.save(second_vn_model)
+        device = Mock(macAddress='c8:5b:76:53:0f:f5')
+        device.backing.port.portgroupKey = 'dportgroup-50'
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
-                                                 VCenterPort('c8:5b:76:53:0f:f5', '', 'dportgroup-50'))
+                                                 VCenterPort(device))
         vmi_model.parent = vnc_api.Project()
         vmi_model.security_group = vnc_api.SecurityGroup()
         vnc_instance_ip = Mock()
         vnc_instance_ip.uuid = 'uuid'
         vmi_model.vnc_instance_ip = vnc_instance_ip
         self.database.save(vmi_model)
-        self.vm_model.ports[0] = VCenterPort('c8:5b:76:53:0f:f5', '', 'dportgroup-51')
+        device.backing.port.portgroupKey = 'dportgroup-51'
+        self.vm_model.ports[0] = VCenterPort(device)
 
         self.vmi_service.update_vmis_for_vm_model(self.vm_model)
 
@@ -229,8 +232,9 @@ class TestVirtualMachineInterfaceService(TestCase):
 
     def test_removes_unused_vmis(self):
         """ VMIs are deleted when the VM is no longer connected to corresponding DPG. """
+        device = Mock(macAddress='c8:5b:76:53:0f:f5')
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
-                                                 VCenterPort('c8:5b:76:53:0f:f5', '', ''))
+                                                 VCenterPort(device))
         vmi_model.vnc_instance_ip = Mock()
         self.database.save(vmi_model)
 
@@ -276,7 +280,8 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.vnc_client.delete_vmi.assert_called_once()
 
     def test_remove_vmis_for_vm_model(self):
-        vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, VCenterPort('mac_addr', '', ''))
+        device = Mock(macAddress='mac_addr')
+        vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, VCenterPort(device))
         vmi_model.vnc_instance_ip = Mock()
         self.database.save(vmi_model)
         self.database.save(self.vm_model)
@@ -300,7 +305,8 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.vnc_client.delete_vmi.assert_not_called()
 
     def test_rename_vmis(self):
-        vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, VCenterPort('mac_addr', '', ''))
+        vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
+                                                 VCenterPort(Mock(macAddress='mac_addr')))
         vmi_model.parent = vnc_api.Project()
         vmi_model.security_group = vnc_api.SecurityGroup()
         self.database.save(vmi_model)
@@ -513,6 +519,24 @@ class TestCanDeleteFromVnc(TestCase):
         self.vnc_api_client.read_vmi.return_value = vnc_vmi
 
         result = self.vmi_service._can_delete_from_vnc(vnc_vmi)
+
+        self.assertFalse(result)
+
+    def test_no_annotations(self):
+        vnc_vm = vnc_api.VirtualMachine('VM', vnc_api.Project())
+        self.vnc_api_client.read_vm.return_value = vnc_vm
+
+        result = self.vm_service._can_delete_from_vnc(vnc_vm)
+
+        self.assertFalse(result)
+
+    def test_no_vrouter_uuid(self):
+        vnc_vm = vnc_api.VirtualMachine('VM', vnc_api.Project())
+        vnc_vm.set_annotations(KeyValuePairs(
+            [KeyValuePair('key', 'value')]))
+        self.vnc_api_client.read_vm.return_value = vnc_vm
+
+        result = self.vm_service._can_delete_from_vnc(vnc_vm)
 
         self.assertFalse(result)
 

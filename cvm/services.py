@@ -26,9 +26,14 @@ class Service(object):
             existing_obj = self._vnc_api_client.read_vm(vnc_obj.uuid)
         if vnc_obj.get_type() == 'virtual-machine-interface':
             existing_obj = self._vnc_api_client.read_vmi(vnc_obj.uuid)
-        existing_obj_vrouter_uuid = next(pair.value
-                                         for pair in existing_obj.get_annotations().key_value_pair
-                                         if pair.key == 'vrouter-uuid')
+        try:
+            existing_obj_vrouter_uuid = next(pair.value
+                                             for pair in existing_obj.get_annotations().key_value_pair
+                                             if pair.key == 'vrouter-uuid')
+        except (AttributeError, StopIteration):
+            logger.error('Cannot read vrouter-uuid annotation for %s %s.', vnc_obj.get_type(), vnc_obj.name)
+            return False
+
         if existing_obj_vrouter_uuid == self._vrouter_uuid:
             return True
         logger.error('%s %s is managed by vRouter %s and cannot be deleted from VNC.',
@@ -160,8 +165,7 @@ class VirtualMachineInterfaceService(Service):
             vmi_model.security_group = self._default_security_group
         if vmi_model.vn_model != vn_model:
             with self._vcenter_api_client:
-                self._vcenter_api_client.restore_vlan_id(
-                    vmi_model.vn_model.dvs_name, vmi_model.vcenter_port.port_key)
+                self._vcenter_api_client.restore_vlan_id(vmi_model.vcenter_port)
             vmi_model.clear_vlan_id()
             vmi_model.vn_model = vn_model
             vmi_model.vcenter_port = vcenter_port
@@ -170,11 +174,10 @@ class VirtualMachineInterfaceService(Service):
 
     def _create_or_update(self, vmi_model):
         with self._vcenter_api_client:
-            current_vlan_id = self._vcenter_api_client.get_vlan_id(vmi_model)
+            current_vlan_id = self._vcenter_api_client.get_vlan_id(vmi_model.vcenter_port)
             vmi_model.acquire_vlan_id(current_vlan_id)
             if not current_vlan_id:
-                self._vcenter_api_client.set_vlan_id(
-                    vmi_model.vn_model.dvs_name, vmi_model.vcenter_port.port_key, vmi_model.vcenter_port.vlan_id)
+                self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
         self._vnc_api_client.update_or_create_vmi(vmi_model.to_vnc())
         vmi_model.construct_instance_ip()
         if vmi_model.vnc_instance_ip:
@@ -219,8 +222,7 @@ class VirtualMachineInterfaceService(Service):
 
     def _restore_vlan_id(self, vmi_model):
         with self._vcenter_api_client:
-            self._vcenter_api_client.restore_vlan_id(
-                vmi_model.vn_model.dvs_name, vmi_model.vcenter_port.port_key)
+            self._vcenter_api_client.restore_vlan_id(vmi_model.vcenter_port)
         vmi_model.clear_vlan_id()
 
     def _delete_vrouter_port(self, vmi_model):

@@ -97,14 +97,10 @@ class VirtualMachineModel(object):
 
     def update_ports(self):
         self.ports = self._read_ports()
-        # port = next(port for port in self.ports if port.mac_address == mac_address)
-        # port.portgroup_key = portgroup_key
 
     def _read_ports(self):
         try:
-            return [VCenterPort(mac_address=device.macAddress,
-                                port_key=device.backing.port.portKey,
-                                portgroup_key=device.backing.port.portgroupKey)
+            return [VCenterPort(device)
                     for device in self.vmware_vm.config.hardware.device
                     if isinstance(device.backing, vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo)]
         except AttributeError:
@@ -307,8 +303,9 @@ class VlanIdPool(object):
 
 
 class VCenterPort(object):
-    def __init__(self, mac_address, port_key, portgroup_key):
-        self.mac_address = mac_address
-        self.port_key = port_key
-        self.portgroup_key = portgroup_key
+    def __init__(self, device):
+        self.mac_address = device.macAddress
+        self.port_key = device.backing.port.portKey
+        self.portgroup_key = device.backing.port.portgroupKey
+        self.dvs_uuid = device.backing.port.switchUuid
         self.vlan_id = None
