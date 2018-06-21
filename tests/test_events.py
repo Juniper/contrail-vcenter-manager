@@ -88,6 +88,14 @@ def vm_properties_renamed():
     }
 
 
+@pytest.fixture()
+def contrail_vm_properties():
+    return {
+        'config.instanceUuid': '12345678-1234-1234-1234-123456789012',
+        'name': 'ContrailVM'
+    }
+
+
 def assign_ip_to_instance_ip(instance_ip):
     instance_ip.set_instance_ip_address('192.168.100.5')
     return instance_ip
@@ -476,3 +484,28 @@ def test_vm_created_vlan_id(vcenter_api_client, vn_model_1, vm_created_update,
         vn_model=vn_model_1,
         vm_model=vm_model
     )
+
+
+def test_contrail_vm(vcenter_api_client, vm_created_update, esxi_api_client,
+                     vnc_api_client, contrail_vm_properties):
+    """ We need ContrailVM only in database. It should not be created in VNC. """
+    vrouter_api_client = Mock()
+    database = Database()
+    vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
+    vmi_service = VirtualMachineInterfaceService(vcenter_api_client, vnc_api_client, database)
+    vrouter_port_service = VRouterPortService(vrouter_api_client, database)
+    esxi_api_client.read_vm_properties.return_value = contrail_vm_properties
+    controller = VmwareController(vm_service, None, vmi_service, vrouter_port_service, [])
+
+    # A new update containing VmCreatedEvent arrives and is being handled by the controller
+    controller.handle_update(vm_created_update)
+
+    # Check if VM Model has been saved in the database
+    assert len(database.get_all_vm_models()) == 1
+
+    # There were no calls to vnc_api
+    vnc_api_client.update_or_create_vm.assert_not_called()
+    vnc_api_client.update_or_create_vmi.assert_not_called()
+
+    # There were no calls to vrouter_api
+    vrouter_api_client.add_port.assert_not_called()
