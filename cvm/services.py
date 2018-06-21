@@ -60,7 +60,8 @@ class VirtualMachineService(Service):
     def _create(self, vmware_vm, vm_properties):
         vm_model = VirtualMachineModel(vmware_vm, vm_properties)
         self._add_property_filter_for_vm(vm_model, ['guest.toolsRunningStatus', 'guest.net'])
-        self._vnc_api_client.update_or_create_vm(vm_model.vnc_vm)
+        if not vm_model.is_contrail_vm:
+            self._vnc_api_client.update_or_create_vm(vm_model.vnc_vm)
         self._database.save(vm_model)
         return vm_model
 
