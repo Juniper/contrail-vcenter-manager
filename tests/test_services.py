@@ -78,7 +78,7 @@ class TestVirtualMachineService(TestCase):
 
         self.assertEqual(old_vm_model, new_vm_model)
         old_vm_model.update.assert_called_once_with(self.vmware_vm, self.vm_properties)
-        self.vnc_client.update_vm.assert_not_called()
+        self.vnc_client.update_or_create_vm.assert_not_called()
 
     def test_sync_vms(self):
         self.esxi_api_client.get_all_vms.return_value = [self.vmware_vm]

@@ -108,3 +108,6 @@ config.yaml
 
 # pytest
 .pytest_cache/
+
+# Sandesh generated files
+cvm/sandesh/
