@@ -620,6 +620,7 @@ class TestPortService(TestCase):
         self.assertEqual(0, self.vrouter_api_client.delete_port.call_count)
         self.assertEqual(0, self.vrouter_api_client.add_port.call_count)
         self.assertEqual(0, self.vrouter_api_client.enable_port.call_count)
+        self.assertEqual([], self.database.ports_to_update)
 
     def test_delete_port(self):
         self.database.ports_to_delete.append('fe71b44d-0654-36aa-9841-ab9b78d628c5')

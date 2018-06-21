@@ -263,12 +263,22 @@ class VRouterPortService(object):
         self._database = database
 
     def sync_ports(self):
+        self._delete_ports()
+        self._update_ports()
+
+    def _delete_ports(self):
         for uuid in self._database.ports_to_delete:
             self._delete_port(uuid)
+            self._database.ports_to_delete.remove(uuid)
 
+    def _delete_port(self, uuid):
+        self._vrouter_api_client.delete_port(uuid)
+
+    def _update_ports(self):
         for vmi_model in self._database.ports_to_update:
             if self._port_needs_an_update(vmi_model):
                 self._update_port(vmi_model)
+            self._database.ports_to_update.remove(vmi_model)
 
     def _port_needs_an_update(self, vmi_model):
         vrouter_port = self._vrouter_api_client.read_port(vmi_model.uuid)
@@ -284,8 +294,3 @@ class VRouterPortService(object):
         self._vrouter_api_client.delete_port(vmi_model.uuid)
         self._vrouter_api_client.add_port(vmi_model)
         self._vrouter_api_client.enable_port(vmi_model.uuid)
-        self._database.ports_to_update.remove(vmi_model)
-
-    def _delete_port(self, uuid):
-        self._vrouter_api_client.delete_port(uuid)
-        self._database.ports_to_delete.remove(uuid)
