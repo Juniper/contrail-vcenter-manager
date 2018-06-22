@@ -49,21 +49,24 @@ class VirtualMachineService(Service):
         vm_properties = self._esxi_api_client.read_vm_properties(vmware_vm)
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
         if vm_model:
-            return self._update(vm_model, vmware_vm, vm_properties)
-        return self._create(vmware_vm, vm_properties)
+            self._update(vm_model, vmware_vm, vm_properties)
+            return
+        self._create(vmware_vm, vm_properties)
 
     def _update(self, vm_model, vmware_vm, vm_properties):
         vm_model.update(vmware_vm, vm_properties)
+        for vmi_model in vm_model.vmi_models:
+            self._database.vmis_to_update.append(vmi_model)
         self._database.save(vm_model)
-        return vm_model
 
     def _create(self, vmware_vm, vm_properties):
         vm_model = VirtualMachineModel(vmware_vm, vm_properties)
+        for vmi_model in vm_model.vmi_models:
+            self._database.vmis_to_update.append(vmi_model)
         self._add_property_filter_for_vm(vm_model, ['guest.toolsRunningStatus', 'guest.net'])
         if not vm_model.is_contrail_vm:
             self._vnc_api_client.update_or_create_vm(vm_model.vnc_vm)
         self._database.save(vm_model)
-        return vm_model
 
     def _add_property_filter_for_vm(self, vm_model, filters):
         property_filter = self._esxi_api_client.add_filter(vm_model.vmware_vm, filters)
@@ -108,9 +111,18 @@ class VirtualMachineService(Service):
         self._vnc_api_client.update_or_create_vm(vm_model.vnc_vm)
         self._database.save(vm_model)
 
-    def update_vm_models_interface(self, vmware_vm):
+    def update_vm_models_interfaces(self, vmware_vm):
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
+        old_vmi_models = {vmi_model.uuid: vmi_model for vmi_model in vm_model.vmi_models}
         vm_model.update_ports()
+        vm_model.update_vmis()
+        new_vmi_models = {vmi_model.uuid: vmi_model for vmi_model in vm_model.vmi_models}
+
+        for uuid, new_vmi_model in new_vmi_models.items():
+            old_vmi_models.pop(uuid, None)
+            self._database.vmis_to_update.append(new_vmi_model)
+
+        self._database.vmis_to_delete += old_vmi_models.values()
 
 
 class VirtualNetworkService(Service):
@@ -135,43 +147,25 @@ class VirtualMachineInterfaceService(Service):
                                                              vcenter_api_client=vcenter_api_client)
 
     def sync_vmis(self):
-        self._create_new_vmis()
+        self.update_vmis()
         self._delete_unused_vmis()
 
-    def _create_new_vmis(self):
-        for vm_model in self._database.get_all_vm_models():
-            self.update_vmis_for_vm_model(vm_model)
+    def update_vmis(self):
+        for vmi_model in self._database.vmis_to_update:
+            if vmi_model.vm_model.is_contrail_vm:
+                continue
+            self.update_vmis_vn(vmi_model)
+            self._database.vmis_to_update.remove(vmi_model)
 
-    def update_vmis_for_vm_model(self, vm_model):
-        if vm_model.is_contrail_vm:
-            return
-
-        existing_vmi_models = {vmi_model.vcenter_port.mac_address: vmi_model
-                               for vmi_model in self._database.get_vmi_models_by_vm_uuid(vm_model.uuid)}
-        for vcenter_port in vm_model.ports:
-            existing_vmi_models.pop(vcenter_port.mac_address, None)
-            self.update_vmis_vn(vm_model.vmware_vm, vcenter_port.mac_address)
-
-        for unused_vmi_model in existing_vmi_models.values():
-            self._delete(unused_vmi_model)
-
-    def update_vmis_vn(self, vmware_vm, mac_address):
-        vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
-        vcenter_port = next(port for port in vm_model.ports if port.mac_address == mac_address)
-        vmi_model = self._database.get_vmi_model_by_uuid(VirtualMachineInterfaceModel.get_uuid(mac_address))
-        vn_model = self._database.get_vn_model_by_key(vcenter_port.portgroup_key)
-        if not vmi_model:
-            vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, vcenter_port)
-            vmi_model.parent = self._project
-            vmi_model.security_group = self._default_security_group
-        if vmi_model.vn_model != vn_model:
-            with self._vcenter_api_client:
-                self._vcenter_api_client.restore_vlan_id(vmi_model.vcenter_port)
-            vmi_model.clear_vlan_id()
-            vmi_model.vn_model = vn_model
-            vmi_model.vcenter_port = vcenter_port
+        for vmi_model in self._database.vmis_to_delete:
             self._delete(vmi_model)
-        self._create_or_update(vmi_model)
+
+    def update_vmis_vn(self, new_vmi_model):
+        old_vmi_model = self._database.get_vmi_model_by_uuid(new_vmi_model.uuid)
+        new_vmi_model.vn_model = self._database.get_vn_model_by_key(new_vmi_model.vcenter_port.portgroup_key)
+        if old_vmi_model and old_vmi_model.vn_model != new_vmi_model.vn_model:
+            self._delete(old_vmi_model)
+        self._create_or_update(new_vmi_model)
 
     def _create_or_update(self, vmi_model):
         with self._vcenter_api_client:
@@ -179,6 +173,8 @@ class VirtualMachineInterfaceService(Service):
             vmi_model.acquire_vlan_id(current_vlan_id)
             if not current_vlan_id:
                 self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
+        vmi_model.parent = self._project
+        vmi_model.security_group = self._default_security_group
         self._vnc_api_client.update_or_create_vmi(vmi_model.to_vnc())
         vmi_model.construct_instance_ip()
         if vmi_model.vnc_instance_ip:
@@ -212,6 +208,9 @@ class VirtualMachineInterfaceService(Service):
             pass
 
     def _delete(self, vmi_model):
+        with self._vcenter_api_client:
+            self._vcenter_api_client.restore_vlan_id(vmi_model.vcenter_port)
+            vmi_model.clear_vlan_id()
         self._delete_from_vnc(vmi_model)
         self._restore_vlan_id(vmi_model)
         self._database.delete_vmi_model(vmi_model.uuid)
