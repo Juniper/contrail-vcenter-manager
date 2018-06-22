@@ -13,6 +13,8 @@ class Database(object):
         self.vm_models = {}
         self.vn_models = {}
         self.vmi_models = {}
+        self.vmis_to_update = []
+        self.vmis_to_delete = []
         self.ports_to_update = []
         self.ports_to_delete = []
 

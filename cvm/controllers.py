@@ -69,8 +69,8 @@ class VmwareController(object):
     def _handle_vm_updated_event(self, event):
         vmware_vm = event.vm.vm
         try:
-            vm_model = self._vm_service.update(vmware_vm)
-            self._vmi_service.update_vmis_for_vm_model(vm_model)
+            self._vm_service.update(vmware_vm)
+            self._vmi_service.update_vmis()
             self._vrouter_port_service.sync_ports()
         except vmodl.fault.ManagedObjectNotFound:
             logger.info('Skipping event for a non-existent VM.')
@@ -141,9 +141,8 @@ class VmReconfiguredHandler(AbstractEventHandler):
             device = device_spec.device
             if isinstance(device, vim.vm.device.VirtualVmxnet3):
                 logger.info('Detected VmReconfiguredEvent with %s device', type(device))
-                mac_address = device.macAddress
-                self._vm_service.update_vm_models_interface(vmware_vm)
-                self._vmi_service.update_vmis_vn(vmware_vm, mac_address)
+                self._vm_service.update_vm_models_interfaces(vmware_vm)
+                self._vmi_service.update_vmis()
                 self._vrouter_port_service.sync_ports()
             else:
                 logger.info('Detected VmReconfiguredEvent with unsupported %s device', type(device))

@@ -84,6 +84,7 @@ class VirtualMachineModel(object):
         self.vrouter_uuid = find_vrouter_uuid(vmware_vm.summary.runtime.host)
         self.property_filter = None
         self.ports = self._read_ports()
+        self.vmi_models = self._construct_interfaces()
         self._vnc_vm = None
 
     def update(self, vmware_vm, vm_properties):
@@ -98,6 +99,9 @@ class VirtualMachineModel(object):
     def update_ports(self):
         self.ports = self._read_ports()
 
+    def update_vmis(self):
+        self.vmi_models = self._construct_interfaces()
+
     def _read_ports(self):
         try:
             return [VCenterPort(device)
@@ -106,6 +110,10 @@ class VirtualMachineModel(object):
         except AttributeError:
             logger.error('Could not read ports for %s.', self.name)
         return None
+
+    def _construct_interfaces(self):
+        return [VirtualMachineInterfaceModel(self, None, port)
+                for port in self.ports]
 
     def destroy_property_filter(self):
         self.property_filter.DestroyPropertyFilter()
