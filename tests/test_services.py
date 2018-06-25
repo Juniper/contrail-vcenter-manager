@@ -36,8 +36,9 @@ class TestVirtualMachineService(TestCase):
         self.vm_service = VirtualMachineService(self.esxi_api_client, self.vnc_client, self.database)
 
     def test_update_new_vm(self):
-        vm_model = self.vm_service.update(self.vmware_vm)
+        self.vm_service.update(self.vmware_vm)
 
+        vm_model = self.database.save.call_args[0][0]
         self.assertIsNotNone(vm_model)
         self.assertEqual(self.vm_properties, vm_model.vm_properties)
         self.assertEqual(self.vmware_vm, vm_model.vmware_vm)
@@ -53,11 +54,12 @@ class TestVirtualMachineService(TestCase):
         )
         self.esxi_api_client.add_filter.return_value = property_filter
 
-        vm_model = self.vm_service.update(self.vmware_vm)
+        self.vm_service.update(self.vmware_vm)
 
         self.esxi_api_client.add_filter.assert_called_once_with(
             self.vmware_vm, ['guest.toolsRunningStatus', 'guest.net']
         )
+        vm_model = self.database.save.call_args[0][0]
         self.assertEqual(property_filter, vm_model.property_filter)
 
     def test_destroy_property_filter(self):
@@ -71,11 +73,12 @@ class TestVirtualMachineService(TestCase):
         vm_model.destroy_property_filter.assert_called_once()
 
     def test_update_existing_vm(self):
-        old_vm_model = Mock()
+        old_vm_model = Mock(vmi_models=[])
         self.database.get_vm_model_by_uuid.return_value = old_vm_model
 
-        new_vm_model = self.vm_service.update(self.vmware_vm)
+        self.vm_service.update(self.vmware_vm)
 
+        new_vm_model = self.database.save.call_args[0][0]
         self.assertEqual(old_vm_model, new_vm_model)
         old_vm_model.update.assert_called_once_with(self.vmware_vm, self.vm_properties)
         self.vnc_client.update_or_create_vm.assert_not_called()
@@ -179,10 +182,11 @@ class TestVirtualMachineInterfaceService(TestCase):
     def test_create_vmis_proper_vm_dpg(self):
         """ A new VMI is being created with proper VM/DPG pair. """
         self.database.save(self.vm_model)
+        self.database.vmis_to_update.append(self.vm_model.vmi_models[0])
         other_vn_model = create_vn_model(name='DPortGroup', key='dportgroup-51', uuid='uuid_2')
         self.database.save(other_vn_model)
 
-        self.vmi_service.update_vmis_for_vm_model(self.vm_model)
+        self.vmi_service.update_vmis()
 
         self.assertEqual(1, len(self.database.get_all_vmi_models()))
         saved_vmi = self.database.get_all_vmi_models()[0]
@@ -195,8 +199,10 @@ class TestVirtualMachineInterfaceService(TestCase):
     def test_no_update_for_no_dpgs(self):
         """ No new VMIs are created for VM not connected to any DPG. """
         self.vm_model.ports = {}
+        self.vm_model.vmi_models = []
+        self.database.save(self.vm_model)
 
-        self.vmi_service.update_vmis_for_vm_model(self.vm_model)
+        self.vmi_service.update_vmis()
 
         self.assertEqual(0, len(self.database.get_all_vmi_models()))
         self.vnc_client.update_or_create_vmi.assert_not_called()
@@ -219,8 +225,12 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.database.save(vmi_model)
         device.backing.port.portgroupKey = 'dportgroup-51'
         self.vm_model.ports[0] = VCenterPort(device)
+        self.vm_model.vmi_models[0] = VirtualMachineInterfaceModel(
+            self.vm_model, None, self.vm_model.ports[0]
+        )
+        self.database.vmis_to_update.append(self.vm_model.vmi_models[0])
 
-        self.vmi_service.update_vmis_for_vm_model(self.vm_model)
+        self.vmi_service.update_vmis()
 
         self.assertEqual(1, len(self.database.get_all_vmi_models()))
         saved_vmi = self.database.get_all_vmi_models()[0]
@@ -230,24 +240,10 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.assertIn(second_vn_model.uuid, [ref['uuid'] for ref in vnc_vmi.get_virtual_network_refs()])
         self.assertIn(saved_vmi, self.database.ports_to_update)
 
-    def test_removes_unused_vmis(self):
-        """ VMIs are deleted when the VM is no longer connected to corresponding DPG. """
-        device = Mock(macAddress='c8:5b:76:53:0f:f5')
-        vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
-                                                 VCenterPort(device))
-        vmi_model.vnc_instance_ip = Mock()
-        self.database.save(vmi_model)
-
-        self.vm_model.ports = {}
-        self.vmi_service.update_vmis_for_vm_model(self.vm_model)
-
-        self.assertFalse(self.database.get_all_vmi_models())
-        self.vnc_client.delete_vmi.assert_called_once_with(
-            VirtualMachineInterfaceModel.get_uuid('c8:5b:76:53:0f:f5'))
-        self.assertIn(vmi_model.uuid, self.database.ports_to_delete)
-
     def test_sync_vmis(self):
         self.database.save(self.vm_model)
+        self.database.save(Mock(vn_model=self.vn_model))
+        self.database.vmis_to_update.append(self.vm_model.vmi_models[0])
         self.vnc_client.get_vmis_by_project.return_value = []
 
         self.vmi_service.sync_vmis()
@@ -256,6 +252,7 @@ class TestVirtualMachineInterfaceService(TestCase):
 
     def test_syncs_one_vmi_once(self):
         self.database.save(self.vm_model)
+        self.database.vmis_to_update.append(self.vm_model.vmi_models[0])
         self.vnc_client.get_vmis_by_project.return_value = []
 
         with patch.object(self.database, 'save') as database_save_mock:
