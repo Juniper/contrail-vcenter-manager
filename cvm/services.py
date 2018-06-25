@@ -280,6 +280,7 @@ class VRouterPortService(object):
         for vmi_model in ports:
             if self._port_needs_an_update(vmi_model):
                 self._update_port(vmi_model)
+            self._set_port_state(vmi_model)
             self._database.ports_to_update.remove(vmi_model)
 
     def _port_needs_an_update(self, vmi_model):
@@ -295,4 +296,9 @@ class VRouterPortService(object):
     def _update_port(self, vmi_model):
         self._vrouter_api_client.delete_port(vmi_model.uuid)
         self._vrouter_api_client.add_port(vmi_model)
-        self._vrouter_api_client.enable_port(vmi_model.uuid)
+
+    def _set_port_state(self, vmi_model):
+        if vmi_model.vm_model.is_powered_on:
+            self._vrouter_api_client.enable_port(vmi_model.uuid)
+        else:
+            self._vrouter_api_client.disable_port(vmi_model.uuid)
