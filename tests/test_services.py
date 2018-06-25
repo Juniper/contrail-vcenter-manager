@@ -617,9 +617,8 @@ class TestPortService(TestCase):
             port_check.return_value = False
             self.port_service.sync_ports()
 
-        self.assertEqual(0, self.vrouter_api_client.delete_port.call_count)
-        self.assertEqual(0, self.vrouter_api_client.add_port.call_count)
-        self.assertEqual(0, self.vrouter_api_client.enable_port.call_count)
+        self.vrouter_api_client.delete_port.assert_not_called()
+        self.vrouter_api_client.add_port.assert_not_called()
         self.assertEqual([], self.database.ports_to_update)
 
     def test_delete_port(self):
@@ -628,3 +627,27 @@ class TestPortService(TestCase):
         self.port_service.sync_ports()
 
         self.vrouter_api_client.delete_port.assert_called_once_with('fe71b44d-0654-36aa-9841-ab9b78d628c5')
+
+    def test_enable_port(self):
+        vmi_model = construct_vmi_model()
+        vmi_model.vm_model.is_powered_on = True
+        self.database.ports_to_update.append(vmi_model)
+
+        with patch('cvm.services.VRouterPortService._port_needs_an_update') as port_check:
+            port_check.return_value = False
+            self.port_service.sync_ports()
+
+        self.vrouter_api_client.enable_port.assert_called_once_with('fe71b44d-0654-36aa-9841-ab9b78d628c5')
+        self.vrouter_api_client.disable_port.assert_not_called()
+
+    def test_disable_port(self):
+        vmi_model = construct_vmi_model()
+        vmi_model.vm_model.is_powered_on = False
+        self.database.ports_to_update.append(vmi_model)
+
+        with patch('cvm.services.VRouterPortService._port_needs_an_update') as port_check:
+            port_check.return_value = False
+            self.port_service.sync_ports()
+
+        self.vrouter_api_client.disable_port.assert_called_once_with('fe71b44d-0654-36aa-9841-ab9b78d628c5')
+        self.vrouter_api_client.enable_port.assert_not_called()

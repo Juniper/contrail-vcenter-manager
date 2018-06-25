@@ -464,6 +464,12 @@ class VRouterAPIClient(object):
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
 
+    def disable_port(self, vmi_uuid):
+        try:
+            self.vrouter_api.disable_port(vmi_uuid)
+        except Exception, e:
+            logger.error('There was a problem with vRouter API Client: %s', e)
+
     def read_port(self, vmi_uuid):
         request_url = '{host}:{port}/port/{uuid}'.format(host=self.vrouter_host,
                                                          port=self.vrouter_port,
