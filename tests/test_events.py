@@ -488,7 +488,7 @@ def test_vm_created_vlan_id(vcenter_api_client, vn_model_1, vm_created_update,
 
 def test_contrail_vm(vcenter_api_client, vm_created_update, esxi_api_client,
                      vnc_api_client, contrail_vm_properties):
-    """ We need ContrailVM only in database. It should not be created in VNC. """
+    """ We don't need ContrailVM model for CVM to operate properly. """
     vrouter_api_client = Mock()
     database = Database()
     vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
@@ -500,8 +500,8 @@ def test_contrail_vm(vcenter_api_client, vm_created_update, esxi_api_client,
     # A new update containing VmCreatedEvent arrives and is being handled by the controller
     controller.handle_update(vm_created_update)
 
-    # Check if VM Model has been saved in the database
-    assert len(database.get_all_vm_models()) == 1
+    # VM model has not been saved in the database
+    assert len(database.get_all_vm_models()) == 0
 
     # There were no calls to vnc_api
     vnc_api_client.update_or_create_vm.assert_not_called()

@@ -1,12 +1,17 @@
 import ipaddress
 import logging
 
-from cvm.constants import VLAN_ID_RANGE_END, VLAN_ID_RANGE_START
+from cvm.constants import (CONTRAIL_VM_NAME, VLAN_ID_RANGE_END,
+                           VLAN_ID_RANGE_START)
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel, VlanIdPool)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def is_contrail_vm_name(name):
+    return CONTRAIL_VM_NAME in name
 
 
 class Service(object):
@@ -47,6 +52,8 @@ class VirtualMachineService(Service):
 
     def update(self, vmware_vm):
         vm_properties = self._esxi_api_client.read_vm_properties(vmware_vm)
+        if is_contrail_vm_name(vm_properties['name']):
+            return
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
         if vm_model:
             self._update(vm_model, vmware_vm, vm_properties)
@@ -64,8 +71,7 @@ class VirtualMachineService(Service):
         for vmi_model in vm_model.vmi_models:
             self._database.vmis_to_update.append(vmi_model)
         self._add_property_filter_for_vm(vm_model, ['guest.toolsRunningStatus', 'guest.net'])
-        if not vm_model.is_contrail_vm:
-            self._vnc_api_client.update_or_create_vm(vm_model.vnc_vm)
+        self._vnc_api_client.update_or_create_vm(vm_model.vnc_vm)
         self._database.save(vm_model)
 
     def _add_property_filter_for_vm(self, vm_model, filters):
@@ -153,8 +159,6 @@ class VirtualMachineInterfaceService(Service):
     def update_vmis(self):
         vmis_to_update = [vmi_model for vmi_model in self._database.vmis_to_update]
         for vmi_model in vmis_to_update:
-            if vmi_model.vm_model.is_contrail_vm:
-                continue
             self.update_vmis_vn(vmi_model)
             self._database.vmis_to_update.remove(vmi_model)
 

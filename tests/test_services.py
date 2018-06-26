@@ -13,7 +13,7 @@ from cvm.models import (VCenterPort, VirtualMachineInterfaceModel,
                         VirtualMachineModel, VirtualNetworkModel)
 from cvm.services import (Service, VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService,
-                          VRouterPortService)
+                          VRouterPortService, is_contrail_vm_name)
 from tests.utils import (create_dpg_mock, create_property_filter,
                          create_vcenter_client_mock, create_vmware_vm_mock,
                          create_vn_model, create_vnc_client_mock)
@@ -648,3 +648,15 @@ class TestPortService(TestCase):
 
         self.vrouter_api_client.disable_port.assert_called_once_with('fe71b44d-0654-36aa-9841-ab9b78d628c5')
         self.vrouter_api_client.enable_port.assert_not_called()
+
+
+class TestContrailVM(TestCase):
+    def test_contrail_vm_name(self):
+        contrail_name = 'ContrailVM-datacenter-0.0.0.0'
+        regular_name = 'VM1'
+
+        contrail_result = is_contrail_vm_name(contrail_name)
+        regular_result = is_contrail_vm_name(regular_name)
+
+        self.assertTrue(contrail_result)
+        self.assertFalse(regular_result)

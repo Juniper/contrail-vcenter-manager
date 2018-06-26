@@ -1,16 +1,12 @@
 #!/usr/bin/env python
 
 import argparse
+import socket
 import sys
 
 import gevent
-from gevent import monkey; monkey.patch_all()
-import socket
-
 import yaml
-
-from pysandesh.sandesh_base import Sandesh, SandeshLevel
-from cvm.sandesh.vcenter_manager.ttypes import *
+from pysandesh.sandesh_base import Sandesh
 
 import cvm.constants as const
 from cvm.clients import (ESXiAPIClient, VCenterAPIClient, VNCAPIClient,
@@ -19,10 +15,12 @@ from cvm.controllers import (VmReconfiguredHandler, VmRemovedHandler,
                              VmRenamedHandler, VmwareController)
 from cvm.database import Database
 from cvm.monitors import VMwareMonitor
+from cvm.sandesh_handler import SandeshHandler
 from cvm.services import (VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService,
                           VRouterPortService)
-from cvm.sandesh_handler import SandeshHandler
+
+gevent.monkey.patch_all()
 
 
 def load_config(config_file):
