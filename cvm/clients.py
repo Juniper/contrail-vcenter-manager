@@ -80,9 +80,6 @@ class VSphereAPIClient(object):
         self._si = None
         self._datacenter = None
 
-    def _get_datacenter(self, name):
-        return self._get_object([vim.Datacenter], name)
-
     def _get_object(self, vimtype, name):
         """
          Get the vsphere object associated with a given text name
@@ -107,7 +104,7 @@ class ESXiAPIClient(VSphereAPIClient):
             port=esxi_cfg.get('port'),
             preferredApiVersions=esxi_cfg.get('preferred_api_versions')
         )
-        self._datacenter = self._get_datacenter(esxi_cfg.get('datacenter'))
+        self._datacenter = self._si.content.rootFolder.childEntity[0]
         atexit.register(Disconnect, self._si)
         self._property_collector = self._si.content.propertyCollector
         self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
@@ -203,6 +200,9 @@ class VCenterAPIClient(VSphereAPIClient):
     def _get_dvs_by_uuid(self, uuid):
         dvs_manager = self._si.content.dvSwitchManager
         return dvs_manager.QueryDvsByUuid(uuid)
+
+    def _get_datacenter(self, name):
+        return self._get_object([vim.Datacenter], name)
 
     @staticmethod
     def enable_vlan_override(portgroup):
