@@ -127,10 +127,6 @@ class VirtualMachineModel(object):
         return self.vm_properties.get('name')
 
     @property
-    def is_contrail_vm(self):
-        return 'ContrailVM' in self.name
-
-    @property
     def is_powered_on(self):
         return self.vm_properties.get('runtime.powerState') == 'poweredOn'
 
