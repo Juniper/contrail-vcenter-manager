@@ -1,5 +1,5 @@
-from abc import abstractmethod, ABCMeta
 import logging
+from abc import ABCMeta, abstractmethod
 
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 
@@ -17,8 +17,8 @@ class VmwareController(object):
 
     def initialize_database(self):
         logger.info('Initializing database...')
-        self._vn_service.sync_vns()
         self._vm_service.get_vms_from_vmware()
+        self._vn_service.update_vns()
         self._vmi_service.sync_vmis()
         self._vm_service.delete_unused_vms_in_vnc()
         self._vrouter_port_service.sync_ports()
@@ -70,6 +70,7 @@ class VmwareController(object):
         vmware_vm = event.vm.vm
         try:
             self._vm_service.update(vmware_vm)
+            self._vn_service.update_vns()
             self._vmi_service.update_vmis()
             self._vrouter_port_service.sync_ports()
         except vmodl.fault.ManagedObjectNotFound:
@@ -129,8 +130,9 @@ class VmRenamedHandler(AbstractEventHandler):
 class VmReconfiguredHandler(AbstractEventHandler):
     EVENTS = (vim.event.VmReconfiguredEvent,)
 
-    def __init__(self, vm_service, vmi_service, vrouter_port_service):
+    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service):
         self._vm_service = vm_service
+        self._vn_service = vn_service
         self._vmi_service = vmi_service
         self._vrouter_port_service = vrouter_port_service
 
@@ -142,6 +144,7 @@ class VmReconfiguredHandler(AbstractEventHandler):
             if isinstance(device, vim.vm.device.VirtualVmxnet3):
                 logger.info('Detected VmReconfiguredEvent with %s device', type(device))
                 self._vm_service.update_vm_models_interfaces(vmware_vm)
+                self._vn_service.update_vns()
                 self._vmi_service.update_vmis()
                 self._vrouter_port_service.sync_ports()
             else:
