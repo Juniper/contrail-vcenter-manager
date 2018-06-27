@@ -168,9 +168,9 @@ class VCenterAPIClient(VSphereAPIClient):
     def __exit__(self, *args):
         Disconnect(self._si)
 
-    def get_dpg_by_name(self, name):
+    def get_dpg_by_key(self, key):
         for dpg in self._datacenter.network:
-            if dpg.name == name and isinstance(dpg, vim.dvs.DistributedVirtualPortgroup):
+            if isinstance(dpg, vim.dvs.DistributedVirtualPortgroup) and dpg.key == key:
                 return dpg
         return None
 
@@ -299,12 +299,12 @@ class VNCAPIClient(object):
             logger.error('Virtual Machine Interface not found %s', uuid)
             return None
 
-    def get_vns_by_project(self, project):
-        vns = self.vnc_lib.virtual_networks_list(parent_id=project.uuid).get('virtual-networks')
-        return [self._read_vn(vn['fq_name']) for vn in vns]
-
-    def _read_vn(self, fq_name):
-        return self.vnc_lib.virtual_network_read(fq_name)
+    def read_vn(self, fq_name):
+        try:
+            return self.vnc_lib.virtual_network_read(fq_name)
+        except NoIdError:
+            logger.error('Not found VN with fq_name: %s', str(fq_name))
+        return None
 
     def read_or_create_project(self):
         try:
