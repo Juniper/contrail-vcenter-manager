@@ -18,6 +18,7 @@ class VmwareController(object):
     def initialize_database(self):
         logger.info('Initializing database...')
         with self._lock:
+            self._vmi_service.sync_vlan_ids()
             self._vm_service.get_vms_from_vmware()
             self._vn_service.update_vns()
             self._vmi_service.sync_vmis()
