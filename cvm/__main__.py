@@ -86,6 +86,7 @@ def run_introspect(args, database):
 def main(args):
     database = Database()
     vmware_monitor = build_monitor(args.config_file, database)
+    vmware_monitor.sync()
     run_introspect(args, database)
     greenlets = [
         gevent.spawn(vmware_monitor.start()),
