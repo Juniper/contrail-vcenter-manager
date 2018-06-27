@@ -71,12 +71,16 @@ class SandeshConverter(object):
         )
 
     def convert_vmi(self, vmi_model):
+        if vmi_model.vnc_instance_ip is not None:
+            ip_address = vmi_model.vnc_instance_ip.instance_ip_address
+        else:
+            ip_address = 'unset'
         return VirtualMachineInterfaceData(
             uuid=vmi_model.uuid,
             display_name=vmi_model.display_name,
             mac_address=vmi_model.vcenter_port.mac_address,
             port_key=vmi_model.vcenter_port.port_key,
-            ip_address=vmi_model.ip_address,
+            ip_address=ip_address,
             vm_uuid=vmi_model.vm_model.uuid,
             vn_uuid=vmi_model.vn_model.uuid,
             vlan_id=vmi_model.vcenter_port.vlan_id,
