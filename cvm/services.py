@@ -2,7 +2,8 @@ import ipaddress
 import logging
 
 from cvm.constants import (CONTRAIL_VM_NAME, VLAN_ID_RANGE_END,
-                           VLAN_ID_RANGE_START)
+                           VLAN_ID_RANGE_START, VNC_ROOT_DOMAIN,
+                           VNC_VCENTER_PROJECT)
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel, VlanIdPool)
 
@@ -136,14 +137,25 @@ class VirtualNetworkService(Service):
         super(VirtualNetworkService, self).__init__(vnc_api_client, database)
         self._vcenter_api_client = vcenter_api_client
 
-    def sync_vns(self):
-        with self._vcenter_api_client:
-            for vn in self._vnc_api_client.get_vns_by_project(self._project):
-                dpg = self._vcenter_api_client.get_dpg_by_name(vn.name)
-                if vn and dpg:
-                    vn_model = VirtualNetworkModel(dpg, vn, VlanIdPool(VLAN_ID_RANGE_START, VLAN_ID_RANGE_END))
+    def update_vns(self):
+        for vmi_model in self._database.vmis_to_update:
+            portgroup_key = vmi_model.vcenter_port.portgroup_key
+            if self._database.get_vn_model_by_key(portgroup_key) is not None:
+                continue
+            logger.info('Fetching new portgroup for key: %s', portgroup_key)
+            with self._vcenter_api_client:
+                dpg = self._vcenter_api_client.get_dpg_by_key(portgroup_key)
+                fq_name = [VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, dpg.name]
+                vnc_vn = self._vnc_api_client.read_vn(fq_name)
+                if dpg and vnc_vn:
+                    logger.info('Fetched new portgroup key: %s name: %s', dpg.key, vnc_vn.name)
+                    vn_model = VirtualNetworkModel(dpg, vnc_vn,
+                                                   VlanIdPool(VLAN_ID_RANGE_START, VLAN_ID_RANGE_END))
                     self._vcenter_api_client.enable_vlan_override(vn_model.vmware_vn)
                     self._database.save(vn_model)
+                    logger.info('Successfully saved new portgroup key: %s name: %s', dpg.key, vnc_vn.name)
+                else:
+                    logger.error('Unable to fetch new portgroup for key: %s', portgroup_key)
 
 
 class VirtualMachineInterfaceService(Service):
