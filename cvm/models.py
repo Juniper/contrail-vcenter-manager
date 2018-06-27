@@ -148,16 +148,13 @@ class VirtualMachineModel(object):
 
 
 class VirtualNetworkModel(object):
-    def __init__(self, vmware_vn, vnc_vn, vlan_id_pool):
+    def __init__(self, vmware_vn, vnc_vn):
         self.vmware_vn = vmware_vn
         self.key = vmware_vn.key
         self.dvs = vmware_vn.config.distributedVirtualSwitch
         self.dvs_name = vmware_vn.config.distributedVirtualSwitch.name
         self.default_port_config = vmware_vn.config.defaultPortConfig
         self.vnc_vn = vnc_vn
-        self.vlan_id = None
-        self.vlan_id_pool = vlan_id_pool
-        self._sync_vlan_ids()
 
     @property
     def name(self):
@@ -177,19 +174,6 @@ class VirtualNetworkModel(object):
 
     def subnet_info_is_set(self):
         return self.vnc_vn.get_network_ipam_refs()
-
-    def _sync_vlan_ids(self):
-        criteria = vim.dvs.PortCriteria()
-        criteria.portgroupKey = self.key
-        criteria.inside = True
-
-        vlans = [port.config.setting.vlan for port in self.dvs.FetchDVPorts(criteria)]
-
-        for vlan in vlans:
-            try:
-                self.vlan_id_pool.reserve(vlan.vlanId)
-            except TypeError:
-                pass
 
 
 class VirtualMachineInterfaceModel(object):
@@ -259,16 +243,6 @@ class VirtualMachineInterfaceModel(object):
         )
         self.vnc_instance_ip = instance_ip
 
-    def acquire_vlan_id(self, vlan_id):
-        if not vlan_id:
-            self.vcenter_port.vlan_id = self.vn_model.vlan_id_pool.get_available()
-            return
-        self.vcenter_port.vlan_id = vlan_id
-
-    def clear_vlan_id(self):
-        self.vn_model.vlan_id_pool.free(self.vcenter_port.vlan_id)
-        self.vcenter_port.vlan_id = None
-
     def _find_ip_address(self):
         if self.vn_model.vnc_vn.get_external_ipam() and self.vm_model.tools_running:
             return find_virtual_machine_ip_address(self.vm_model.vmware_vm, self.vn_model.name)
@@ -310,5 +284,4 @@ class VCenterPort(object):
         self.mac_address = device.macAddress
         self.port_key = device.backing.port.portKey
         self.portgroup_key = device.backing.port.portgroupKey
-        self.dvs_uuid = device.backing.port.switchUuid
         self.vlan_id = None
