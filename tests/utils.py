@@ -41,7 +41,6 @@ def create_vcenter_client_mock():
     vcenter_client = Mock()
     vcenter_client.__enter__ = Mock()
     vcenter_client.__exit__ = Mock()
-    vcenter_client.get_ip_pool_for_dpg.return_value = None
     return vcenter_client
 
 
@@ -67,10 +66,15 @@ def create_vn_model(name, key, uuid=None):
     vnc_vn.name = name
     vnc_vn.uuid = uuid or 'uuid'
     vmware_dpg = create_dpg_mock(name=name, key=key)
-    return VirtualNetworkModel(vmware_dpg, vnc_vn, VlanIdPool(0, 100))
+    return VirtualNetworkModel(vmware_dpg, vnc_vn)
 
 
 def create_port_mock(vlan_id):
     port = Mock()
     port.config.setting.vlan.vlanId = vlan_id
     return port
+
+
+def reserve_vlan_ids(vlan_id_pool, vlan_ids):
+    for vlan_id in vlan_ids:
+        vlan_id_pool.reserve(vlan_id)

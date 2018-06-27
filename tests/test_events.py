@@ -13,6 +13,7 @@ from cvm.models import VirtualNetworkModel, VlanIdPool
 from cvm.services import (VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService,
                           VRouterPortService)
+from tests.utils import reserve_vlan_ids
 
 
 def create_ipam():
@@ -36,7 +37,7 @@ def create_vn_model(vnc_vn, portgroup_key, portgroup_name):
     dvs = Mock()
     dpg.config.distributedVirtualSwitch = dvs
     dvs.FetchDVPorts.return_value = []
-    return VirtualNetworkModel(dpg, vnc_vn, VlanIdPool(0, 100))
+    return VirtualNetworkModel(dpg, vnc_vn)
 
 
 @pytest.fixture()
@@ -168,6 +169,12 @@ def esxi_api_client(vm_properties_1):
     return esxi_client
 
 
+@pytest.fixture()
+def vlan_id_pool():
+    vlan_pool = VlanIdPool(0, 100)
+    return vlan_pool
+
+
 def assert_vmi_model_state(vmi_model, mac_address=None, ip_address=None,
                            vlan_id=None, display_name=None, vn_model=None, vm_model=None):
     if mac_address is not None:
@@ -212,18 +219,14 @@ def assert_vnc_vm_state(vnc_vm, uuid=None, name=None):
         assert vnc_vm.name == name
 
 
-def reserve_vlan_ids(vn_model, vlan_ids):
-    for vlan_id in vlan_ids:
-        vn_model.vlan_id_pool.reserve(vlan_id)
-
-
 def test_vm_created(vcenter_api_client, vn_model_1, vm_created_update,
-                    esxi_api_client, vnc_api_client, vnc_vn_1):
+                    esxi_api_client, vnc_api_client, vnc_vn_1, vlan_id_pool):
     vrouter_api_client = Mock()
     database = Database()
     vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
     vn_service = VirtualNetworkService(esxi_api_client, vnc_api_client, database)
-    vmi_service = VirtualMachineInterfaceService(vcenter_api_client, vnc_api_client, database)
+    vmi_service = VirtualMachineInterfaceService(vcenter_api_client, vnc_api_client,
+                                                 database, vlan_id_pool=vlan_id_pool)
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
     controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [])
 
@@ -233,7 +236,7 @@ def test_vm_created(vcenter_api_client, vn_model_1, vm_created_update,
 
     # Some vlan ids should be already reserved
     vcenter_api_client.get_vlan_id.return_value = None
-    reserve_vlan_ids(vn_model_1, [0, 1])
+    reserve_vlan_ids(vlan_id_pool, [0, 1])
 
     # A new update containing VmCreatedEvent arrives and is being handled by the controller
     controller.handle_update(vm_created_update)
@@ -283,7 +286,7 @@ def test_vm_created(vcenter_api_client, vn_model_1, vm_created_update,
 
 
 def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
-                    esxi_api_client, vm_renamed_update,
+                    esxi_api_client, vm_renamed_update, vlan_id_pool,
                     vm_properties_renamed, vnc_api_client):
     vrouter_api_client = Mock()
     database = Database()
@@ -292,7 +295,8 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
     vmi_service = VirtualMachineInterfaceService(
         vcenter_api_client,
         vnc_api_client,
-        database
+        database,
+        vlan_id_pool=vlan_id_pool
     )
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
     vm_renamed_handler = VmRenamedHandler(vm_service, vmi_service, vrouter_port_service)
@@ -304,7 +308,7 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
 
     # Some vlan ids should be already reserved
     vcenter_api_client.get_vlan_id.return_value = None
-    reserve_vlan_ids(vn_model_1, [0, 1])
+    reserve_vlan_ids(vlan_id_pool, [0, 1])
 
     # A new update containing VmCreatedEvent arrives and is being handled by the controller
     controller.handle_update(vm_created_update)
@@ -359,7 +363,7 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
 
 def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_update,
                          esxi_api_client, vm_reconfigure_update, vnc_api_client, vnc_vn_2,
-                         vmware_vm_1):
+                         vmware_vm_1, vlan_id_pool):
     vrouter_api_client = Mock()
     database = Database()
     vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
@@ -367,7 +371,8 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
     vmi_service = VirtualMachineInterfaceService(
         vcenter_api_client,
         vnc_api_client,
-        database
+        database,
+        vlan_id_pool=vlan_id_pool
     )
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
     vm_reconfigure_handler = VmReconfiguredHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
@@ -380,13 +385,10 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
 
     # Some vlan ids should be already reserved
     vcenter_api_client.get_vlan_id.return_value = None
-    reserve_vlan_ids(vn_model_1, [0, 1])
-    reserve_vlan_ids(vn_model_2, [0, 1, 2, 3])
+    reserve_vlan_ids(vlan_id_pool, [0, 1, 2, 3])
 
     # A new update containing VmCreatedEvent arrives and is being handled by the controller
     controller.handle_update(vm_created_update)
-    old_vmi_model = database.get_vmi_models_by_vm_uuid('12345678-1234-1234-1234-123456789012')[0]
-    old_instance_ip = old_vmi_model.vnc_instance_ip
 
     # After a portgroup is changed, the port key is also changed
     vmware_vm_1.config.hardware.device[0].backing.port.portgroupKey = 'dvportgroup-2'
@@ -431,21 +433,21 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
     assert vcenter_api_client.set_vlan_id.call_count == 2
     vcenter_port = vcenter_api_client.set_vlan_id.call_args[0][0]
     assert vcenter_port.port_key == '11'
-    assert vcenter_port.vlan_id == 4
+    assert vcenter_port.vlan_id == 5
 
     # Check inner VMI model state
     assert_vmi_model_state(
         vmi_model,
         mac_address='11:11:11:11:11:11',
         ip_address='192.168.100.5',
-        vlan_id=4,
+        vlan_id=5,
         display_name='vmi-DPG2-VM1',
         vn_model=vn_model_2
     )
 
 
 def test_vm_created_vlan_id(vcenter_api_client, vn_model_1, vm_created_update,
-                            esxi_api_client, vnc_api_client):
+                            esxi_api_client, vnc_api_client, vlan_id_pool):
     """
     What happens when the created interface is already using an overriden VLAN ID?
     We should keep it, not removing old/adding new VLAN ID, since it breaks the connectivity
@@ -455,7 +457,12 @@ def test_vm_created_vlan_id(vcenter_api_client, vn_model_1, vm_created_update,
     database = Database()
     vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
     vn_service = VirtualNetworkService(esxi_api_client, vnc_api_client, database)
-    vmi_service = VirtualMachineInterfaceService(vcenter_api_client, vnc_api_client, database)
+    vmi_service = VirtualMachineInterfaceService(
+        vcenter_api_client,
+        vnc_api_client,
+        database,
+        vlan_id_pool=vlan_id_pool
+    )
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
     controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [])
 
@@ -464,7 +471,7 @@ def test_vm_created_vlan_id(vcenter_api_client, vn_model_1, vm_created_update,
     database.save(vn_model_1)
 
     # Some vlan ids should be already reserved
-    reserve_vlan_ids(vn_model_1, [0, 1, 5])
+    reserve_vlan_ids(vlan_id_pool, [0, 1, 5])
 
     # When we ask vCenter for the VLAN ID it turns out that the VLAN ID has already been overridden
     vcenter_api_client.get_vlan_id.return_value = 5
@@ -473,7 +480,7 @@ def test_vm_created_vlan_id(vcenter_api_client, vn_model_1, vm_created_update,
     controller.handle_update(vm_created_update)
 
     # Check if VLAN ID has not been changed
-    assert vcenter_api_client.set_vlan_id.call_count == 0
+    vcenter_api_client.set_vlan_id.assert_not_called()
 
     # Check inner VMI model state
     vm_model = database.get_vm_model_by_uuid('12345678-1234-1234-1234-123456789012')
@@ -505,7 +512,7 @@ def test_contrail_vm(vcenter_api_client, vm_created_update, esxi_api_client,
     controller.handle_update(vm_created_update)
 
     # VM model has not been saved in the database
-    assert len(database.get_all_vm_models()) == 0
+    assert not database.get_all_vm_models()
 
     # There were no calls to vnc_api
     vnc_api_client.update_or_create_vm.assert_not_called()
