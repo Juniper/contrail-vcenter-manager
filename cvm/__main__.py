@@ -14,6 +14,7 @@ from cvm.clients import (ESXiAPIClient, VCenterAPIClient, VNCAPIClient,
 from cvm.controllers import (VmReconfiguredHandler, VmRemovedHandler,
                              VmRenamedHandler, VmwareController)
 from cvm.database import Database
+from cvm.models import VlanIdPool
 from cvm.monitors import VMwareMonitor
 from cvm.sandesh_handler import SandeshHandler
 from cvm.services import (VirtualMachineInterfaceService,
@@ -61,7 +62,8 @@ def build_monitor(config_file, lock, database):
         vcenter_api_client=vcenter_api_client,
         vnc_api_client=vnc_api_client,
         database=database,
-        esxi_api_client=esxi_api_client
+        esxi_api_client=esxi_api_client,
+        vlan_id_pool=VlanIdPool(const.VLAN_ID_RANGE_START, const.VLAN_ID_RANGE_END)
     )
     vrouter_port_service = VRouterPortService(
         vrouter_api_client=VRouterAPIClient(),

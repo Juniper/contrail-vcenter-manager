@@ -161,7 +161,7 @@ class TestVirtualMachineInterfaceModel(TestCase):
         vmware_vn = create_dpg_mock(name='VM Network', key='123')
         vnc_vn = Mock(uuid='d376b6b4-943d-4599-862f-d852fd6ba425')
         vnc_vn.name = 'VM Network'
-        self.vn_model = VirtualNetworkModel(vmware_vn, vnc_vn, VlanIdPool(0, 100))
+        self.vn_model = VirtualNetworkModel(vmware_vn, vnc_vn)
         self.vcenter_port = VCenterPort(device)
 
     def test_to_vnc(self):
@@ -245,40 +245,3 @@ class TestVlanIdPool(TestCase):
         next_id = self.vlan_id_pool.get_available()
 
         self.assertEqual(1, next_id)
-
-
-class TestVirtualNetworkVlans(TestCase):
-    def setUp(self):
-        self.dpg = create_dpg_mock(name='DPG1', key='dvportgroup-20')
-        self.ports = []
-        self.dvs = Mock()
-        self.dpg.config.distributedVirtualSwitch = self.dvs
-        self.dvs.FetchDVPorts.side_effect = self._check_criteria
-
-    def test_sync_vlan_ids(self):
-        self.ports.append(create_port_mock(1))
-        self.ports.append(create_port_mock(2))
-
-        vn_model = VirtualNetworkModel(self.dpg, None, VlanIdPool(0, 100))
-
-        self.assertNotIn(1, vn_model.vlan_id_pool._available_ids)
-        self.assertNotIn(2, vn_model.vlan_id_pool._available_ids)
-
-    def test_vmi_vlan_id_aquisition(self):
-        self.ports.append(create_port_mock(0))
-        self.ports.append(create_port_mock(1))
-        vn_model = VirtualNetworkModel(self.dpg, None, VlanIdPool(0, 100))
-        vm_model = VirtualMachineModel(*create_vmware_vm_mock([self.dpg]))
-        device = Mock()
-        device.backing.port.portgroupKey = 'dvportgroup-20'
-        vcenter_port = VCenterPort(device)
-        vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, vcenter_port)
-
-        vmi_model.acquire_vlan_id(None)
-
-        self.assertEqual(2, vmi_model.vcenter_port.vlan_id)
-
-    def _check_criteria(self, criteria):
-        if criteria.portgroupKey == 'dvportgroup-20' and criteria.inside:
-            return self.ports
-        return None
