@@ -3,8 +3,10 @@ class VMwareMonitor(object):
         self._esxi_api_client = esxi_api_client
         self._controller = vmware_controller
 
-    def start(self):
+    def sync(self):
         self._controller.initialize_database()
+
+    def start(self):
         while True:
             update_set = self._esxi_api_client.wait_for_updates()
             if update_set:

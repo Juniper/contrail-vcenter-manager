@@ -23,7 +23,9 @@ class SandeshHandler(object):
             vm_models = [self._database.get_vm_model_by_name(request.name)]
         else:
             vm_models = self._database.get_all_vm_models()
-        virtual_machines_data = [self._converter.convert_vm(vm_model) for vm_model in vm_models]
+        virtual_machines_data = [
+            self._converter.convert_vm(vm_model) for vm_model in vm_models if vm_model is not None
+        ]
         response = VirtualMachineResponse(virtual_machines_data)
         response.response(request.context())
 
@@ -34,7 +36,9 @@ class SandeshHandler(object):
             vn_models = [self._database.get_vn_model_by_key(request.key)]
         else:
             vn_models = self._database.get_all_vn_models()
-        virtual_networks_data = [self._converter.convert_vn(vn_model) for vn_model in vn_models]
+        virtual_networks_data = [
+            self._converter.convert_vn(vn_model) for vn_model in vn_models if vn_model is not None
+        ]
         response = VirtualNetworkResponse(virtual_networks_data)
         response.response(request.context())
 
@@ -43,8 +47,10 @@ class SandeshHandler(object):
             vmi_models = [self._database.get_vmi_model_by_uuid(request.uuid)]
         else:
             vmi_models = self._database.get_all_vmi_models()
-        virtual_interfaces_data = [self._converter.convert_vmi(vmi_model) for vmi_model in vmi_models]
-        response = VirtualNetworkResponse(virtual_interfaces_data)
+        virtual_interfaces_data = [
+            self._converter.convert_vmi(vmi_model) for vmi_model in vmi_models if vmi_model is not None
+        ]
+        response = VirtualMachineInterfaceResponse(virtual_interfaces_data)
         response.response(request.context())
 
 
