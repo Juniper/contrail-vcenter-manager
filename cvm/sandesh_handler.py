@@ -1,9 +1,12 @@
-from cvm.sandesh.vcenter_manager.ttypes import (
-    VirtualMachineData, VirtualMachineInterfaceData, VirtualNetworkData,
-    VirtualMachineRequest, VirtualMachineResponse,
-    VirtualNetworkRequest, VirtualNetworkResponse,
-    VirtualMachineInterfaceRequest, VirtualMachineInterfaceResponse
-)
+from cvm.sandesh.vcenter_manager.ttypes import (VirtualMachineData,
+                                                VirtualMachineInterfaceData,
+                                                VirtualMachineInterfaceRequest,
+                                                VirtualMachineInterfaceResponse,
+                                                VirtualMachineRequest,
+                                                VirtualMachineResponse,
+                                                VirtualNetworkData,
+                                                VirtualNetworkRequest,
+                                                VirtualNetworkResponse)
 
 
 class SandeshHandler(object):

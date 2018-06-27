@@ -222,9 +222,10 @@ def test_vm_created(vcenter_api_client, vn_model_1, vm_created_update,
     vrouter_api_client = Mock()
     database = Database()
     vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
+    vn_service = VirtualNetworkService(esxi_api_client, vnc_api_client, database)
     vmi_service = VirtualMachineInterfaceService(vcenter_api_client, vnc_api_client, database)
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
-    controller = VmwareController(vm_service, None, vmi_service, vrouter_port_service, [])
+    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [])
 
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
@@ -287,6 +288,7 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
     vrouter_api_client = Mock()
     database = Database()
     vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
+    vn_service = VirtualNetworkService(esxi_api_client, vnc_api_client, database)
     vmi_service = VirtualMachineInterfaceService(
         vcenter_api_client,
         vnc_api_client,
@@ -294,7 +296,7 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
     )
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
     vm_renamed_handler = VmRenamedHandler(vm_service, vmi_service, vrouter_port_service)
-    controller = VmwareController(vm_service, None, vmi_service, vrouter_port_service, [vm_renamed_handler])
+    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [vm_renamed_handler])
 
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
@@ -368,7 +370,7 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
         database
     )
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
-    vm_reconfigure_handler = VmReconfiguredHandler(vm_service, vmi_service, vrouter_port_service)
+    vm_reconfigure_handler = VmReconfiguredHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
     controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [vm_reconfigure_handler])
 
     # Virtual Networks are already created for us and after synchronization,
@@ -452,9 +454,10 @@ def test_vm_created_vlan_id(vcenter_api_client, vn_model_1, vm_created_update,
     vrouter_api_client = Mock()
     database = Database()
     vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
+    vn_service = VirtualNetworkService(esxi_api_client, vnc_api_client, database)
     vmi_service = VirtualMachineInterfaceService(vcenter_api_client, vnc_api_client, database)
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
-    controller = VmwareController(vm_service, None, vmi_service, vrouter_port_service, [])
+    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [])
 
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
@@ -492,10 +495,11 @@ def test_contrail_vm(vcenter_api_client, vm_created_update, esxi_api_client,
     vrouter_api_client = Mock()
     database = Database()
     vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
+    vn_service = VirtualNetworkService(esxi_api_client, vnc_api_client, database)
     vmi_service = VirtualMachineInterfaceService(vcenter_api_client, vnc_api_client, database)
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
     esxi_api_client.read_vm_properties.return_value = contrail_vm_properties
-    controller = VmwareController(vm_service, None, vmi_service, vrouter_port_service, [])
+    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [])
 
     # A new update containing VmCreatedEvent arrives and is being handled by the controller
     controller.handle_update(vm_created_update)
