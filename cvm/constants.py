@@ -34,3 +34,5 @@ CONTRAIL_NETWORK = 'VM-PG'
 
 VLAN_ID_RANGE_START = 7
 VLAN_ID_RANGE_END = 100
+
+LOG_FILE = '/var/log/contrail/contrail-vcenter-manager.log'

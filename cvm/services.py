@@ -6,7 +6,6 @@ from cvm.constants import (CONTRAIL_VM_NAME, VLAN_ID_RANGE_END,
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel, VlanIdPool)
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
