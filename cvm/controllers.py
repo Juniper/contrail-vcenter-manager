@@ -86,6 +86,7 @@ class VmwareController(object):
         logger.info('Handling NicInfo update.')
         for nic_info in nic_infos:
             self._vmi_service.update_nic(nic_info)
+        self._vrouter_port_service.sync_ports()
 
 
 class AbstractEventHandler(object):
