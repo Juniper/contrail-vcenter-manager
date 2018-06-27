@@ -16,7 +16,6 @@ from cvm.constants import (VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_PROJECT)
 from cvm.models import find_vrouter_uuid
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

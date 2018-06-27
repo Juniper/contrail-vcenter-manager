@@ -1,9 +1,8 @@
-from abc import abstractmethod, ABCMeta
 import logging
+from abc import ABCMeta, abstractmethod
 
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

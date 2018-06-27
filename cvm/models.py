@@ -11,7 +11,6 @@ from vnc_api.vnc_api import (IdPermsType, InstanceIp, KeyValuePair,
 from cvm.constants import (CONTRAIL_VM_NAME, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_PROJECT)
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 ID_PERMS = IdPermsType(creator='vcenter-manager',
