@@ -3,8 +3,8 @@ from unittest import TestCase
 from mock import Mock
 
 from cvm.database import Database
-from cvm.models import (VirtualMachineInterfaceModel)
-from tests.utils import create_vn_model, create_vm_model
+from cvm.models import VirtualMachineInterfaceModel
+from tests.utils import create_vm_model, create_vn_model
 
 
 class TestFindVirtualMachineIpAddress(TestCase):

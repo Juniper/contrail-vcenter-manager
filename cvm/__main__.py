@@ -6,7 +6,6 @@ import sys
 
 import gevent
 import yaml
-from pysandesh.sandesh_base import Sandesh
 
 import cvm.constants as const
 from cvm.clients import (ESXiAPIClient, VCenterAPIClient, VNCAPIClient,
@@ -19,6 +18,7 @@ from cvm.sandesh_handler import SandeshHandler
 from cvm.services import (VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService,
                           VRouterPortService)
+from pysandesh.sandesh_base import Sandesh
 
 gevent.monkey.patch_all()
 
@@ -67,10 +67,12 @@ def build_monitor(config_file, database):
         database=database
     )
     vm_renamed_handler = VmRenamedHandler(vm_service, vmi_service, vrouter_port_service)
-    vm_reconfigured_handler = VmReconfiguredHandler(vm_service, vmi_service, vrouter_port_service)
+    vm_reconfigured_handler = VmReconfiguredHandler(vm_service, vn_service,
+                                                    vmi_service, vrouter_port_service)
     vm_removed_handler = VmRemovedHandler(vm_service, vmi_service, vrouter_port_service)
     handlers = [vm_renamed_handler, vm_reconfigured_handler, vm_removed_handler]
-    vmware_controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, handlers)
+    vmware_controller = VmwareController(vm_service, vn_service,
+                                         vmi_service, vrouter_port_service, handlers)
     return VMwareMonitor(esxi_api_client, vmware_controller)
 
 

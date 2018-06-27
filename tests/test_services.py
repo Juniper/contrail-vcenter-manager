@@ -161,6 +161,50 @@ class TestVirtualMachineService(TestCase):
         self.database.save.assert_called_once_with(vm_model)
 
 
+class TestVirtualNetworkService(TestCase):
+
+    def setUp(self):
+        self.database = Database()
+        self.vnc_client = create_vnc_client_mock()
+        self.vcenter_client = create_vcenter_client_mock()
+        self.vn_service = VirtualNetworkService(self.vcenter_client,
+                                                self.vnc_client, self.database)
+
+    def test_update_vns_no_vns(self):
+        self.database.vmis_to_update = []
+
+        self.vn_service.update_vns()
+
+        assert len(self.database.vn_models) == 0
+        self.vcenter_client.get_dpg_by_key.assert_not_called()
+        self.vnc_client.read_vn.assert_not_called()
+
+    def test_update_vns(self):
+        vmi_model = Mock()
+        vmi_model.vcenter_port.portgroup_key = 'dvportgroup-62'
+        self.database.vmis_to_update = [vmi_model]
+
+        dpg_mock = create_dpg_mock(key='dvportgroup-62', name='network_name')
+        self.vcenter_client.get_dpg_by_key.return_value = dpg_mock
+
+        vnc_vn_mock = Mock()
+        self.vnc_client.read_vn.return_value = vnc_vn_mock
+
+        self.vn_service.update_vns()
+
+        vn_model = self.database.get_vn_model_by_key('dvportgroup-62')
+        assert vn_model is not None
+        assert vn_model.vnc_vn == vnc_vn_mock
+        assert vn_model.vmware_vn == dpg_mock
+        assert vn_model.key == 'dvportgroup-62'
+
+        self.vcenter_client.get_dpg_by_key.called_once_with('dvportgroup-62')
+        self.vcenter_client.enable_vlan_override.called_once_with(dpg_mock)
+
+        fq_name = [VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, 'network_name']
+        self.vnc_client.read_vn.called_once_with(fq_name)
+
+
 class TestVirtualMachineInterfaceService(TestCase):
 
     def setUp(self):
@@ -316,38 +360,6 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.assertEqual(0, self.vnc_client.create_and_read_instance_ip.call_count)
         self.vnc_client.update_or_create_vmi.assert_called_once()
         self.assertIn(vmi_model, self.database.ports_to_update)
-
-
-class TestVirtualNetworkService(TestCase):
-
-    def setUp(self):
-        self.vcenter_api_client = create_vcenter_client_mock()
-        self.vnc_api_client = create_vnc_client_mock()
-        self.database = Database()
-        self.vn_service = VirtualNetworkService(self.vcenter_api_client,
-                                                self.vnc_api_client, self.database)
-
-    def test_sync_no_vns(self):
-        """ Syncing when there's no VNC VNs doesn't save anything to the database. """
-        self.vnc_api_client.get_all_vns.return_value = None
-
-        self.vn_service.sync_vns()
-
-        self.assertFalse(self.database.vn_models)
-
-    def test_sync_vns(self):
-        first_vnc_vn = vnc_api.VirtualNetwork('VM Portgroup')
-        second_vnc_vn = vnc_api.VirtualNetwork(VirtualNetworkModel.get_uuid('DPortgroup'))
-        self.vnc_api_client.get_vns_by_project.return_value = [first_vnc_vn, second_vnc_vn]
-
-        first_vmware_dpg = create_dpg_mock(name='VM Portgroup', key='dportgroup-50')
-        second_vmware_dpg = create_dpg_mock(name='DPortgroup', key='dportgroup-51')
-        self.vcenter_api_client.get_dpg_by_name.side_effect = [first_vmware_dpg, second_vmware_dpg]
-
-        self.vn_service.sync_vns()
-
-        self.assertEqual(first_vnc_vn, self.database.get_vn_model_by_key('dportgroup-50').vnc_vn)
-        self.assertEqual(second_vnc_vn, self.database.get_vn_model_by_key('dportgroup-51').vnc_vn)
 
 
 class TestVMIInstanceIp(TestCase):
