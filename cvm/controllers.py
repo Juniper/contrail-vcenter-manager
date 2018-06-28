@@ -7,30 +7,33 @@ logger = logging.getLogger(__name__)
 
 
 class VmwareController(object):
-    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service, handlers):
+    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service, handlers, lock):
         self._vm_service = vm_service
         self._vn_service = vn_service
         self._vmi_service = vmi_service
         self._vrouter_port_service = vrouter_port_service
         self._handlers = handlers
+        self._lock = lock
 
     def initialize_database(self):
         logger.info('Initializing database...')
-        self._vm_service.get_vms_from_vmware()
-        self._vn_service.update_vns()
-        self._vmi_service.sync_vmis()
-        self._vm_service.delete_unused_vms_in_vnc()
-        self._vrouter_port_service.sync_ports()
+        with self._lock:
+            self._vm_service.get_vms_from_vmware()
+            self._vn_service.update_vns()
+            self._vmi_service.sync_vmis()
+            self._vm_service.delete_unused_vms_in_vnc()
+            self._vrouter_port_service.sync_ports()
 
     def handle_update(self, update_set):
         logger.info('Handling ESXi update.')
-        for handler in self._handlers:
-            handler.handle_update(update_set)
+        with self._lock:
+            for handler in self._handlers:
+                handler.handle_update(update_set)
 
-        for property_filter_update in update_set.filterSet:
-            for object_update in property_filter_update.objectSet:
-                for property_change in object_update.changeSet:
-                    self._handle_change(object_update.obj, property_change)
+            for property_filter_update in update_set.filterSet:
+                for object_update in property_filter_update.objectSet:
+                    for property_change in object_update.changeSet:
+                        self._handle_change(object_update.obj, property_change)
 
     def _handle_change(self, obj, property_change):
         name = getattr(property_change, 'name', None)
