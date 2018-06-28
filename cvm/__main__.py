@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import logging
 import socket
 import sys
 
@@ -83,6 +84,9 @@ def run_introspect(args, database):
     sandesh.init_generator('cvm', socket.gethostname(),
                            'contrail-vcenter-manager', '0', [],
                            'cvm_context', args.introspect_port, ['cvm'])
+    sandesh.sandesh_logger().set_logger_params(
+        sandesh.logger(), True, 'SYS_INFO', const.LOG_FILE, False, None
+    )
 
 
 def main(args):
@@ -108,3 +112,7 @@ if __name__ == '__main__':
         sys.exit(0)
     except KeyboardInterrupt:
         sys.exit(0)
+    except Exception:
+        logger = logging.getLogger('cvm')
+        logger.critical('', exc_info=True)
+        raise
