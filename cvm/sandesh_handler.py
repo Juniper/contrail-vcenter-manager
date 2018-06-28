@@ -10,8 +10,9 @@ from cvm.sandesh.vcenter_manager.ttypes import (VirtualMachineData,
 
 
 class SandeshHandler(object):
-    def __init__(self, database):
+    def __init__(self, database, lock):
         self._database = database
+        self._lock = lock
         self._converter = SandeshConverter(self._database)
 
     def bind_handlers(self):
@@ -20,39 +21,42 @@ class SandeshHandler(object):
         VirtualMachineInterfaceRequest.handle_request = self.handle_virtual_machine_interface_request
 
     def handle_virtual_machine_request(self, request):
-        if request.uuid is not None:
-            vm_models = [self._database.get_vm_model_by_uuid(request.uuid)]
-        elif request.name is not None:
-            vm_models = [self._database.get_vm_model_by_name(request.name)]
-        else:
-            vm_models = self._database.get_all_vm_models()
-        virtual_machines_data = [
-            self._converter.convert_vm(vm_model) for vm_model in vm_models if vm_model is not None
-        ]
+        with self._lock:
+            if request.uuid is not None:
+                vm_models = [self._database.get_vm_model_by_uuid(request.uuid)]
+            elif request.name is not None:
+                vm_models = [self._database.get_vm_model_by_name(request.name)]
+            else:
+                vm_models = self._database.get_all_vm_models()
+            virtual_machines_data = [
+                self._converter.convert_vm(vm_model) for vm_model in vm_models if vm_model is not None
+            ]
         response = VirtualMachineResponse(virtual_machines_data)
         response.response(request.context())
 
     def handle_virtual_network_request(self, request):
-        if request.uuid is not None:
-            vn_models = [self._database.get_vn_model_by_uuid(request.uuid)]
-        elif request.key is not None:
-            vn_models = [self._database.get_vn_model_by_key(request.key)]
-        else:
-            vn_models = self._database.get_all_vn_models()
-        virtual_networks_data = [
-            self._converter.convert_vn(vn_model) for vn_model in vn_models if vn_model is not None
-        ]
+        with self._lock:
+            if request.uuid is not None:
+                vn_models = [self._database.get_vn_model_by_uuid(request.uuid)]
+            elif request.key is not None:
+                vn_models = [self._database.get_vn_model_by_key(request.key)]
+            else:
+                vn_models = self._database.get_all_vn_models()
+            virtual_networks_data = [
+                self._converter.convert_vn(vn_model) for vn_model in vn_models if vn_model is not None
+            ]
         response = VirtualNetworkResponse(virtual_networks_data)
         response.response(request.context())
 
     def handle_virtual_machine_interface_request(self, request):
-        if request.uuid is not None:
-            vmi_models = [self._database.get_vmi_model_by_uuid(request.uuid)]
-        else:
-            vmi_models = self._database.get_all_vmi_models()
-        virtual_interfaces_data = [
-            self._converter.convert_vmi(vmi_model) for vmi_model in vmi_models if vmi_model is not None
-        ]
+        with self._lock:
+            if request.uuid is not None:
+                vmi_models = [self._database.get_vmi_model_by_uuid(request.uuid)]
+            else:
+                vmi_models = self._database.get_all_vmi_models()
+            virtual_interfaces_data = [
+                self._converter.convert_vmi(vmi_model) for vmi_model in vmi_models if vmi_model is not None
+            ]
         response = VirtualMachineInterfaceResponse(virtual_interfaces_data)
         response.response(request.context())
 

@@ -33,7 +33,7 @@ def load_config(config_file):
     return esxi_cfg, vcenter_cfg, vnc_cfg
 
 
-def build_monitor(config_file, database):
+def build_monitor(config_file, lock, database):
     esxi_cfg, vcenter_cfg, vnc_cfg = load_config(config_file)
 
     esxi_api_client = ESXiAPIClient(esxi_cfg)
@@ -73,13 +73,13 @@ def build_monitor(config_file, database):
     vm_removed_handler = VmRemovedHandler(vm_service, vmi_service, vrouter_port_service)
     handlers = [vm_renamed_handler, vm_reconfigured_handler, vm_removed_handler]
     vmware_controller = VmwareController(vm_service, vn_service,
-                                         vmi_service, vrouter_port_service, handlers)
+                                         vmi_service, vrouter_port_service, handlers, lock)
     return VMwareMonitor(esxi_api_client, vmware_controller)
 
 
-def run_introspect(args, database):
+def run_introspect(args, database, lock):
     sandesh = Sandesh()
-    sandesh_handler = SandeshHandler(database)
+    sandesh_handler = SandeshHandler(database, lock)
     sandesh_handler.bind_handlers()
     sandesh.init_generator('cvm', socket.gethostname(),
                            'contrail-vcenter-manager', '0', [],
@@ -91,9 +91,10 @@ def run_introspect(args, database):
 
 def main(args):
     database = Database()
-    vmware_monitor = build_monitor(args.config_file, database)
+    lock = gevent.lock.BoundedSemaphore()
+    vmware_monitor = build_monitor(args.config_file, lock, database)
+    run_introspect(args, database, lock)
     vmware_monitor.sync()
-    run_introspect(args, database)
     greenlets = [
         gevent.spawn(vmware_monitor.start()),
     ]
