@@ -65,15 +65,6 @@ def make_pg_config_vlan_override(portgroup):
     return pg_config_spec
 
 
-def fetch_port_from_dvs(dvs, port_key):
-    criteria = vim.dvs.PortCriteria()
-    criteria.portKey = port_key
-    try:
-        return next(port for port in dvs.FetchDVPorts(criteria))
-    except StopIteration:
-        return None
-
-
 class VSphereAPIClient(object):
     def __init__(self):
         self._si = None
@@ -143,7 +134,9 @@ class ESXiAPIClient(VSphereAPIClient):
         options = vmodl.query.PropertyCollector.RetrieveOptions()
         object_set = self._property_collector.RetrievePropertiesEx([filter_spec], options=options).objects
         prop_set = object_set[0].propSet
-        return {prop.name: prop.val for prop in prop_set}
+        properties = {prop.name: prop.val for prop in prop_set}
+        logger.info('Read from ESXi API %s properties: %s', vmware_vm.name, properties)
+        return properties
 
     def read_vrouter_uuid(self):
         host = self._datacenter.hostFolder.childEntity[0].host[0]
@@ -154,6 +147,7 @@ class VCenterAPIClient(VSphereAPIClient):
     def __init__(self, vcenter_cfg):
         super(VCenterAPIClient, self).__init__()
         self._vcenter_cfg = vcenter_cfg
+        self._dvs = None
 
     def __enter__(self):
         self._si = SmartConnectNoSSL(
@@ -164,6 +158,7 @@ class VCenterAPIClient(VSphereAPIClient):
             preferredApiVersions=self._vcenter_cfg.get('preferred_api_versions')
         )
         self._datacenter = self._get_datacenter(self._vcenter_cfg.get('datacenter'))
+        self._dvs = self._get_object([vim.dvs.VmwareDistributedVirtualSwitch], self._vcenter_cfg.get('dvswitch'))
 
     def __exit__(self, *args):
         Disconnect(self._si)
@@ -175,26 +170,32 @@ class VCenterAPIClient(VSphereAPIClient):
         return None
 
     def set_vlan_id(self, vcenter_port):
-        dvs = self._get_dvs_by_uuid(vcenter_port.dvs_uuid)
-        dv_port = fetch_port_from_dvs(dvs, vcenter_port.port_key)
+        dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
         if not dv_port:
             return
         dv_port_spec = make_dv_port_spec(dv_port, vcenter_port.vlan_id)
-        logger.info('Setting VLAN ID of port %s to %d', vcenter_port.port_key, vcenter_port.vlan_id)
-        dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
+        logger.info('Setting vCenter VLAN ID of port %s to %d', vcenter_port.port_key, vcenter_port.vlan_id)
+        self._dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
 
     def get_vlan_id(self, vcenter_port):
-        dvs = self._get_dvs_by_uuid(vcenter_port.dvs_uuid)
-        dv_port = fetch_port_from_dvs(dvs, vcenter_port.port_key)
+        logger.info('Reading VLAN ID of port %s', vcenter_port.port_key)
+        dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
         if not dv_port.config.setting.vlan.inherited:
-            return dv_port.config.setting.vlan.vlanId
+            vlan_id = dv_port.config.setting.vlan.vlanId
+            logger.info('Port: %s VLAN ID: %s', vcenter_port.port_key, vlan_id)
+            return vlan_id
         return None
 
     def restore_vlan_id(self, vcenter_port):
-        dvs = self._get_dvs_by_uuid(vcenter_port.dvs_uuid)
-        dv_port = fetch_port_from_dvs(dvs, vcenter_port.port_key)
+        logger.info('Restoring VLAN ID of port %s to inherited value', vcenter_port.port_key)
+        dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
         dv_port_config_spec = make_dv_port_spec(dv_port)
-        dvs.ReconfigureDVPort_Task(port=[dv_port_config_spec])
+        self._dvs.ReconfigureDVPort_Task(port=[dv_port_config_spec])
+
+    def get_reserved_vlan_ids(self):
+        logger.info('Retrieving reserved VLAN IDs')
+        return [port.config.setting.vlan.vlanId for port in self._dvs.FetchDVPorts()
+                if isinstance(port.config.setting.vlan, vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec)]
 
     def _get_dvs_by_uuid(self, uuid):
         dvs_manager = self._si.content.dvSwitchManager
@@ -203,10 +204,19 @@ class VCenterAPIClient(VSphereAPIClient):
     def _get_datacenter(self, name):
         return self._get_object([vim.Datacenter], name)
 
+    def _fetch_port_from_dvs(self, port_key):
+        criteria = vim.dvs.PortCriteria()
+        criteria.portKey = port_key
+        try:
+            return next(port for port in self._dvs.FetchDVPorts(criteria))
+        except StopIteration:
+            return None
+
     @staticmethod
     def enable_vlan_override(portgroup):
         pg_config_spec = make_pg_config_vlan_override(portgroup)
         portgroup.ReconfigureDVPortgroup_Task(pg_config_spec)
+        logger.info('Enabled vCenter portgroup %s vlan override', portgroup.name)
 
 
 class VNCAPIClient(object):
@@ -225,29 +235,31 @@ class VNCAPIClient(object):
         self.id_perms.set_enable(True)
 
     def delete_vm(self, uuid):
+        logger.info('Attempting to delete Virtual Machine %s from VNC...', uuid)
         vm = self.read_vm(uuid)
         for vmi_ref in vm.get_virtual_machine_interface_back_refs() or []:
             self.delete_vmi(vmi_ref.get('uuid'))
         try:
             self.vnc_lib.virtual_machine_delete(id=uuid)
-            logger.info('Virtual Machine removed: %s', uuid)
+            logger.info('Virtual Machine %s removed from VNC', uuid)
         except NoIdError:
-            logger.error('Virtual Machine not found: %s', uuid)
+            logger.error('Virtual Machine %s not found in VNC. Unable to delete', uuid)
 
     def update_or_create_vm(self, vnc_vm):
         try:
+            logger.info('Attempting to update Virtual Machine %s in VNC', vnc_vm.name)
             self._update_vm(vnc_vm)
         except NoIdError:
-            logger.info('Virtual Machine not found - creating: %s', vnc_vm.name)
+            logger.info('Virtual Machine %s not found in VNC - creating', vnc_vm.name)
             self._create_vm(vnc_vm)
 
     def _update_vm(self, vnc_vm):
         self.vnc_lib.virtual_machine_update(vnc_vm)
-        logger.info('Virtual Machine updated: %s', vnc_vm.name)
+        logger.info('Virtual Machine %s updated in VNC', vnc_vm.name)
 
     def _create_vm(self, vnc_vm):
         self.vnc_lib.virtual_machine_create(vnc_vm)
-        logger.info('Virtual Machine created: %s', vnc_vm.name)
+        logger.info('Virtual Machine %s created in VNC', vnc_vm.name)
 
     def get_all_vms(self):
         vms = self.vnc_lib.virtual_machines_list().get('virtual-machines')
@@ -258,18 +270,19 @@ class VNCAPIClient(object):
 
     def update_or_create_vmi(self, vnc_vmi):
         try:
+            logger.info('Attempting to update Virtual Machine Interface %s in VNC', vnc_vmi.name)
             self._update_vmi(vnc_vmi)
         except NoIdError:
-            logger.info('Virtual Machine Interface not found - creating: %s', vnc_vmi.name)
+            logger.info('Virtual Machine Interface %s not found in VNC - creating', vnc_vmi.name)
             self._create_vmi(vnc_vmi)
 
     def _update_vmi(self, vnc_vmi):
         self.vnc_lib.virtual_machine_interface_update(vnc_vmi)
-        logger.info('Virtual Machine Interface updated: %s', vnc_vmi.name)
+        logger.info('Virtual Machine Interface %s updated in VNC', vnc_vmi.name)
 
     def _create_vmi(self, vmi):
         self.vnc_lib.virtual_machine_interface_create(vmi)
-        logger.info('Virtual Machine Interface created: %s', vmi.display_name)
+        logger.info('Virtual Machine Interface %s created in VNC', vmi.display_name)
 
     def delete_vmi(self, uuid):
         vmi = self.read_vmi(uuid)
@@ -278,9 +291,9 @@ class VNCAPIClient(object):
 
         try:
             self.vnc_lib.virtual_machine_interface_delete(id=uuid)
-            logger.info('Virtual Machine Interface removed: %s', uuid)
+            logger.info('Virtual Machine Interface %s removed from VNC', uuid)
         except NoIdError:
-            logger.error('Virtual Machine Interface not found: %s', uuid)
+            logger.error('Virtual Machine Interface %s not found in VNC. Unable to delete', uuid)
 
     def get_vmis_by_project(self, project):
         vmis = self.vnc_lib.virtual_machine_interfaces_list(parent_id=project.uuid).get('virtual-machine-interfaces')
@@ -296,14 +309,14 @@ class VNCAPIClient(object):
         try:
             return self.vnc_lib.virtual_machine_interface_read(id=uuid)
         except NoIdError:
-            logger.error('Virtual Machine Interface not found %s', uuid)
+            logger.error('Virtual Machine Interface %s not found in VNC', uuid)
             return None
 
     def read_vn(self, fq_name):
         try:
             return self.vnc_lib.virtual_network_read(fq_name)
         except NoIdError:
-            logger.error('Not found VN with fq_name: %s', str(fq_name))
+            logger.error('Not found VN with fq_name: %s in VNC', str(fq_name))
         return None
 
     def read_or_create_project(self):
@@ -434,19 +447,26 @@ class VRouterAPIClient(object):
     def add_port(self, vmi_model):
         """ Add port to VRouter Agent. """
         try:
-            self.vrouter_api.add_port(
+            ip_address = vmi_model.ip_address
+            if vmi_model.vnc_instance_ip:
+                ip_address = vmi_model.vnc_instance_ip.instance_ip_address
+
+            parameters = dict(
                 vm_uuid_str=vmi_model.vm_model.uuid,
                 vif_uuid_str=vmi_model.uuid,
                 interface_name=vmi_model.uuid,
                 mac_address=vmi_model.vcenter_port.mac_address,
-                ip_address=vmi_model.vnc_instance_ip.instance_ip_address,
+                ip_address=ip_address,
                 vn_id=vmi_model.vn_model.uuid,
                 display_name=vmi_model.vm_model.name,
                 vlan=vmi_model.vcenter_port.vlan_id,
                 rx_vlan=vmi_model.vcenter_port.vlan_id,
                 port_type=2,
-                vm_project_id=vmi_model.vn_model.vnc_vn.parent_uuid,
+                # vrouter-port-control accepts only project's uuid without dashes
+                vm_project_id=vmi_model.vn_model.vnc_vn.parent_uuid.replace('-', ''),
             )
+            self.vrouter_api.add_port(**parameters)
+            logger.info('Added port to vRouter with parameters: %s', parameters)
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
 
@@ -454,18 +474,21 @@ class VRouterAPIClient(object):
         """ Delete port from VRouter Agent. """
         try:
             self.vrouter_api.delete_port(vmi_uuid)
+            logger.info('Removed port from vRouter with uuid: %s', vmi_uuid)
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
 
     def enable_port(self, vmi_uuid):
         try:
             self.vrouter_api.enable_port(vmi_uuid)
+            logger.info('Enabled vRouter port with uuid: %s', vmi_uuid)
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
 
     def disable_port(self, vmi_uuid):
         try:
             self.vrouter_api.disable_port(vmi_uuid)
+            logger.info('Disabled vRouter port with uuid: %s', vmi_uuid)
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
 
@@ -475,6 +498,9 @@ class VRouterAPIClient(object):
                                                          uuid=vmi_uuid)
         response = requests.get(request_url)
         if response.status_code != requests.codes.ok:
+            logger.error('Unable to read vRouter port with uuid: %s', vmi_uuid)
             return None
 
-        return json.loads(response.content)
+        port_properties = json.loads(response.content)
+        logger.info('Read vRouter port with uuid: %s, port properties: %s', vmi_uuid, port_properties)
+        return port_properties

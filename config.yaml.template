@@ -13,6 +13,7 @@ vcenter:
   preferred_api_versions:
     - vim.version.version10
   datacenter:
+  dvswitch:
 vnc:
   api_server_host:
   api_server_port: 8082

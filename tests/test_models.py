@@ -5,96 +5,8 @@ from mock import Mock, patch
 from vnc_api.vnc_api import Project, SecurityGroup
 
 from cvm.models import (ID_PERMS, VCenterPort, VirtualMachineInterfaceModel,
-                        VirtualMachineModel, VirtualNetworkModel, VlanIdPool,
-                        find_virtual_machine_ip_address)
-from tests.utils import (create_dpg_mock, create_port_mock,
-                         create_vmware_vm_mock)
-
-
-class TestFindVirtualMachineIpAddress(TestCase):
-    def setUp(self):
-        self.vm = Mock()
-
-    def test_standard_case(self):
-        desired_portgroup, expected_ip = 'second', '10.7.0.60'
-        self.vm.guest.net = [
-            self._create_mock(
-                network='first',
-                ipAddress=['1.1.1.1', 'fe80::257:56ff:fe90:d265'],
-            ),
-            self._create_mock(
-                network=desired_portgroup,
-                ipAddress=['fe80::250:56ff:fe90:d265', expected_ip],
-            ),
-        ]
-
-        result = find_virtual_machine_ip_address(self.vm, desired_portgroup)
-
-        self.assertEqual(result, expected_ip)
-
-    def test_unmatched_portgroup_name(self):
-        desired_portgroup, expected_ip = 'non-existent', None
-        self.vm.guest.net = [
-            self._create_mock(
-                network='first',
-                ipAddress=['1.1.1.1', 'fe80::257:56ff:fe90:d265'],
-            ),
-            self._create_mock(
-                network='second',
-                ipAddress=['fe80::250:56ff:fe90:d265', expected_ip],
-
-            ),
-        ]
-
-        result = find_virtual_machine_ip_address(self.vm, desired_portgroup)
-
-        self.assertEqual(result, expected_ip)
-
-    def test_unmatched_ip_type(self):
-        desired_portgroup, expected_ip = 'second', None
-        self.vm.guest.net = [
-            self._create_mock(
-                network='first',
-                ipAddress=['1.1.1.1', 'fe80::257:56ff:fe90:d265'],
-            ),
-            self._create_mock(
-                network=desired_portgroup,
-                ipAddress=['fe80::250:56ff:fe90:d265'],
-            ),
-        ]
-
-        result = find_virtual_machine_ip_address(self.vm, desired_portgroup)
-
-        self.assertEqual(result, expected_ip)
-
-    def test_missing_field(self):
-        desired_portgroup, expected_ip = 'irrelevant', None
-        self.vm.guest = None
-
-        result = find_virtual_machine_ip_address(self.vm, desired_portgroup)
-
-        self.assertEqual(result, expected_ip)
-
-    def test_missing_field_in_network(self):
-        desired_portgroup, expected_ip = 'second', '10.7.0.60'
-        self.vm.guest.net = [
-            None,
-            self._create_mock(
-                network=desired_portgroup,
-                ipAddress=['fe80::250:56ff:fe90:d265', expected_ip],
-            ),
-        ]
-
-        result = find_virtual_machine_ip_address(self.vm, desired_portgroup)
-
-        self.assertEqual(result, expected_ip)
-
-    @staticmethod
-    def _create_mock(**kwargs):
-        mock = Mock()
-        for kwarg in kwargs:
-            setattr(mock, kwarg, kwargs[kwarg])
-        return mock
+                        VirtualMachineModel, VirtualNetworkModel, VlanIdPool)
+from tests.utils import create_dpg_mock, create_vmware_vm_mock
 
 
 class TestVirtualMachineModel(TestCase):
@@ -143,6 +55,26 @@ class TestVirtualMachineModel(TestCase):
         self.assertFalse(vm_model.is_powered_on)
         self.assertFalse(vm_model.tools_running)
 
+    def test_update_power_state(self):
+        vm_model = VirtualMachineModel(self.vmware_vm, self.vm_properties)
+
+        result = vm_model.update_power_state('poweredOff')
+        result2 = vm_model.update_power_state('poweredOff')
+
+        self.assertTrue(result)
+        self.assertFalse(result2)
+        self.assertFalse(vm_model.is_powered_on)
+
+    def test_update_tools_running(self):
+        vm_model = VirtualMachineModel(self.vmware_vm, self.vm_properties)
+
+        result = vm_model.update_tools_running_status('guestToolsNotRunning')
+        result2 = vm_model.update_tools_running_status('guestToolsNotRunning')
+
+        self.assertTrue(result)
+        self.assertFalse(result2)
+        self.assertFalse(vm_model.tools_running)
+
 
 class TestVirtualMachineInterfaceModel(TestCase):
     def setUp(self):
@@ -161,7 +93,7 @@ class TestVirtualMachineInterfaceModel(TestCase):
         vmware_vn = create_dpg_mock(name='VM Network', key='123')
         vnc_vn = Mock(uuid='d376b6b4-943d-4599-862f-d852fd6ba425')
         vnc_vn.name = 'VM Network'
-        self.vn_model = VirtualNetworkModel(vmware_vn, vnc_vn, VlanIdPool(0, 100))
+        self.vn_model = VirtualNetworkModel(vmware_vn, vnc_vn)
         self.vcenter_port = VCenterPort(device)
 
     def test_to_vnc(self):
@@ -169,7 +101,7 @@ class TestVirtualMachineInterfaceModel(TestCase):
         vmi_model.parent = self.project
         vmi_model.security_group = self.security_group
 
-        vnc_vmi = vmi_model.to_vnc()
+        vnc_vmi = vmi_model.vnc_vmi
 
         self.assertEqual(vnc_vmi.name, vmi_model.uuid)
         self.assertEqual(vnc_vmi.parent_name, self.project.name)
@@ -179,12 +111,11 @@ class TestVirtualMachineInterfaceModel(TestCase):
                          [vmi_model.vcenter_port.mac_address])
         self.assertEqual(vnc_vmi.get_id_perms(), ID_PERMS)
 
-    @patch('cvm.models.find_vm_mac_address')
-    @patch('cvm.models.VirtualMachineInterfaceModel.to_vnc')
+    @patch('cvm.models.VirtualMachineInterfaceModel.vnc_vmi')
     @patch('cvm.models.VirtualMachineInterfaceModel._should_construct_instance_ip')
-    def test_construct_instance_ip(self, should_construct, to_vnc_mock, _):
+    def test_construct_instance_ip(self, should_construct, vnc_vmi):
         should_construct.return_value = True
-        to_vnc_mock.return_value.uuid = 'd376b6b4-943d-4599-862f-d852fd6ba425'
+        vnc_vmi.uuid = 'd376b6b4-943d-4599-862f-d852fd6ba425'
 
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, self.vcenter_port)
         vmi_model.construct_instance_ip()
@@ -197,6 +128,16 @@ class TestVirtualMachineInterfaceModel(TestCase):
                            'ip-' + self.vn_model.name + '-' + self.vm_model.name)),
             instance_ip.uuid
         )
+
+    def test_update_ip_address(self):
+        vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, self.vcenter_port)
+
+        result = vmi_model.update_ip_address('192.168.100.5')
+        result2 = vmi_model.update_ip_address('192.168.100.5')
+
+        self.assertEqual('192.168.100.5', vmi_model.ip_address)
+        self.assertTrue(result)
+        self.assertFalse(result2)
 
 
 class TestVlanIdPool(TestCase):
@@ -245,40 +186,3 @@ class TestVlanIdPool(TestCase):
         next_id = self.vlan_id_pool.get_available()
 
         self.assertEqual(1, next_id)
-
-
-class TestVirtualNetworkVlans(TestCase):
-    def setUp(self):
-        self.dpg = create_dpg_mock(name='DPG1', key='dvportgroup-20')
-        self.ports = []
-        self.dvs = Mock()
-        self.dpg.config.distributedVirtualSwitch = self.dvs
-        self.dvs.FetchDVPorts.side_effect = self._check_criteria
-
-    def test_sync_vlan_ids(self):
-        self.ports.append(create_port_mock(1))
-        self.ports.append(create_port_mock(2))
-
-        vn_model = VirtualNetworkModel(self.dpg, None, VlanIdPool(0, 100))
-
-        self.assertNotIn(1, vn_model.vlan_id_pool._available_ids)
-        self.assertNotIn(2, vn_model.vlan_id_pool._available_ids)
-
-    def test_vmi_vlan_id_aquisition(self):
-        self.ports.append(create_port_mock(0))
-        self.ports.append(create_port_mock(1))
-        vn_model = VirtualNetworkModel(self.dpg, None, VlanIdPool(0, 100))
-        vm_model = VirtualMachineModel(*create_vmware_vm_mock([self.dpg]))
-        device = Mock()
-        device.backing.port.portgroupKey = 'dvportgroup-20'
-        vcenter_port = VCenterPort(device)
-        vmi_model = VirtualMachineInterfaceModel(vm_model, vn_model, vcenter_port)
-
-        vmi_model.acquire_vlan_id(None)
-
-        self.assertEqual(2, vmi_model.vcenter_port.vlan_id)
-
-    def _check_criteria(self, criteria):
-        if criteria.portgroupKey == 'dvportgroup-20' and criteria.inside:
-            return self.ports
-        return None

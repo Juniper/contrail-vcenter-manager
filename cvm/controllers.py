@@ -7,17 +7,18 @@ logger = logging.getLogger(__name__)
 
 
 class VmwareController(object):
-    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service, handlers, lock):
+    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service, update_handler, lock):
         self._vm_service = vm_service
         self._vn_service = vn_service
         self._vmi_service = vmi_service
         self._vrouter_port_service = vrouter_port_service
-        self._handlers = handlers
+        self._update_handler = update_handler
         self._lock = lock
 
     def initialize_database(self):
         logger.info('Initializing database...')
         with self._lock:
+            self._vmi_service.sync_vlan_ids()
             self._vm_service.get_vms_from_vmware()
             self._vn_service.update_vns()
             self._vmi_service.sync_vmis()
@@ -25,50 +26,73 @@ class VmwareController(object):
             self._vrouter_port_service.sync_ports()
 
     def handle_update(self, update_set):
-        logger.info('Handling ESXi update.')
         with self._lock:
-            for handler in self._handlers:
-                handler.handle_update(update_set)
+            self._update_handler.handle_update(update_set)
 
-            for property_filter_update in update_set.filterSet:
-                for object_update in property_filter_update.objectSet:
-                    for property_change in object_update.changeSet:
-                        self._handle_change(object_update.obj, property_change)
 
-    def _handle_change(self, obj, property_change):
+class UpdateHandler(object):
+    def __init__(self, handlers):
+        self._handlers = handlers
+
+    def handle_update(self, update_set):
+        for property_filter_update in update_set.filterSet:
+            for object_update in property_filter_update.objectSet:
+                for property_change in object_update.changeSet:
+                    for handler in self._handlers:
+                        handler.handle_change(object_update.obj, property_change)
+
+
+class AbstractChangeHandler(object):
+    __metaclass__ = ABCMeta
+
+    def handle_change(self, obj, property_change):
         name = getattr(property_change, 'name', None)
         value = getattr(property_change, 'val', None)
         if value:
-            if name.startswith('latestPage'):
-                if isinstance(value, vim.event.Event):
-                    self._handle_event(value)
-                # elif isinstance(value, list):
-                #     for event in sorted(value, key=lambda e: e.key):
-                #         self._handle_event(event)
-            elif name.startswith('guest.toolsRunningStatus'):
-                self._handle_tools_status(obj, value)
-            elif name.startswith('guest.net'):
-                self._handle_net_change(value)
+            if name.startswith(self.PROPERTY_NAME):
+                self._handle_change(obj, value)
+
+    @abstractmethod
+    def _handle_change(self, obj, value):
+        pass
+
+
+class AbstractEventHandler(AbstractChangeHandler):
+    __metaclass__ = ABCMeta
+    PROPERTY_NAME = 'latestPage'
+
+    def _handle_change(self, obj, value):
+        if isinstance(value, self.EVENTS):
+            self._handle_event(value)
+
+    @abstractmethod
+    def _handle_event(self, event):
+        pass
+
+
+class VmUpdatedHandler(AbstractEventHandler):
+    EVENTS = (
+        vim.event.VmCreatedEvent,
+        vim.event.VmClonedEvent,
+        vim.event.VmDeployedEvent,
+        vim.event.VmMacChangedEvent,
+        vim.event.VmMacAssignedEvent,
+        vim.event.DrsVmMigratedEvent,
+        vim.event.DrsVmPoweredOnEvent,
+        vim.event.VmMigratedEvent,
+        vim.event.VmRegisteredEvent,
+        vim.event.VmPoweredOnEvent,
+        vim.event.VmPoweredOffEvent,
+        vim.event.VmSuspendedEvent,
+    )
+
+    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service):
+        self._vm_service = vm_service
+        self._vn_service = vn_service
+        self._vmi_service = vmi_service
+        self._vrouter_port_service = vrouter_port_service
 
     def _handle_event(self, event):
-        logger.info('Handling event: %s', event.fullFormattedMessage)
-        if isinstance(event, (
-                vim.event.VmCreatedEvent,
-                vim.event.VmClonedEvent,
-                vim.event.VmDeployedEvent,
-                vim.event.VmMacChangedEvent,
-                vim.event.VmMacAssignedEvent,
-                vim.event.DrsVmMigratedEvent,
-                vim.event.DrsVmPoweredOnEvent,
-                vim.event.VmMigratedEvent,
-                vim.event.VmRegisteredEvent,
-                vim.event.VmPoweredOnEvent,
-                vim.event.VmPoweredOffEvent,
-                vim.event.VmSuspendedEvent,
-        )):
-            self._handle_vm_updated_event(event)
-
-    def _handle_vm_updated_event(self, event):
         vmware_vm = event.vm.vm
         try:
             self._vm_service.update(vmware_vm)
@@ -77,41 +101,6 @@ class VmwareController(object):
             self._vrouter_port_service.sync_ports()
         except vmodl.fault.ManagedObjectNotFound:
             logger.info('Skipping event for a non-existent VM.')
-
-    def _handle_tools_status(self, vmware_vm, value):
-        try:
-            logger.info('Handling toolsRunningStatus update.')
-            self._vm_service.set_tools_running_status(vmware_vm, value)
-        except vmodl.fault.ManagedObjectNotFound:
-            logger.info('Skipping toolsRunningStatus change for a non-existent VM.')
-
-    def _handle_net_change(self, nic_infos):
-        logger.info('Handling NicInfo update.')
-        for nic_info in nic_infos:
-            self._vmi_service.update_nic(nic_info)
-        self._vrouter_port_service.sync_ports()
-
-
-class AbstractEventHandler(object):
-    __metaclass__ = ABCMeta
-
-    def handle_update(self, update_set):
-        for property_filter_update in update_set.filterSet:
-            for object_update in property_filter_update.objectSet:
-                for property_change in object_update.changeSet:
-                    self._handle_change(property_change)
-
-    def _handle_change(self, property_change):
-        name = getattr(property_change, 'name', None)
-        value = getattr(property_change, 'val', None)
-        if value:
-            if name.startswith('latestPage'):
-                if isinstance(value, self.EVENTS):
-                    self._handle_event(value)
-
-    @abstractmethod
-    def _handle_event(self, event):
-        pass
 
 
 class VmRenamedHandler(AbstractEventHandler):
@@ -167,3 +156,41 @@ class VmRemovedHandler(AbstractEventHandler):
         self._vmi_service.remove_vmis_for_vm_model(vm_name)
         self._vm_service.remove_vm(vm_name)
         self._vrouter_port_service.sync_ports()
+
+
+class GuestNetHandler(AbstractChangeHandler):
+    PROPERTY_NAME = 'guest.net'
+
+    def __init__(self, vmi_service, vrouter_port_service):
+        self._vmi_service = vmi_service
+        self._vrouter_port_service = vrouter_port_service
+
+    def _handle_change(self, obj, value):
+        for nic_info in value:
+            self._vmi_service.update_nic(nic_info)
+        self._vrouter_port_service.sync_ports()
+
+
+class VmwareToolsStatusHandler(AbstractChangeHandler):
+    PROPERTY_NAME = 'guest.toolsRunningStatus'
+
+    def __init__(self, vm_service):
+        self._vm_service = vm_service
+
+    def _handle_change(self, obj, value):
+        try:
+            self._vm_service.update_vmware_tools_status(obj, value)
+        except vmodl.fault.ManagedObjectNotFound:
+            pass
+
+
+class PowerStateHandler(AbstractChangeHandler):
+    PROPERTY_NAME = 'runtime.powerState'
+
+    def __init__(self, vm_service, vrouter_port_service):
+        self._vm_service = vm_service
+        self._vrouter_port_service = vrouter_port_service
+
+    def _handle_change(self, obj, value):
+        self._vm_service.update_power_state(obj, value)
+        self._vrouter_port_service.sync_port_states()
