@@ -61,7 +61,9 @@ class VirtualMachineService(Service):
         self._create(vmware_vm, vm_properties)
 
     def _update(self, vm_model, vmware_vm, vm_properties):
+        logger.info('Updating %s', vm_model)
         vm_model.update(vmware_vm, vm_properties)
+        logger.info('Updated %s', vm_model)
         for vmi_model in vm_model.vmi_models:
             self._database.vmis_to_update.append(vmi_model)
         self._database.save(vm_model)
@@ -72,6 +74,7 @@ class VirtualMachineService(Service):
             self._database.vmis_to_update.append(vmi_model)
         self._add_property_filter_for_vm(vm_model, ['guest.toolsRunningStatus', 'guest.net'])
         self._vnc_api_client.update_or_create_vm(vm_model.vnc_vm)
+        logger.info('Created %s', vm_model)
         self._database.save(vm_model)
 
     def _add_property_filter_for_vm(self, vm_model, filters):
@@ -95,13 +98,13 @@ class VirtualMachineService(Service):
 
     def remove_vm(self, name):
         vm_model = self._database.get_vm_model_by_name(name)
+        logger.info('Deleting %s', vm_model)
         if not vm_model:
-            return None
+            return
         if self._can_delete_from_vnc(vm_model.vnc_vm):
             self._vnc_api_client.delete_vm(vm_model.vnc_vm.uuid)
         self._database.delete_vm_model(vm_model.uuid)
         vm_model.destroy_property_filter()
-        return vm_model
 
     def set_tools_running_status(self, vmware_vm, value):
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
@@ -112,6 +115,7 @@ class VirtualMachineService(Service):
         self._database.save(vm_model)
 
     def rename_vm(self, old_name, new_name):
+        logger.info('Renaming %s to %s', old_name, new_name)
         vm_model = self._database.get_vm_model_by_name(old_name)
         vm_model.rename(new_name)
         self._vnc_api_client.update_or_create_vm(vm_model.vnc_vm)
@@ -152,7 +156,7 @@ class VirtualNetworkService(Service):
                                                    VlanIdPool(VLAN_ID_RANGE_START, VLAN_ID_RANGE_END))
                     self._vcenter_api_client.enable_vlan_override(vn_model.vmware_vn)
                     self._database.save(vn_model)
-                    logger.info('Successfully saved new portgroup key: %s name: %s', dpg.key, vnc_vn.name)
+                    logger.info('Created %s', vn_model)
                 else:
                     logger.error('Unable to fetch new portgroup for key: %s', portgroup_key)
 
@@ -170,8 +174,10 @@ class VirtualMachineInterfaceService(Service):
     def update_vmis(self):
         vmis_to_update = [vmi_model for vmi_model in self._database.vmis_to_update]
         for vmi_model in vmis_to_update:
+            logger.info('Updating %s', vmi_model)
             self.update_vmis_vn(vmi_model)
             self._database.vmis_to_update.remove(vmi_model)
+            logger.info('Updated %s', vmi_model)
 
         for vmi_model in self._database.vmis_to_delete:
             self._delete(vmi_model)
