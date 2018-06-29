@@ -173,8 +173,10 @@ class VirtualMachineInterfaceService(Service):
             self.update_vmis_vn(vmi_model)
             self._database.vmis_to_update.remove(vmi_model)
 
-        for vmi_model in self._database.vmis_to_delete:
+        vmis_to_delete = [vmi_model for vmi_model in self._database.vmis_to_delete]
+        for vmi_model in vmis_to_delete:
             self._delete(vmi_model)
+            self._database.vmis_to_delete.remove(vmi_model)
 
     def update_vmis_vn(self, new_vmi_model):
         old_vmi_model = self._database.get_vmi_model_by_uuid(new_vmi_model.uuid)
@@ -283,7 +285,8 @@ class VRouterPortService(object):
         self._update_ports()
 
     def _delete_ports(self):
-        for uuid in self._database.ports_to_delete:
+        uuids = [uuid for uuid in self._database.ports_to_delete]
+        for uuid in uuids:
             self._delete_port(uuid)
             self._database.ports_to_delete.remove(uuid)
 
