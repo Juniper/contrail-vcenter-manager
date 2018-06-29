@@ -144,7 +144,7 @@ class VmReconfiguredHandler(AbstractEventHandler):
         vmware_vm = event.vm.vm
         for device_spec in event.configSpec.deviceChange:
             device = device_spec.device
-            if isinstance(device, vim.vm.device.VirtualVmxnet3):
+            if isinstance(device, vim.vm.device.VirtualEthernetCard):
                 logger.info('Detected VmReconfiguredEvent with %s device', type(device))
                 self._vm_service.update_vm_models_interfaces(vmware_vm)
                 self._vn_service.update_vns()

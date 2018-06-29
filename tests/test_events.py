@@ -168,6 +168,14 @@ def esxi_api_client(vm_properties_1):
     return esxi_client
 
 
+@pytest.fixture()
+def lock():
+    semaphore = Mock()
+    semaphore.__enter__ = Mock()
+    semaphore.__exit__ = Mock()
+    return semaphore
+
+
 def assert_vmi_model_state(vmi_model, mac_address=None, ip_address=None,
                            vlan_id=None, display_name=None, vn_model=None, vm_model=None):
     if mac_address is not None:
@@ -218,14 +226,14 @@ def reserve_vlan_ids(vn_model, vlan_ids):
 
 
 def test_vm_created(vcenter_api_client, vn_model_1, vm_created_update,
-                    esxi_api_client, vnc_api_client, vnc_vn_1):
+                    esxi_api_client, vnc_api_client, vnc_vn_1, lock):
     vrouter_api_client = Mock()
     database = Database()
     vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
     vn_service = VirtualNetworkService(esxi_api_client, vnc_api_client, database)
     vmi_service = VirtualMachineInterfaceService(vcenter_api_client, vnc_api_client, database)
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
-    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [])
+    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [], lock)
 
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
@@ -284,7 +292,7 @@ def test_vm_created(vcenter_api_client, vn_model_1, vm_created_update,
 
 def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
                     esxi_api_client, vm_renamed_update,
-                    vm_properties_renamed, vnc_api_client):
+                    vm_properties_renamed, vnc_api_client, lock):
     vrouter_api_client = Mock()
     database = Database()
     vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
@@ -296,7 +304,7 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
     )
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
     vm_renamed_handler = VmRenamedHandler(vm_service, vmi_service, vrouter_port_service)
-    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [vm_renamed_handler])
+    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [vm_renamed_handler], lock)
 
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
@@ -359,7 +367,7 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
 
 def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_update,
                          esxi_api_client, vm_reconfigure_update, vnc_api_client, vnc_vn_2,
-                         vmware_vm_1):
+                         vmware_vm_1, lock):
     vrouter_api_client = Mock()
     database = Database()
     vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
@@ -371,7 +379,8 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
     )
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
     vm_reconfigure_handler = VmReconfiguredHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
-    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [vm_reconfigure_handler])
+    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service,
+                                  [vm_reconfigure_handler], lock)
 
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
@@ -445,7 +454,7 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
 
 
 def test_vm_created_vlan_id(vcenter_api_client, vn_model_1, vm_created_update,
-                            esxi_api_client, vnc_api_client):
+                            esxi_api_client, vnc_api_client, lock):
     """
     What happens when the created interface is already using an overriden VLAN ID?
     We should keep it, not removing old/adding new VLAN ID, since it breaks the connectivity
@@ -457,7 +466,7 @@ def test_vm_created_vlan_id(vcenter_api_client, vn_model_1, vm_created_update,
     vn_service = VirtualNetworkService(esxi_api_client, vnc_api_client, database)
     vmi_service = VirtualMachineInterfaceService(vcenter_api_client, vnc_api_client, database)
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
-    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [])
+    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [], lock)
 
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
@@ -490,7 +499,7 @@ def test_vm_created_vlan_id(vcenter_api_client, vn_model_1, vm_created_update,
 
 
 def test_contrail_vm(vcenter_api_client, vm_created_update, esxi_api_client,
-                     vnc_api_client, contrail_vm_properties):
+                     vnc_api_client, contrail_vm_properties, lock):
     """ We don't need ContrailVM model for CVM to operate properly. """
     vrouter_api_client = Mock()
     database = Database()
@@ -499,7 +508,7 @@ def test_contrail_vm(vcenter_api_client, vm_created_update, esxi_api_client,
     vmi_service = VirtualMachineInterfaceService(vcenter_api_client, vnc_api_client, database)
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
     esxi_api_client.read_vm_properties.return_value = contrail_vm_properties
-    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [])
+    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [], lock)
 
     # A new update containing VmCreatedEvent arrives and is being handled by the controller
     controller.handle_update(vm_created_update)

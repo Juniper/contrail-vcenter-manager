@@ -4,8 +4,8 @@ from unittest import TestCase
 from mock import Mock, patch
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 
-from cvm.controllers import (VmRemovedHandler, VmRenamedHandler,
-                             VmwareController)
+from cvm.controllers import (VmReconfiguredHandler, VmRemovedHandler,
+                             VmRenamedHandler, VmwareController)
 
 logging.disable(logging.CRITICAL)
 
@@ -24,13 +24,17 @@ class TestVmwareController(TestCase):
         self.database = Mock()
         self.vm_service = Mock(database=self.database)
         self.vmi_service = Mock()
+        self.vn_service = Mock()
         self.vrouter_port_service = Mock()
 
         vm_renamed_handler = VmRenamedHandler(self.vm_service, self.vmi_service, self.vrouter_port_service)
         vm_removed_handler = VmRemovedHandler(self.vm_service, self.vmi_service, Mock())
-        handlers = [vm_renamed_handler, vm_removed_handler]
+        vm_reconfigured_handler = VmReconfiguredHandler(self.vm_service, self.vn_service,
+                                                        self.vmi_service, self.vrouter_port_service)
+        handlers = [vm_renamed_handler, vm_removed_handler, vm_reconfigured_handler]
+        lock = Mock(__enter__=Mock(), __exit__=Mock())
         self.vmware_controller = VmwareController(self.vm_service, None, self.vmi_service, None,
-                                                  handlers)
+                                                  handlers, lock)
 
     @patch.object(VmwareController, '_handle_change')
     def test_handle_update_no_fltr_set(self, mocked_handle_change):
@@ -110,3 +114,17 @@ class TestVmwareController(TestCase):
 
         self.vm_service.rename_vm.assert_called_once()
         self.vmi_service.rename_vmis.assert_called_once()
+
+    def test_virtual_ethernet_card(self):
+        event = Mock(spec=vim.event.VmReconfiguredEvent())
+        device_spec = Mock()
+        device_spec.device = Mock(spec=vim.vm.device.VirtualE1000())
+        event.configSpec.deviceChange = [device_spec]
+        update_set = construct_update_set('latestPage', event)
+
+        self.vmware_controller.handle_update(update_set)
+
+        self.vm_service.update_vm_models_interfaces.assert_called_once()
+        self.vn_service.update_vns.assert_called_once()
+        self.vmi_service.update_vmis.assert_called_once()
+        self.vrouter_port_service.sync_ports.assert_called_once()
