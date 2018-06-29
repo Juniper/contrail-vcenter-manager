@@ -146,6 +146,11 @@ class VirtualMachineModel(object):
             )
         return self._vnc_vm
 
+    def __repr__(self):
+        return 'VirtualMachineModel(uuid=%s, name=%s, vrouter_uuid=%s, vm_properties=%s, interfaces=%s)' % \
+               (self.uuid, self.name, self.vrouter_uuid, self.vm_properties,
+                [vmi_model.uuid for vmi_model in self.vmi_models])
+
 
 class VirtualNetworkModel(object):
     def __init__(self, vmware_vn, vnc_vn):
@@ -175,6 +180,10 @@ class VirtualNetworkModel(object):
     def subnet_info_is_set(self):
         return self.vnc_vn.get_network_ipam_refs()
 
+    def __repr__(self):
+        return 'VirtualNetworkModel(uuid=%s, key=%s, name=%s)' % \
+               (self.uuid, self.key, self.name)
+
 
 class VirtualMachineInterfaceModel(object):
     def __init__(self, vm_model, vn_model, vcenter_port):
@@ -193,7 +202,9 @@ class VirtualMachineInterfaceModel(object):
 
     @property
     def display_name(self):
-        return 'vmi-{}-{}'.format(self.vn_model.name, self.vm_model.name)
+        if self.vn_model and self.vm_model:
+            return 'vmi-{}-{}'.format(self.vn_model.name, self.vm_model.name)
+        return None
 
     def refresh_port_key(self):
         self.vcenter_port.port_key = find_vmi_port_key(self.vm_model.vmware_vm, self.vcenter_port.mac_address)
@@ -258,6 +269,14 @@ class VirtualMachineInterfaceModel(object):
     def get_uuid(mac_address):
         return str(uuid.uuid3(uuid.NAMESPACE_DNS, mac_address.encode('utf-8')))
 
+    def __repr__(self):
+        if self.vnc_instance_ip is not None:
+            ip_address = self.vnc_instance_ip.instance_ip_address
+        else:
+            ip_address = 'unset'
+        return 'VirtualMachineInterfaceModel(uuid=%s, display_name=%s, vcenter_port=%s, ip_address=%s)' \
+               % (self.uuid, self.display_name, self.vcenter_port, ip_address)
+
 
 class VlanIdPool(object):
     def __init__(self, start, end):
@@ -285,3 +304,7 @@ class VCenterPort(object):
         self.port_key = device.backing.port.portKey
         self.portgroup_key = device.backing.port.portgroupKey
         self.vlan_id = None
+
+    def __repr__(self):
+        return 'VCenterPort(mac_address=%s, port_key=%s, portgroup_key=%s, vlan_id=%s)' \
+               % (self.mac_address, self.port_key, self.portgroup_key, self.vlan_id)
