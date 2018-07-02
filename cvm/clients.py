@@ -175,7 +175,7 @@ class VCenterAPIClient(VSphereAPIClient):
             return
         dv_port_spec = make_dv_port_spec(dv_port, vcenter_port.vlan_id)
         logger.info('Setting vCenter VLAN ID of port %s to %d', vcenter_port.port_key, vcenter_port.vlan_id)
-        dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
+        self._dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
 
     def get_vlan_id(self, vcenter_port):
         logger.info('Reading VLAN ID of port %s', vcenter_port.port_key)

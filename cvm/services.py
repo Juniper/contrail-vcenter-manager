@@ -105,7 +105,7 @@ class VirtualMachineService(Service):
         self._database.delete_vm_model(vm_model.uuid)
         vm_model.destroy_property_filter()
 
-    def set_tools_running_status(self, vmware_vm, value):
+    def update_vmware_tools_status(self, vmware_vm, value):
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
         if not vm_model:
             return

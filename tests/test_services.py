@@ -143,7 +143,7 @@ class TestVirtualMachineService(TestCase):
         vmware_vm = Mock()
         value = 'guestToolsNotRunning'
 
-        self.vm_service.set_tools_running_status(vmware_vm, value)
+        self.vm_service.update_vmware_tools_status(vmware_vm, value)
 
         self.assertEqual(value, vm_model.tools_running_status)
         self.database.save.assert_called_once_with(vm_model)

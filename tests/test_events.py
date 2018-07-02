@@ -6,7 +6,8 @@ from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 from vnc_api.vnc_api import Project, VirtualNetwork
 
-from cvm.controllers import (VmReconfiguredHandler, VmRenamedHandler,
+from cvm.controllers import (UpdateHandler, VmReconfiguredHandler,
+                             VmRenamedHandler, VmUpdatedHandler,
                              VmwareController)
 from cvm.database import Database
 from cvm.models import VirtualNetworkModel, VlanIdPool
@@ -132,7 +133,7 @@ def vm_renamed_update():
 
 
 @pytest.fixture()
-def vm_reconfigure_update(vmware_vm_1):
+def vm_reconfigured_update(vmware_vm_1):
     event = Mock(spec=vim.event.VmReconfiguredEvent())
     event.vm.vm = vmware_vm_1
     port = Mock(spec=vim.dvs.PortConnection())
@@ -236,7 +237,9 @@ def test_vm_created(vcenter_api_client, vn_model_1, vm_created_update,
     vmi_service = VirtualMachineInterfaceService(vcenter_api_client, vnc_api_client,
                                                  database, vlan_id_pool=vlan_id_pool)
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
-    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [], lock)
+    vm_updated_handler = VmUpdatedHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
+    update_handler = UpdateHandler([vm_updated_handler])
+    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, update_handler, lock)
 
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
@@ -307,8 +310,10 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
         vlan_id_pool=vlan_id_pool
     )
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
+    vm_updated_handler = VmUpdatedHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
     vm_renamed_handler = VmRenamedHandler(vm_service, vmi_service, vrouter_port_service)
-    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [vm_renamed_handler], lock)
+    update_handler = UpdateHandler([vm_updated_handler, vm_renamed_handler])
+    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, update_handler, lock)
 
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
@@ -370,7 +375,7 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
 
 
 def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_update,
-                         esxi_api_client, vm_reconfigure_update, vnc_api_client, vnc_vn_2,
+                         esxi_api_client, vm_reconfigured_update, vnc_api_client, vnc_vn_2,
                          vmware_vm_1, lock, vlan_id_pool):
     vrouter_api_client = Mock()
     database = Database()
@@ -383,9 +388,11 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
         vlan_id_pool=vlan_id_pool
     )
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
-    vm_reconfigure_handler = VmReconfiguredHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
+    vm_updated_handler = VmUpdatedHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
+    vm_reconfigured_handler = VmReconfiguredHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
+    update_handler = UpdateHandler([vm_updated_handler, vm_reconfigured_handler])
     controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service,
-                                  [vm_reconfigure_handler], lock)
+                                  update_handler, lock)
 
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
@@ -404,7 +411,7 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
     vmware_vm_1.config.hardware.device[0].backing.port.portKey = '11'
 
     # Then VmReconfiguredEvent is being handled
-    controller.handle_update(vm_reconfigure_update)
+    controller.handle_update(vm_reconfigured_update)
 
     # Check if VM Model has been saved properly in Database:
     vm_model = database.get_vm_model_by_uuid('12345678-1234-1234-1234-123456789012')
@@ -473,7 +480,9 @@ def test_vm_created_vlan_id(vcenter_api_client, vn_model_1, vm_created_update,
         vlan_id_pool=vlan_id_pool
     )
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
-    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, [], lock)
+    vm_updated_handler = VmUpdatedHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
+    update_handler = UpdateHandler([vm_updated_handler])
+    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, update_handler, lock)
 
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
