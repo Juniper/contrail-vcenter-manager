@@ -244,9 +244,8 @@ class VirtualMachineInterfaceService(Service):
             for ip in nic_info.ipAddress:
                 if isinstance(ipaddress.ip_address(ip.decode('utf-8')), ipaddress.IPv4Address):
                     vmi_model.ip_address = ip
-                    self._update_in_vnc(vmi_model)
+                    self._add_instance_ip_to(vmi_model)
                     logger.info('IP address of %s updated to %s', vmi_model.display_name, ip)
-                    self._update_vrouter_port(vmi_model)
         except AttributeError:
             pass
 
@@ -332,7 +331,7 @@ class VRouterPortService(object):
                 vrouter_port.get('vn-id') != vmi_model.vn_model.uuid or
                 vrouter_port.get('rx-vlan-id') != vmi_model.vcenter_port.vlan_id or
                 vrouter_port.get('tx-vlan-id') != vmi_model.vcenter_port.vlan_id or
-                vrouter_port.get('ip-address') != vmi_model.vnc_instance_ip.instance_ip_address)
+                vrouter_port.get('ip-address') != vmi_model.ip_address)
 
     def _update_port(self, vmi_model):
         self._vrouter_api_client.delete_port(vmi_model.uuid)

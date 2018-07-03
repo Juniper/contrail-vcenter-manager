@@ -89,8 +89,3 @@ class Database(object):
             self.vmi_models.pop(uuid)
         except KeyError:
             logger.info('Could not find VMI model with uuid %s. Nothing to delete.', uuid)
-
-    def print_out(self):
-        print self.vm_models
-        print self.vn_models
-        print self.vmi_models

@@ -6,9 +6,9 @@ from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 from vnc_api.vnc_api import Project, VirtualNetwork
 
-from cvm.controllers import (UpdateHandler, VmReconfiguredHandler,
-                             VmRenamedHandler, VmUpdatedHandler,
-                             VmwareController)
+from cvm.controllers import (GuestNetHandler, UpdateHandler,
+                             VmReconfiguredHandler, VmRenamedHandler,
+                             VmUpdatedHandler, VmwareController)
 from cvm.database import Database
 from cvm.models import VirtualNetworkModel, VlanIdPool
 from cvm.services import (VirtualMachineInterfaceService,
@@ -103,10 +103,18 @@ def assign_ip_to_instance_ip(instance_ip):
     return instance_ip
 
 
-def wrap_into_update_set(event):
+def dont_assign_ip_to_instance_ip(instance_ip):
+    return instance_ip
+
+
+def wrap_event_into_change(event):
     change = vmodl.query.PropertyCollector.Change()
     change.name = 'latestPage'
     change.val = event
+    return change
+
+
+def wrap_into_update_set(change):
     update_set = vmodl.query.PropertyCollector.UpdateSet()
     filter_update = vmodl.query.PropertyCollector.FilterUpdate()
     object_update = vmodl.query.PropertyCollector.ObjectUpdate()
@@ -121,7 +129,8 @@ def wrap_into_update_set(event):
 def vm_created_update(vmware_vm_1):
     event = Mock(spec=vim.event.VmCreatedEvent())
     event.vm.vm = vmware_vm_1
-    return wrap_into_update_set(event)
+    change = wrap_event_into_change(event)
+    return wrap_into_update_set(change)
 
 
 @pytest.fixture()
@@ -129,7 +138,8 @@ def vm_renamed_update():
     event = Mock(spec=vim.event.VmRenamedEvent())
     event.oldName = 'VM1'
     event.newName = 'VM1-renamed'
-    return wrap_into_update_set(event)
+    change = wrap_event_into_change(event)
+    return wrap_into_update_set(change)
 
 
 @pytest.fixture()
@@ -143,7 +153,8 @@ def vm_reconfigured_update(vmware_vm_1):
     device.macAddress = '11:11:11:11:11:11'
     device_spec = Mock(spec=vim.vm.device.VirtualDeviceSpec(), device=device)
     event.configSpec.deviceChange = [device_spec]
-    return wrap_into_update_set(event)
+    change = wrap_event_into_change(event)
+    return wrap_into_update_set(change)
 
 
 @pytest.fixture()
@@ -182,6 +193,17 @@ def lock():
 def vlan_id_pool():
     vlan_pool = VlanIdPool(0, 100)
     return vlan_pool
+
+
+@pytest.fixture()
+def nic_info_update():
+    nic_info = Mock(spec=vim.vm.GuestInfo.NicInfo())
+    nic_info.ipAddress = ['192.168.100.5']
+    nic_info.macAddress = '11:11:11:11:11:11'
+    change = Mock(spec=vmodl.query.PropertyCollector.Change())
+    change.name = 'guest.net'
+    change.val = [nic_info]
+    return wrap_into_update_set(change)
 
 
 def assert_vmi_model_state(vmi_model, mac_address=None, ip_address=None,
@@ -543,3 +565,45 @@ def test_contrail_vm(vcenter_api_client, vm_created_update, esxi_api_client,
     # There were no calls to vrouter_api
     vrouter_api_client.add_port.assert_not_called()
 
+
+def test_external_ipam(vcenter_api_client, vm_created_update, esxi_api_client,
+                       vnc_api_client, vn_model_1, nic_info_update, lock):
+    """ We don't need ContrailVM model for CVM to operate properly. """
+    vrouter_api_client = Mock()
+    database = Database()
+    vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
+    vn_service = VirtualNetworkService(esxi_api_client, vnc_api_client, database)
+    vmi_service = VirtualMachineInterfaceService(vcenter_api_client, vnc_api_client, database)
+    vrouter_port_service = VRouterPortService(vrouter_api_client, database)
+    vm_updated_handler = VmUpdatedHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
+    guest_net_handler = GuestNetHandler(vmi_service, vrouter_port_service)
+    update_handler = UpdateHandler([vm_updated_handler, guest_net_handler])
+    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, update_handler, lock)
+
+    # The network we use uses external IPAM
+    vn_model_1.vnc_vn.external_ipam = True
+    database.save(vn_model_1)
+
+    # We use external IPAM, so there's no assignment of IP addresses
+    vnc_api_client.create_and_read_instance_ip.side_effect = dont_assign_ip_to_instance_ip
+
+    controller.handle_update(vm_created_update)
+
+    # The IP address was not assigned by Contrail Controller
+    vmi_model = database.get_all_vmi_models()[0]
+    assert vmi_model.ip_address is None
+    assert vmi_model.vnc_instance_ip is None
+
+    controller.handle_update(nic_info_update)
+
+    # IP address is updated
+    assert vmi_model.ip_address == '192.168.100.5'
+    assert vmi_model.vnc_instance_ip.instance_ip_address == '192.168.100.5'
+    assert vnc_api_client.create_and_read_instance_ip.call_args[0][0] is vmi_model.vnc_instance_ip
+
+    # vRouter port should not be updated - it will gather IP info from the Controller
+    vrouter_api_client.add_port.assert_called_once()
+    vrouter_api_client.delete_port.assert_called_once()
+
+    # The VMI itself should not be updated, since there's no new info
+    vnc_api_client.update_or_create_vmi.assert_called_once()

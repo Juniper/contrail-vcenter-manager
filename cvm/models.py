@@ -1,4 +1,3 @@
-import ipaddress
 import logging
 import uuid
 from collections import deque
@@ -17,46 +16,11 @@ ID_PERMS = IdPermsType(creator='vcenter-manager',
                        enable=True)
 
 
-def find_virtual_machine_ip_address(vmware_vm, port_group_name):
-    try:
-        return next(
-            addr for nicInfo in vmware_vm.guest.net
-            if is_nic_info_valid(nicInfo)
-            for addr in nicInfo.ipAddress
-            if (nicInfo.network == port_group_name and
-                is_ipv4(addr.decode('utf-8')))
-        )
-    except (StopIteration, AttributeError):
-        return None
-
-
-def is_ipv4(string):
-    return isinstance(ipaddress.ip_address(string), ipaddress.IPv4Address)
-
-
-def is_nic_info_valid(info):
-    return hasattr(info, 'ipAddress') and hasattr(info, 'network')
-
-
 def find_vrouter_uuid(host):
     try:
         for vmware_vm in host.vm:
             if vmware_vm.name.startswith(CONTRAIL_VM_NAME):
                 return vmware_vm.config.instanceUuid
-    except AttributeError:
-        pass
-    return None
-
-
-def find_vm_mac_address(vmware_vm, portgroup_key):
-    try:
-        devices = vmware_vm.config.hardware.device
-        for device in devices:
-            try:
-                if device.backing.port.portgroupKey == portgroup_key:
-                    return device.macAddress
-            except AttributeError:
-                pass
     except AttributeError:
         pass
     return None
@@ -167,6 +131,14 @@ class VirtualNetworkModel(object):
     def uuid(self):
         return str(self.vnc_vn.uuid)
 
+    @property
+    def has_external_ipam(self):
+        return self.vnc_vn.get_external_ipam()
+
+    @property
+    def subnet_info_is_set(self):
+        return self.vnc_vn.get_network_ipam_refs()
+
     @staticmethod
     def get_fq_name(name):
         return [VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, name]
@@ -174,9 +146,6 @@ class VirtualNetworkModel(object):
     @staticmethod
     def get_uuid(key):
         return str(uuid.uuid3(uuid.NAMESPACE_DNS, key))
-
-    def subnet_info_is_set(self):
-        return self.vnc_vn.get_network_ipam_refs()
 
     def __repr__(self):
         return 'VirtualNetworkModel(uuid=%s, key=%s, name=%s)' % \
@@ -239,9 +208,7 @@ class VirtualMachineInterfaceModel(object):
             id_perms=ID_PERMS,
         )
 
-        # if self.ip_address:
-        #    instance_ip.set_instance_ip_address(self.ip_address)
-        # TODO: Check if setting this to None works (remove if statement)
+        instance_ip.set_instance_ip_address(self.ip_address)
         instance_ip.set_uuid(instance_ip_uuid)
         instance_ip.set_virtual_network(self.vn_model.vnc_vn)
         instance_ip.set_virtual_machine_interface(self.vnc_vmi)
@@ -251,16 +218,9 @@ class VirtualMachineInterfaceModel(object):
         )
         self.vnc_instance_ip = instance_ip
 
-    def _find_ip_address(self):
-        if self.vn_model.vnc_vn.get_external_ipam() and self.vm_model.tools_running:
-            return find_virtual_machine_ip_address(self.vm_model.vmware_vm, self.vn_model.name)
-        return None
-
     def _should_construct_instance_ip(self):
-        return (self.vcenter_port.mac_address
-                and self.vn_model.subnet_info_is_set()
-                and (self.ip_address
-                     or not self.vn_model.vnc_vn.get_external_ipam()))
+        return (self.vn_model.subnet_info_is_set
+                and (self.ip_address or not self.vn_model.has_external_ipam))
 
     @staticmethod
     def get_uuid(mac_address):
