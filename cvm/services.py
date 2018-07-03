@@ -25,7 +25,7 @@ class Service(object):
         if self._esxi_api_client:
             self._vrouter_uuid = esxi_api_client.read_vrouter_uuid()
 
-    def _can_delete_from_vnc(self, vnc_obj):
+    def _can_modify_in_vnc(self, vnc_obj):
         if vnc_obj.get_type() == 'virtual-machine':
             existing_obj = self._vnc_api_client.read_vm(vnc_obj.uuid)
         if vnc_obj.get_type() == 'virtual-machine-interface':
@@ -40,7 +40,7 @@ class Service(object):
 
         if existing_obj_vrouter_uuid == self._vrouter_uuid:
             return True
-        logger.error('%s %s is managed by vRouter %s and cannot be deleted from VNC.',
+        logger.error('%s %s is managed by vRouter %s and cannot be modified in VNC.',
                      vnc_obj.get_type(), vnc_obj.name, existing_obj_vrouter_uuid)
         return False
 
@@ -91,7 +91,7 @@ class VirtualMachineService(Service):
             vm_model = self._database.get_vm_model_by_uuid(vnc_vm.uuid)
             if vm_model:
                 continue
-            if self._can_delete_from_vnc(vnc_vm):
+            if self._can_modify_in_vnc(vnc_vm):
                 logger.info('Deleting %s from VNC', vnc_vm.name)
                 self._vnc_api_client.delete_vm(vnc_vm.uuid)
 
@@ -100,7 +100,7 @@ class VirtualMachineService(Service):
         logger.info('Deleting %s', vm_model)
         if not vm_model:
             return
-        if self._can_delete_from_vnc(vm_model.vnc_vm):
+        if self._can_modify_in_vnc(vm_model.vnc_vm):
             self._vnc_api_client.delete_vm(vm_model.vnc_vm.uuid)
         self._database.delete_vm_model(vm_model.uuid)
         vm_model.destroy_property_filter()
@@ -117,7 +117,8 @@ class VirtualMachineService(Service):
         logger.info('Renaming %s to %s', old_name, new_name)
         vm_model = self._database.get_vm_model_by_name(old_name)
         vm_model.rename(new_name)
-        self._vnc_api_client.update_or_create_vm(vm_model.vnc_vm)
+        if self._can_modify_in_vnc(vm_model.vnc_vm):
+            self._vnc_api_client.update_or_create_vm(vm_model.vnc_vm)
         self._database.save(vm_model)
 
     def update_vm_models_interfaces(self, vmware_vm):
@@ -217,7 +218,7 @@ class VirtualMachineInterfaceService(Service):
         vmi_model.security_group = self._default_security_group
 
     def _update_in_vnc(self, vmi_model):
-        self._vnc_api_client.update_or_create_vmi(vmi_model.to_vnc())
+        self._vnc_api_client.update_or_create_vmi(vmi_model.vnc_vmi)
 
     def _add_instance_ip_to(self, vmi_model):
         vmi_model.construct_instance_ip()
@@ -233,7 +234,7 @@ class VirtualMachineInterfaceService(Service):
             vmi_model = self._database.get_vmi_model_by_uuid(vnc_vmi.get_uuid())
             if vmi_model:
                 continue
-            if self._can_delete_from_vnc(vnc_vmi):
+            if self._can_modify_in_vnc(vnc_vmi):
                 logger.info('Deleting %s from VNC.', vnc_vmi.name)
                 self._vnc_api_client.delete_vmi(vnc_vmi.get_uuid())
 
@@ -257,7 +258,6 @@ class VirtualMachineInterfaceService(Service):
 
     def _delete_from_vnc(self, vmi_model):
         self._vnc_api_client.delete_vmi(vmi_model.uuid)
-        vmi_model.vnc_vmi = None
 
     def _restore_vlan_id(self, vmi_model):
         with self._vcenter_api_client:
@@ -274,7 +274,7 @@ class VirtualMachineInterfaceService(Service):
             return
         vmi_models = self._database.get_vmi_models_by_vm_uuid(vm_model.uuid)
         for vmi_model in vmi_models:
-            if self._can_delete_from_vnc(vmi_model.vnc_vmi):
+            if self._can_modify_in_vnc(vmi_model.vnc_vmi):
                 self._delete_from_vnc(vmi_model)
                 self._restore_vlan_id(vmi_model)
             self._database.delete_vmi_model(vmi_model.uuid)
@@ -285,8 +285,8 @@ class VirtualMachineInterfaceService(Service):
         vmi_models = self._database.get_vmi_models_by_vm_uuid(vm_model.uuid)
         for vmi_model in vmi_models:
             vmi_model.vm_model = vm_model
-            self._update_in_vnc(vmi_model)
-            self._update_vrouter_port(vmi_model)
+            if self._can_modify_in_vnc(vmi_model.vnc_vmi):
+                self._update_in_vnc(vmi_model)
 
     @staticmethod
     def _get_vn_from_vmi(vnc_vmi):

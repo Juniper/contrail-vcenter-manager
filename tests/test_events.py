@@ -309,6 +309,10 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
         database,
         vlan_id_pool=vlan_id_pool
     )
+    vmi_service._can_modify_in_vnc = Mock()
+    vmi_service._can_modify_in_vnc.return_value = True
+    vm_service._can_modify_in_vnc = Mock()
+    vmi_service._can_modify_in_vnc.return_value = True
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
     vm_updated_handler = VmUpdatedHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
     vm_renamed_handler = VmRenamedHandler(vm_service, vmi_service, vrouter_port_service)
@@ -352,10 +356,6 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
 
     # Check if VMI Model's Instance IP has been created in VNC:
     vnc_api_client.create_and_read_instance_ip.assert_called_once()
-
-    # Check if VMI's vRouter Port has been added:
-    vrouter_api_client.add_port.called_with(vmi_model)
-    assert vrouter_api_client.add_port.call_count == 2
 
     # Check if VLAN ID has been set using VLAN Override
     vcenter_port = vcenter_api_client.set_vlan_id.call_args[0][0]
@@ -462,6 +462,14 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
     )
 
 
+# def test_vmotion_vm_in():
+#     pass
+#
+#
+# def test_vmotion_vm_out():
+#     pass
+
+
 def test_vm_created_vlan_id(vcenter_api_client, vn_model_1, vm_created_update,
                             esxi_api_client, vnc_api_client, lock, vlan_id_pool):
     """
@@ -538,3 +546,4 @@ def test_contrail_vm(vcenter_api_client, vm_created_update, esxi_api_client,
 
     # There were no calls to vrouter_api
     vrouter_api_client.add_port.assert_not_called()
+
