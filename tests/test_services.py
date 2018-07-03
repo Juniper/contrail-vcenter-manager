@@ -45,7 +45,7 @@ class TestVirtualMachineService(TestCase):
         self.assertEqual(self.vmware_vm, vm_model.vmware_vm)
         self.assertEqual({'c8:5b:76:53:0f:f5': 'dportgroup-50'},
                          {vm_model.ports[0].mac_address: vm_model.ports[0].portgroup_key})
-        self.vnc_client.update_or_create_vm.assert_called_once_with(vm_model.vnc_vm)
+        self.vnc_client.update_or_create_vm.assert_called_once()
         self.database.save.assert_called_once_with(vm_model)
 
     def test_create_property_filter(self):
@@ -67,8 +67,8 @@ class TestVirtualMachineService(TestCase):
         vm_model = Mock()
         self.database.get_vm_model_by_name.return_value = vm_model
 
-        with patch('cvm.services.VirtualMachineService._can_delete_from_vnc') as can_delete:
-            can_delete.return_value = True
+        with patch('cvm.services.VirtualMachineService._can_modify_in_vnc') as can_modify:
+            can_modify.return_value = True
             self.vm_service.remove_vm('VM')
 
         vm_model.destroy_property_filter.assert_called_once()
@@ -110,8 +110,8 @@ class TestVirtualMachineService(TestCase):
         vnc_vm.set_uuid('d376b6b4-943d-4599-862f-d852fd6ba425')
         self.vnc_client.get_all_vms.return_value = [vnc_vm]
 
-        with patch('cvm.services.VirtualMachineService._can_delete_from_vnc') as can_delete:
-            can_delete.return_value = True
+        with patch('cvm.services.VirtualMachineService._can_modify_in_vnc') as can_modify:
+            can_modify.return_value = True
             self.vm_service.delete_unused_vms_in_vnc()
 
         self.vnc_client.delete_vm.assert_called_once_with('d376b6b4-943d-4599-862f-d852fd6ba425')
@@ -121,8 +121,8 @@ class TestVirtualMachineService(TestCase):
         vm_model.vnc_vm.uuid = 'd376b6b4-943d-4599-862f-d852fd6ba425'
         self.database.get_vm_model_by_name.return_value = vm_model
 
-        with patch('cvm.services.VirtualMachineService._can_delete_from_vnc') as can_delete:
-            can_delete.return_value = True
+        with patch('cvm.services.VirtualMachineService._can_modify_in_vnc') as can_modify:
+            can_modify.return_value = True
             self.vm_service.remove_vm('VM')
 
         self.database.delete_vm_model.assert_called_once_with(vm_model.uuid)
@@ -155,7 +155,9 @@ class TestVirtualMachineService(TestCase):
         vmware_vm = Mock()
         vmware_vm.configure_mock(name='VM-renamed')
 
-        self.vm_service.rename_vm('VM', 'VM-renamed')
+        with patch('cvm.services.VirtualMachineService._can_modify_in_vnc') as can_modify:
+            can_modify.return_value = True
+            self.vm_service.rename_vm('VM', 'VM-renamed')
 
         vm_model.rename.assert_called_once_with('VM-renamed')
         self.vnc_client.update_or_create_vm.assert_called_once()
@@ -316,8 +318,8 @@ class TestVirtualMachineInterfaceService(TestCase):
     def test_sync_deletes_unused_vmis(self):
         self.vnc_client.get_vmis_by_project.return_value = [Mock()]
 
-        with patch('cvm.services.VirtualMachineInterfaceService._can_delete_from_vnc') as can_delete:
-            can_delete.return_value = True
+        with patch('cvm.services.VirtualMachineInterfaceService._can_modify_in_vnc') as can_modify:
+            can_modify.return_value = True
             self.vmi_service.sync_vmis()
 
         self.vnc_client.delete_vmi.assert_called_once()
@@ -325,12 +327,13 @@ class TestVirtualMachineInterfaceService(TestCase):
     def test_remove_vmis_for_vm_model(self):
         device = Mock(macAddress='mac_addr')
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, VCenterPort(device))
+        self.vmi_service._add_vnc_info_to(vmi_model)
         vmi_model.vnc_instance_ip = Mock()
         self.database.save(vmi_model)
         self.database.save(self.vm_model)
 
-        with patch('cvm.services.VirtualMachineInterfaceService._can_delete_from_vnc') as can_delete:
-            can_delete.return_value = True
+        with patch('cvm.services.VirtualMachineInterfaceService._can_modify_in_vnc') as can_modify:
+            can_modify.return_value = True
             self.vmi_service.remove_vmis_for_vm_model(self.vm_model.name)
 
         self.assertNotIn(vmi_model, self.database.get_all_vmi_models())
@@ -356,12 +359,13 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.vm_model.update(*create_vmware_vm_mock(name='VM-renamed'))
         self.database.save(self.vm_model)
 
-        self.vmi_service.rename_vmis('VM-renamed')
+        with patch('cvm.services.VirtualMachineInterfaceService._can_modify_in_vnc') as can_modify:
+            can_modify.return_value = True
+            self.vmi_service.rename_vmis('VM-renamed')
 
         self.assertEqual('vmi-VM Portgroup-VM-renamed', vmi_model.display_name)
         self.assertEqual(0, self.vnc_client.create_and_read_instance_ip.call_count)
         self.vnc_client.update_or_create_vmi.assert_called_once()
-        self.assertIn(vmi_model, self.database.ports_to_update)
 
 
 class TestVMIInstanceIp(TestCase):
@@ -499,7 +503,7 @@ class TestCanDeleteFromVnc(TestCase):
             [KeyValuePair('vrouter-uuid', 'vrouter_uuid_1')]))
         self.vnc_api_client.read_vm.return_value = vnc_vm
 
-        result = self.vm_service._can_delete_from_vnc(vnc_vm)
+        result = self.vm_service._can_modify_in_vnc(vnc_vm)
 
         self.assertTrue(result)
 
@@ -509,7 +513,7 @@ class TestCanDeleteFromVnc(TestCase):
             [KeyValuePair('vrouter-uuid', 'vrouter_uuid_2')]))
         self.vnc_api_client.read_vm.return_value = vnc_vm
 
-        result = self.vm_service._can_delete_from_vnc(vnc_vm)
+        result = self.vm_service._can_modify_in_vnc(vnc_vm)
 
         self.assertFalse(result)
 
@@ -519,7 +523,7 @@ class TestCanDeleteFromVnc(TestCase):
             [KeyValuePair('vrouter-uuid', 'vrouter_uuid_1')]))
         self.vnc_api_client.read_vmi.return_value = vnc_vmi
 
-        result = self.vmi_service._can_delete_from_vnc(vnc_vmi)
+        result = self.vmi_service._can_modify_in_vnc(vnc_vmi)
 
         self.assertTrue(result)
 
@@ -529,7 +533,7 @@ class TestCanDeleteFromVnc(TestCase):
             [KeyValuePair('vrouter-uuid', 'vrouter_uuid_2')]))
         self.vnc_api_client.read_vmi.return_value = vnc_vmi
 
-        result = self.vmi_service._can_delete_from_vnc(vnc_vmi)
+        result = self.vmi_service._can_modify_in_vnc(vnc_vmi)
 
         self.assertFalse(result)
 
@@ -537,7 +541,7 @@ class TestCanDeleteFromVnc(TestCase):
         vnc_vm = vnc_api.VirtualMachine('VM', vnc_api.Project())
         self.vnc_api_client.read_vm.return_value = vnc_vm
 
-        result = self.vm_service._can_delete_from_vnc(vnc_vm)
+        result = self.vm_service._can_modify_in_vnc(vnc_vm)
 
         self.assertFalse(result)
 
@@ -547,7 +551,7 @@ class TestCanDeleteFromVnc(TestCase):
             [KeyValuePair('key', 'value')]))
         self.vnc_api_client.read_vm.return_value = vnc_vm
 
-        result = self.vm_service._can_delete_from_vnc(vnc_vm)
+        result = self.vm_service._can_modify_in_vnc(vnc_vm)
 
         self.assertFalse(result)
 
