@@ -309,6 +309,10 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
         database,
         vlan_id_pool=vlan_id_pool
     )
+    vmi_service._can_modify_in_vnc = Mock()
+    vmi_service._can_modify_in_vnc.return_value = True
+    vm_service._can_modify_in_vnc = Mock()
+    vmi_service._can_modify_in_vnc.return_value = True
     vrouter_port_service = VRouterPortService(vrouter_api_client, database)
     vm_updated_handler = VmUpdatedHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
     vm_renamed_handler = VmRenamedHandler(vm_service, vmi_service, vrouter_port_service)
@@ -538,3 +542,4 @@ def test_contrail_vm(vcenter_api_client, vm_created_update, esxi_api_client,
 
     # There were no calls to vrouter_api
     vrouter_api_client.add_port.assert_not_called()
+
