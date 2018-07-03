@@ -5,96 +5,8 @@ from mock import Mock, patch
 from vnc_api.vnc_api import Project, SecurityGroup
 
 from cvm.models import (ID_PERMS, VCenterPort, VirtualMachineInterfaceModel,
-                        VirtualMachineModel, VirtualNetworkModel, VlanIdPool,
-                        find_virtual_machine_ip_address)
-from tests.utils import (create_dpg_mock, create_port_mock,
-                         create_vmware_vm_mock)
-
-
-class TestFindVirtualMachineIpAddress(TestCase):
-    def setUp(self):
-        self.vm = Mock()
-
-    def test_standard_case(self):
-        desired_portgroup, expected_ip = 'second', '10.7.0.60'
-        self.vm.guest.net = [
-            self._create_mock(
-                network='first',
-                ipAddress=['1.1.1.1', 'fe80::257:56ff:fe90:d265'],
-            ),
-            self._create_mock(
-                network=desired_portgroup,
-                ipAddress=['fe80::250:56ff:fe90:d265', expected_ip],
-            ),
-        ]
-
-        result = find_virtual_machine_ip_address(self.vm, desired_portgroup)
-
-        self.assertEqual(result, expected_ip)
-
-    def test_unmatched_portgroup_name(self):
-        desired_portgroup, expected_ip = 'non-existent', None
-        self.vm.guest.net = [
-            self._create_mock(
-                network='first',
-                ipAddress=['1.1.1.1', 'fe80::257:56ff:fe90:d265'],
-            ),
-            self._create_mock(
-                network='second',
-                ipAddress=['fe80::250:56ff:fe90:d265', expected_ip],
-
-            ),
-        ]
-
-        result = find_virtual_machine_ip_address(self.vm, desired_portgroup)
-
-        self.assertEqual(result, expected_ip)
-
-    def test_unmatched_ip_type(self):
-        desired_portgroup, expected_ip = 'second', None
-        self.vm.guest.net = [
-            self._create_mock(
-                network='first',
-                ipAddress=['1.1.1.1', 'fe80::257:56ff:fe90:d265'],
-            ),
-            self._create_mock(
-                network=desired_portgroup,
-                ipAddress=['fe80::250:56ff:fe90:d265'],
-            ),
-        ]
-
-        result = find_virtual_machine_ip_address(self.vm, desired_portgroup)
-
-        self.assertEqual(result, expected_ip)
-
-    def test_missing_field(self):
-        desired_portgroup, expected_ip = 'irrelevant', None
-        self.vm.guest = None
-
-        result = find_virtual_machine_ip_address(self.vm, desired_portgroup)
-
-        self.assertEqual(result, expected_ip)
-
-    def test_missing_field_in_network(self):
-        desired_portgroup, expected_ip = 'second', '10.7.0.60'
-        self.vm.guest.net = [
-            None,
-            self._create_mock(
-                network=desired_portgroup,
-                ipAddress=['fe80::250:56ff:fe90:d265', expected_ip],
-            ),
-        ]
-
-        result = find_virtual_machine_ip_address(self.vm, desired_portgroup)
-
-        self.assertEqual(result, expected_ip)
-
-    @staticmethod
-    def _create_mock(**kwargs):
-        mock = Mock()
-        for kwarg in kwargs:
-            setattr(mock, kwarg, kwargs[kwarg])
-        return mock
+                        VirtualMachineModel, VirtualNetworkModel, VlanIdPool)
+from tests.utils import create_dpg_mock, create_vmware_vm_mock
 
 
 class TestVirtualMachineModel(TestCase):
@@ -179,11 +91,8 @@ class TestVirtualMachineInterfaceModel(TestCase):
                          [vmi_model.vcenter_port.mac_address])
         self.assertEqual(vnc_vmi.get_id_perms(), ID_PERMS)
 
-    @patch('cvm.models.find_vm_mac_address')
     @patch('cvm.models.VirtualMachineInterfaceModel.to_vnc')
-    @patch('cvm.models.VirtualMachineInterfaceModel._should_construct_instance_ip')
-    def test_construct_instance_ip(self, should_construct, to_vnc_mock, _):
-        should_construct.return_value = True
+    def test_construct_instance_ip(self, to_vnc_mock):
         to_vnc_mock.return_value.uuid = 'd376b6b4-943d-4599-862f-d852fd6ba425'
 
         vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, self.vcenter_port)

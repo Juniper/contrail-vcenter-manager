@@ -448,12 +448,16 @@ class VRouterAPIClient(object):
     def add_port(self, vmi_model):
         """ Add port to VRouter Agent. """
         try:
+            ip_address = vmi_model.ip_address
+            if vmi_model.vnc_instance_ip:
+                ip_address = vmi_model.vnc_instance_ip.instance_ip_address
+
             parameters = dict(
                 vm_uuid_str=vmi_model.vm_model.uuid,
                 vif_uuid_str=vmi_model.uuid,
                 interface_name=vmi_model.uuid,
                 mac_address=vmi_model.vcenter_port.mac_address,
-                ip_address=vmi_model.vnc_instance_ip.instance_ip_address,
+                ip_address=ip_address,
                 vn_id=vmi_model.vn_model.uuid,
                 display_name=vmi_model.vm_model.name,
                 vlan=vmi_model.vcenter_port.vlan_id,

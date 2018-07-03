@@ -176,7 +176,7 @@ class TestVirtualNetworkService(TestCase):
 
         self.vn_service.update_vns()
 
-        assert len(self.database.vn_models) == 0
+        self.assertEqual({}, self.database.vn_models)
         self.vcenter_client.get_dpg_by_key.assert_not_called()
         self.vnc_client.read_vn.assert_not_called()
 
@@ -578,6 +578,7 @@ def construct_vmi_model():
     vmi.vn_model.uuid = 'f94fe52e-cf19-48dd-9697-8c2085e7cbee'
     vmi.vcenter_port.vlan_id = 7
     vmi.vnc_instance_ip.instance_ip_address = '192.168.200.5'
+    vmi.ip_address = '192.168.200.5'
     return vmi
 
 
