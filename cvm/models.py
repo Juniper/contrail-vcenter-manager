@@ -64,6 +64,18 @@ class VirtualMachineModel(object):
     def update_vmis(self):
         self.vmi_models = self._construct_interfaces()
 
+    def update_tools_running_status(self, tools_running_status):
+        if tools_running_status != self.vm_properties['guest.toolsRunningStatus']:
+            self.vm_properties['guest.toolsRunningStatus'] = tools_running_status
+            return True
+        return False
+
+    def update_power_state(self, power_state):
+        if power_state != self.vm_properties['runtime.powerState']:
+            self.vm_properties['runtime.powerState'] = power_state
+            return True
+        return False
+
     def _read_ports(self):
         try:
             return [VCenterPort(device)
@@ -118,9 +130,6 @@ class VirtualNetworkModel(object):
     def __init__(self, vmware_vn, vnc_vn):
         self.vmware_vn = vmware_vn
         self.key = vmware_vn.key
-        self.dvs = vmware_vn.config.distributedVirtualSwitch
-        self.dvs_name = vmware_vn.config.distributedVirtualSwitch.name
-        self.default_port_config = vmware_vn.config.defaultPortConfig
         self.vnc_vn = vnc_vn
 
     @property
@@ -157,14 +166,24 @@ class VirtualMachineInterfaceModel(object):
         self.vm_model = vm_model
         self.vn_model = vn_model
         self.vcenter_port = vcenter_port
-        self.ip_address = None
+        self._ip_address = None
         self.vnc_instance_ip = None
         self.parent = None
         self.security_group = None
 
+    def update_ip_address(self, ip_address):
+        if ip_address != self._ip_address:
+            self._ip_address = ip_address
+            return True
+        return False
+
     @property
     def uuid(self):
         return self.get_uuid(self.vcenter_port.mac_address)
+
+    @property
+    def ip_address(self):
+        return self._ip_address
 
     @property
     def display_name(self):
@@ -208,7 +227,7 @@ class VirtualMachineInterfaceModel(object):
             id_perms=ID_PERMS,
         )
 
-        instance_ip.set_instance_ip_address(self.ip_address)
+        instance_ip.set_instance_ip_address(self._ip_address)
         instance_ip.set_uuid(instance_ip_uuid)
         instance_ip.set_virtual_network(self.vn_model.vnc_vn)
         instance_ip.set_virtual_machine_interface(self.vnc_vmi)
