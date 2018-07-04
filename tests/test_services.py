@@ -6,8 +6,9 @@ from vnc_api import vnc_api
 from vnc_api.gen.resource_xsd import KeyValuePair, KeyValuePairs
 
 from cvm.clients import VNCAPIClient
-from cvm.constants import (VNC_ROOT_DOMAIN, VNC_VCENTER_DEFAULT_SG,
-                           VNC_VCENTER_IPAM, VNC_VCENTER_PROJECT)
+from cvm.constants import (VM_UPDATE_FILTERS, VNC_ROOT_DOMAIN,
+                           VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_IPAM,
+                           VNC_VCENTER_PROJECT)
 from cvm.database import Database
 from cvm.models import (VCenterPort, VirtualMachineInterfaceModel,
                         VirtualMachineModel, VlanIdPool)
@@ -51,14 +52,14 @@ class TestVirtualMachineService(TestCase):
     def test_create_property_filter(self):
         property_filter = create_property_filter(
             self.vmware_vm,
-            ['guest.toolsRunningStatus', 'guest.net']
+            VM_UPDATE_FILTERS
         )
         self.esxi_api_client.add_filter.return_value = property_filter
 
         self.vm_service.update(self.vmware_vm)
 
         self.esxi_api_client.add_filter.assert_called_once_with(
-            self.vmware_vm, ['guest.toolsRunningStatus', 'guest.net']
+            self.vmware_vm, VM_UPDATE_FILTERS
         )
         vm_model = self.database.save.call_args[0][0]
         self.assertEqual(property_filter, vm_model.property_filter)
@@ -138,15 +139,30 @@ class TestVirtualMachineService(TestCase):
         self.vnc_client.delete_vm.assert_not_called()
 
     def test_set_tools_running_status(self):
-        vm_model = Mock()
+        vmware_vm, vm_properties = create_vmware_vm_mock(uuid='vm-uuid')
+        vm_model = VirtualMachineModel(vmware_vm, vm_properties)
+        vmi_model = Mock(uuid='vmi-uuid')
+        vm_model.vmi_models = [vmi_model]
         self.database.get_vm_model_by_uuid.return_value = vm_model
-        vmware_vm = Mock()
-        value = 'guestToolsNotRunning'
+        self.database.ports_to_update = []
 
-        self.vm_service.update_vmware_tools_status(vmware_vm, value)
+        self.vm_service.update_vmware_tools_status(vmware_vm, 'guestToolsNotRunning')
 
-        self.assertEqual(value, vm_model.tools_running_status)
+        self.assertFalse(vm_model.tools_running)
         self.database.save.assert_called_once_with(vm_model)
+
+    def test_set_same_tools_status(self):
+        vmware_vm, vm_properties = create_vmware_vm_mock(uuid='vm-uuid')
+        vm_model = VirtualMachineModel(vmware_vm, vm_properties)
+        vmi_model = Mock(uuid='vmi-uuid')
+        vm_model.vmi_models = [vmi_model]
+        self.database.get_vm_model_by_uuid.return_value = vm_model
+        self.database.ports_to_update = []
+
+        self.vm_service.update_vmware_tools_status(vmware_vm, 'guestToolsRunning')
+
+        self.assertTrue(vm_model.tools_running)
+        self.database.save.assert_not_called()
 
     def test_rename_vm(self):
         vm_model = Mock()
@@ -162,6 +178,33 @@ class TestVirtualMachineService(TestCase):
         vm_model.rename.assert_called_once_with('VM-renamed')
         self.vnc_client.update_or_create_vm.assert_called_once()
         self.database.save.assert_called_once_with(vm_model)
+
+    def test_update_power_state(self):
+        vmware_vm, vm_properties = create_vmware_vm_mock(uuid='vm-uuid')
+        vm_model = VirtualMachineModel(vmware_vm, vm_properties)
+        vmi_model = Mock(uuid='vmi-uuid')
+        vm_model.vmi_models = [vmi_model]
+        self.database.get_vm_model_by_uuid.return_value = vm_model
+        self.database.ports_to_update = []
+
+        self.vm_service.update_power_state(vmware_vm, 'poweredOff')
+
+        self.assertFalse(vm_model.is_powered_on)
+        self.assertEqual([vmi_model], self.database.ports_to_update)
+
+    def test_update_same_power_state(self):
+        vmware_vm, vm_properties = create_vmware_vm_mock(uuid='vm-uuid')
+        vm_model = VirtualMachineModel(vmware_vm, vm_properties)
+        vmi_model = Mock(uuid='vmi-uuid')
+        vm_model.vmi_models = [vmi_model]
+        self.database.get_vm_model_by_uuid.return_value = vm_model
+        self.database.ports_to_update = []
+
+        self.vm_service.update_power_state(vmware_vm, 'poweredOn')
+
+        self.database.save.assert_not_called()
+        self.assertTrue(vm_model.is_powered_on)
+        self.assertEqual([], self.database.ports_to_update)
 
 
 class TestVirtualNetworkService(TestCase):
@@ -367,6 +410,18 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.assertEqual(0, self.vnc_client.create_and_read_instance_ip.call_count)
         self.vnc_client.update_or_create_vmi.assert_called_once()
         self.assertIn(vmi_model, self.database.ports_to_update)
+
+    def test_update_nic(self):
+        vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model,
+                                                 VCenterPort(Mock(macAddress='mac_addr')))
+        vmi_model.parent = vnc_api.Project()
+        vmi_model.security_group = vnc_api.SecurityGroup()
+        self.database.save(vmi_model)
+        nic_info = Mock(macAddress='mac_addr', ipAddress=['192.168.100.5'])
+
+        self.vmi_service.update_nic(nic_info)
+
+        self.assertEqual('192.168.100.5', vmi_model.ip_address)
 
 
 class TestVMIInstanceIp(TestCase):
@@ -647,7 +702,7 @@ class TestPortService(TestCase):
 
     def test_enable_port(self):
         vmi_model = construct_vmi_model()
-        vmi_model.vm_model.is_powered_on = True
+        vmi_model.vm_model.update_power_state = True
         self.database.ports_to_update.append(vmi_model)
 
         with patch('cvm.services.VRouterPortService._port_needs_an_update') as port_check:

@@ -12,7 +12,7 @@ from pysandesh.sandesh_base import Sandesh
 import cvm.constants as const
 from cvm.clients import (ESXiAPIClient, VCenterAPIClient, VNCAPIClient,
                          VRouterAPIClient)
-from cvm.controllers import (GuestNetHandler, UpdateHandler,
+from cvm.controllers import (GuestNetHandler, PowerStateHandler, UpdateHandler,
                              VmReconfiguredHandler, VmRemovedHandler,
                              VmRenamedHandler, VmUpdatedHandler,
                              VmwareController, VmwareToolsStatusHandler)
@@ -78,6 +78,7 @@ def build_monitor(config_file, lock, database):
     vm_removed_handler = VmRemovedHandler(vm_service, vmi_service, vrouter_port_service)
     guest_net_handler = GuestNetHandler(vmi_service, vrouter_port_service)
     vmware_tools_status_handler = VmwareToolsStatusHandler(vm_service)
+    power_state_handler = PowerStateHandler(vm_service, vrouter_port_service)
     handlers = [
         vm_updated_handler,
         vm_renamed_handler,
@@ -85,6 +86,7 @@ def build_monitor(config_file, lock, database):
         vm_removed_handler,
         guest_net_handler,
         vmware_tools_status_handler,
+        power_state_handler,
     ]
     update_handler = UpdateHandler(handlers)
     vmware_controller = VmwareController(vm_service, vn_service,
