@@ -26,7 +26,6 @@ class VmwareController(object):
             self._vrouter_port_service.sync_ports()
 
     def handle_update(self, update_set):
-        logger.info('Handling ESXi update.')
         with self._lock:
             self._update_handler.handle_update(update_set)
 
@@ -181,7 +180,18 @@ class VmwareToolsStatusHandler(AbstractChangeHandler):
 
     def _handle_change(self, obj, value):
         try:
-            logger.info('Handling toolsRunningStatus update.')
             self._vm_service.update_vmware_tools_status(obj, value)
         except vmodl.fault.ManagedObjectNotFound:
-            logger.info('Skipping toolsRunningStatus change for a non-existent VM.')
+            pass
+
+
+class PowerStateHandler(AbstractChangeHandler):
+    PROPERTY_NAME = 'runtime.powerState'
+
+    def __init__(self, vm_service, vrouter_port_service):
+        self._vm_service = vm_service
+        self._vrouter_port_service = vrouter_port_service
+
+    def _handle_change(self, obj, value):
+        self._vm_service.update_power_state(obj, value)
+        self._vrouter_port_service.sync_ports()

@@ -21,7 +21,11 @@ VM_PROPERTY_FILTERS = [
     'guest.toolsRunningStatus',
     'summary.runtime.host',
 ]
-
+VM_UPDATE_FILTERS = [
+    'guest.toolsRunningStatus',
+    'guest.net',
+    'runtime.powerState',
+]
 VNC_ROOT_DOMAIN = 'default-domain'
 VNC_VCENTER_PROJECT = 'vCenter'
 VNC_VCENTER_IPAM = 'vCenter-ipam'
