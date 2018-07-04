@@ -4,9 +4,10 @@ from unittest import TestCase
 from mock import Mock
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 
-from cvm.controllers import (GuestNetHandler, UpdateHandler,
+from cvm.controllers import (GuestNetHandler, PowerStateHandler, UpdateHandler,
                              VmReconfiguredHandler, VmRemovedHandler,
-                             VmRenamedHandler, VmwareController, VmwareToolsStatusHandler)
+                             VmRenamedHandler, VmwareController,
+                             VmwareToolsStatusHandler)
 
 logging.disable(logging.CRITICAL)
 
@@ -34,12 +35,14 @@ class TestVmwareController(TestCase):
                                                         self.vmi_service, self.vrouter_port_service)
         guest_net_handler = GuestNetHandler(self.vmi_service, self.vrouter_port_service)
         vmware_tools_handler = VmwareToolsStatusHandler(self.vm_service)
+        power_state_handler = PowerStateHandler(self.vm_service, self.vrouter_port_service)
         handlers = [
             vm_renamed_handler,
             vm_removed_handler,
             vm_reconfigured_handler,
             guest_net_handler,
             vmware_tools_handler,
+            power_state_handler,
         ]
         update_handler = UpdateHandler(handlers)
         lock = Mock(__enter__=Mock(), __exit__=Mock())
@@ -113,4 +116,13 @@ class TestVmwareController(TestCase):
         self.vmware_controller.handle_update(update_set)
 
         self.vmi_service.update_nic.assert_called_once()
+        self.vrouter_port_service.sync_ports.assert_called_once()
+
+    def test_power_state(self):
+        vmware_vm = Mock()
+        update_set = construct_update_set('runtime.powerState', 'poweredOn', vmware_vm)
+
+        self.vmware_controller.handle_update(update_set)
+
+        self.vm_service.update_power_state.assert_called_once_with(vmware_vm, 'poweredOn')
         self.vrouter_port_service.sync_ports.assert_called_once()

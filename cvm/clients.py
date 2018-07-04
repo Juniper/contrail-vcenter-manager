@@ -190,7 +190,6 @@ class VCenterAPIClient(VSphereAPIClient):
         logger.info('Restoring VLAN ID of port %s to inherited value', vcenter_port.port_key)
         dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
         dv_port_config_spec = make_dv_port_spec(dv_port)
-        logger.info('Restoring vCenter VLAN ID of port %s', vcenter_port.port_key)
         self._dvs.ReconfigureDVPort_Task(port=[dv_port_config_spec])
 
     def get_reserved_vlan_ids(self):

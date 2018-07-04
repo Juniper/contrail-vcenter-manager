@@ -55,6 +55,26 @@ class TestVirtualMachineModel(TestCase):
         self.assertFalse(vm_model.is_powered_on)
         self.assertFalse(vm_model.tools_running)
 
+    def test_update_power_state(self):
+        vm_model = VirtualMachineModel(self.vmware_vm, self.vm_properties)
+
+        result = vm_model.update_power_state('poweredOff')
+        result2 = vm_model.update_power_state('poweredOff')
+
+        self.assertTrue(result)
+        self.assertFalse(result2)
+        self.assertFalse(vm_model.is_powered_on)
+
+    def test_update_tools_running(self):
+        vm_model = VirtualMachineModel(self.vmware_vm, self.vm_properties)
+
+        result = vm_model.update_tools_running_status('guestToolsNotRunning')
+        result2 = vm_model.update_tools_running_status('guestToolsNotRunning')
+
+        self.assertTrue(result)
+        self.assertFalse(result2)
+        self.assertFalse(vm_model.tools_running)
+
 
 class TestVirtualMachineInterfaceModel(TestCase):
     def setUp(self):
@@ -108,6 +128,16 @@ class TestVirtualMachineInterfaceModel(TestCase):
                            'ip-' + self.vn_model.name + '-' + self.vm_model.name)),
             instance_ip.uuid
         )
+
+    def test_update_ip_address(self):
+        vmi_model = VirtualMachineInterfaceModel(self.vm_model, self.vn_model, self.vcenter_port)
+
+        result = vmi_model.update_ip_address('192.168.100.5')
+        result2 = vmi_model.update_ip_address('192.168.100.5')
+
+        self.assertEqual('192.168.100.5', vmi_model.ip_address)
+        self.assertTrue(result)
+        self.assertFalse(result2)
 
 
 class TestVlanIdPool(TestCase):
