@@ -1,3 +1,5 @@
+from vnc_api.vnc_api import IdPermsType
+
 EVENTS_TO_OBSERVE = [
     'VmCreatedEvent',
     'VmClonedEvent',
@@ -38,5 +40,7 @@ CONTRAIL_NETWORK = 'VM-PG'
 
 VLAN_ID_RANGE_START = 0
 VLAN_ID_RANGE_END = 4095
+
+ID_PERMS = IdPermsType(creator='vcenter-manager', enable=True)
 
 LOG_FILE = '/var/log/contrail/contrail-vcenter-manager.log'

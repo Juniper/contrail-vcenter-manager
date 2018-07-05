@@ -3,17 +3,13 @@ import uuid
 from collections import deque
 
 from pyVmomi import vim  # pylint: disable=no-name-in-module
-from vnc_api.vnc_api import (IdPermsType, InstanceIp, KeyValuePair,
-                             KeyValuePairs, MacAddressesType, VirtualMachine,
+from vnc_api.vnc_api import (InstanceIp, KeyValuePair, KeyValuePairs,
+                             MacAddressesType, VirtualMachine,
                              VirtualMachineInterface)
 
-from cvm.constants import (CONTRAIL_VM_NAME, VNC_ROOT_DOMAIN,
-                           VNC_VCENTER_PROJECT)
+from cvm.constants import CONTRAIL_VM_NAME, ID_PERMS
 
 logger = logging.getLogger(__name__)
-
-ID_PERMS = IdPermsType(creator='vcenter-manager',
-                       enable=True)
 
 
 def find_vrouter_uuid(host):
@@ -26,32 +22,18 @@ def find_vrouter_uuid(host):
     return None
 
 
-def find_vmi_port_key(vmware_vm, mac_address):
-    try:
-        devices = vmware_vm.config.hardware.device
-        for device in devices:
-            try:
-                if device.macAddress == mac_address:
-                    return device.backing.port.portKey
-            except AttributeError:
-                pass
-    except AttributeError:
-        pass
-    return None
-
-
 class VirtualMachineModel(object):
     def __init__(self, vmware_vm, vm_properties):
-        self.vmware_vm = vmware_vm  # TODO: Consider removing this
         self.vm_properties = vm_properties
+        self.devices = vmware_vm.config.hardware.device
         self.vrouter_uuid = find_vrouter_uuid(vmware_vm.summary.runtime.host)
         self.property_filter = None
         self.ports = self._read_ports()
         self.vmi_models = self._construct_interfaces()
 
     def update(self, vmware_vm, vm_properties):
-        self.vmware_vm = vmware_vm  # TODO: Consider removing this
         self.vm_properties = vm_properties
+        self.devices = vmware_vm.config.hardware.device
         self.vrouter_uuid = find_vrouter_uuid(vmware_vm.summary.runtime.host)
         self.ports = self._read_ports()
 
@@ -79,7 +61,7 @@ class VirtualMachineModel(object):
     def _read_ports(self):
         try:
             return [VCenterPort(device)
-                    for device in self.vmware_vm.config.hardware.device
+                    for device in self.devices
                     if isinstance(device.backing, vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo)]
         except AttributeError:
             logger.error('Could not read ports for %s.', self.name)
@@ -148,14 +130,6 @@ class VirtualNetworkModel(object):
     def subnet_info_is_set(self):
         return self.vnc_vn.get_network_ipam_refs()
 
-    @staticmethod
-    def get_fq_name(name):
-        return [VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, name]
-
-    @staticmethod
-    def get_uuid(key):
-        return str(uuid.uuid3(uuid.NAMESPACE_DNS, key))
-
     def __repr__(self):
         return 'VirtualNetworkModel(uuid=%s, key=%s, name=%s)' % \
                (self.uuid, self.key, self.name)
@@ -190,9 +164,6 @@ class VirtualMachineInterfaceModel(object):
         if self.vn_model and self.vm_model:
             return 'vmi-{}-{}'.format(self.vn_model.name, self.vm_model.name)
         return None
-
-    def refresh_port_key(self):
-        self.vcenter_port.port_key = find_vmi_port_key(self.vm_model.vmware_vm, self.vcenter_port.mac_address)
 
     @property
     def vnc_vmi(self):
