@@ -43,7 +43,7 @@ class TestVirtualMachineService(TestCase):
         vm_model = self.database.save.call_args[0][0]
         self.assertIsNotNone(vm_model)
         self.assertEqual(self.vm_properties, vm_model.vm_properties)
-        self.assertEqual(self.vmware_vm, vm_model.vmware_vm)
+        self.assertEqual(self.vmware_vm.config.hardware.device, vm_model.devices)
         self.assertEqual({'c8:5b:76:53:0f:f5': 'dportgroup-50'},
                          {vm_model.ports[0].mac_address: vm_model.ports[0].portgroup_key})
         self.vnc_client.update_or_create_vm.assert_called_once()
@@ -93,7 +93,8 @@ class TestVirtualMachineService(TestCase):
 
         self.database.save.assert_called_once()
         self.vnc_client.update_or_create_vm.assert_called_once()
-        self.assertEqual(self.vmware_vm, self.database.save.call_args[0][0].vmware_vm)
+        self.assertEqual(self.vmware_vm.config.hardware.device,
+                         self.database.save.call_args[0][0].devices)
 
     def test_sync_no_vms(self):
         """ Syncing when there's no VMware VMs doesn't update anything. """

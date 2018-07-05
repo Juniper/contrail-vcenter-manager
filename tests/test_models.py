@@ -16,7 +16,7 @@ class TestVirtualMachineModel(TestCase):
     def test_init(self):
         vm_model = VirtualMachineModel(self.vmware_vm, self.vm_properties)
 
-        self.assertEqual(self.vmware_vm, vm_model.vmware_vm)
+        self.assertEqual(self.vmware_vm.config.hardware.device, vm_model.devices)
         self.assertEqual('d376b6b4-943d-4599-862f-d852fd6ba425', vm_model.uuid)
         self.assertEqual('VM', vm_model.name)
         self.assertTrue(vm_model.is_powered_on)
@@ -49,7 +49,7 @@ class TestVirtualMachineModel(TestCase):
 
         vm_model.update(vmware_vm, new_properties)
 
-        self.assertEqual(vmware_vm, vm_model.vmware_vm)
+        self.assertEqual(vmware_vm.config.hardware.device, vm_model.devices)
         self.assertEqual('52073317-45b6-c3ee-596f-63dd49dd689e', vm_model.uuid)
         self.assertEqual('VM', vm_model.name)
         self.assertFalse(vm_model.is_powered_on)

@@ -71,13 +71,13 @@ class VirtualMachineService(Service):
         vm_model = VirtualMachineModel(vmware_vm, vm_properties)
         for vmi_model in vm_model.vmi_models:
             self._database.vmis_to_update.append(vmi_model)
-        self._add_property_filter_for_vm(vm_model, VM_UPDATE_FILTERS)
+        self._add_property_filter_for_vm(vm_model, vmware_vm, VM_UPDATE_FILTERS)
         self._vnc_api_client.update_or_create_vm(vm_model.vnc_vm)
         logger.info('Created %s', vm_model)
         self._database.save(vm_model)
 
-    def _add_property_filter_for_vm(self, vm_model, filters):
-        property_filter = self._esxi_api_client.add_filter(vm_model.vmware_vm, filters)
+    def _add_property_filter_for_vm(self, vm_model, vmware_vm, filters):
+        property_filter = self._esxi_api_client.add_filter(vmware_vm, filters)
         vm_model.property_filter = property_filter
 
     def get_vms_from_vmware(self):
@@ -191,7 +191,7 @@ class VirtualMachineInterfaceService(Service):
         vmis_to_update = [vmi_model for vmi_model in self._database.vmis_to_update]
         for vmi_model in vmis_to_update:
             logger.info('Updating %s', vmi_model)
-            self.update_vmis_vn(vmi_model)
+            self._update_vmis_vn(vmi_model)
             self._database.vmis_to_update.remove(vmi_model)
             logger.info('Updated %s', vmi_model)
 
@@ -200,7 +200,7 @@ class VirtualMachineInterfaceService(Service):
             self._delete(vmi_model)
             self._database.vmis_to_delete.remove(vmi_model)
 
-    def update_vmis_vn(self, new_vmi_model):
+    def _update_vmis_vn(self, new_vmi_model):
         old_vmi_model = self._database.get_vmi_model_by_uuid(new_vmi_model.uuid)
         new_vmi_model.vn_model = self._database.get_vn_model_by_key(new_vmi_model.vcenter_port.portgroup_key)
         if old_vmi_model and old_vmi_model.vn_model != new_vmi_model.vn_model:
