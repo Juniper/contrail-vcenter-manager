@@ -145,16 +145,17 @@ class TestVNCAPIClient(TestCase):
 
     def test_update_create_vmi(self):
         vnc_vmi = Mock()
+        self.vnc_lib.virtual_machine_interface_read.side_effect = NoIdError(None)
 
-        self.vnc_client.update_or_create_vmi(vnc_vmi)
+        self.vnc_client.update_vmi(vnc_vmi)
 
-        self.vnc_lib.virtual_machine_interface_update.assert_called_once()
+        self.vnc_lib.virtual_machine_interface_create.assert_called_once()
 
     def test_update_create_new_vmi(self):
         vnc_vmi = Mock()
-        self.vnc_lib.virtual_machine_interface_update.side_effect = NoIdError(None)
+        self.vnc_lib.virtual_machine_interface_read.side_effect = NoIdError(None)
 
-        self.vnc_client.update_or_create_vmi(vnc_vmi)
+        self.vnc_client.update_vmi(vnc_vmi)
 
         self.vnc_lib.virtual_machine_interface_create.assert_called_once_with(vnc_vmi)
 
