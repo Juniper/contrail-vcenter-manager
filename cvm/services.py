@@ -227,7 +227,7 @@ class VirtualMachineInterfaceService(Service):
         vmi_model.security_group = self._default_security_group
 
     def _update_in_vnc(self, vmi_model):
-        self._vnc_api_client.update_or_create_vmi(vmi_model.vnc_vmi)
+        self._vnc_api_client.update_vmi(vmi_model.vnc_vmi)
 
     def _add_instance_ip_to(self, vmi_model):
         vmi_model.construct_instance_ip()
@@ -261,7 +261,8 @@ class VirtualMachineInterfaceService(Service):
         if not vmi_model.update_ip_address(ip_address):
             return
         self._add_instance_ip_to(vmi_model)
-        logger.info('IP address of %s updated to %s', vmi_model.display_name, ip_address)
+        logger.info('IP address of %s updated to %s',
+                    vmi_model.display_name, vmi_model.vnc_instance_ip.instance_ip_address)
 
     def _delete(self, vmi_model):
         self._delete_from_vnc(vmi_model)
