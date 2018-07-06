@@ -42,5 +42,3 @@ VLAN_ID_RANGE_START = 0
 VLAN_ID_RANGE_END = 4095
 
 ID_PERMS = IdPermsType(creator='vcenter-manager', enable=True)
-
-LOG_FILE = '/var/log/contrail/contrail-vcenter-manager.log'
