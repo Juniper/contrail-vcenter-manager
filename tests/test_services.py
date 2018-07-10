@@ -360,13 +360,16 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.assertEqual(0, len(self.database.get_all_vmi_models()))
 
     def test_sync_deletes_unused_vmis(self):
-        self.vnc_client.get_vmis_by_project.return_value = [Mock()]
+        vnc_vmi = Mock()
+        vnc_vmi.get_uuid.return_value = 'vmi-uuid'
+        self.vnc_client.get_vmis_by_project.return_value = [vnc_vmi]
 
         with patch('cvm.services.VirtualMachineInterfaceService._can_modify_in_vnc') as can_modify:
             can_modify.return_value = True
             self.vmi_service.sync_vmis()
 
         self.vnc_client.delete_vmi.assert_called_once()
+        self.assertEqual('vmi-uuid', self.database.ports_to_delete[0])
 
     def test_remove_vmis_for_vm_model(self):
         device = Mock(macAddress='mac_addr')
