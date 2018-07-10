@@ -246,6 +246,7 @@ class VirtualMachineInterfaceService(Service):
             if self._can_modify_in_vnc(vnc_vmi):
                 logger.info('Deleting %s from VNC.', vnc_vmi.name)
                 self._vnc_api_client.delete_vmi(vnc_vmi.get_uuid())
+            self._delete_vrouter_port(vnc_vmi.get_uuid())
 
     def update_nic(self, nic_info):
         vmi_model = self._database.get_vmi_model_by_uuid(VirtualMachineInterfaceModel.get_uuid(nic_info.macAddress))
@@ -268,7 +269,7 @@ class VirtualMachineInterfaceService(Service):
         self._delete_from_vnc(vmi_model)
         self._restore_vlan_id(vmi_model)
         self._database.delete_vmi_model(vmi_model.uuid)
-        self._delete_vrouter_port(vmi_model)
+        self._delete_vrouter_port(vmi_model.uuid)
 
     def _delete_from_vnc(self, vmi_model):
         self._vnc_api_client.delete_vmi(vmi_model.uuid)
@@ -279,8 +280,8 @@ class VirtualMachineInterfaceService(Service):
         self._vlan_id_pool.free(vmi_model.vcenter_port.vlan_id)
         vmi_model.vcenter_port.vlan_id = None
 
-    def _delete_vrouter_port(self, vmi_model):
-        self._database.ports_to_delete.append(vmi_model.uuid)
+    def _delete_vrouter_port(self, uuid):
+        self._database.ports_to_delete.append(uuid)
 
     def remove_vmis_for_vm_model(self, vm_name):
         vm_model = self._database.get_vm_model_by_name(vm_name)
@@ -292,7 +293,7 @@ class VirtualMachineInterfaceService(Service):
                 self._delete_from_vnc(vmi_model)
                 self._restore_vlan_id(vmi_model)
             self._database.delete_vmi_model(vmi_model.uuid)
-            self._delete_vrouter_port(vmi_model)
+            self._delete_vrouter_port(vmi_model.uuid)
 
     def rename_vmis(self, new_name):
         vm_model = self._database.get_vm_model_by_name(new_name)
