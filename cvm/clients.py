@@ -268,21 +268,17 @@ class VNCAPIClient(object):
     def read_vm(self, uuid):
         return self.vnc_lib.virtual_machine_read(id=uuid)
 
-    def update_or_create_vmi(self, vnc_vmi):
+    def update_vmi(self, vnc_vmi):
         try:
             logger.info('Attempting to update Virtual Machine Interface %s in VNC', vnc_vmi.name)
-            self._update_vmi(vnc_vmi)
+            self.delete_vmi(vnc_vmi.get_uuid())
         except NoIdError:
             logger.info('Virtual Machine Interface %s not found in VNC - creating', vnc_vmi.name)
-            self._create_vmi(vnc_vmi)
+        self._create_vmi(vnc_vmi)
 
-    def _update_vmi(self, vnc_vmi):
-        self.vnc_lib.virtual_machine_interface_update(vnc_vmi)
+    def _create_vmi(self, vnc_vmi):
+        self.vnc_lib.virtual_machine_interface_create(vnc_vmi)
         logger.info('Virtual Machine Interface %s updated in VNC', vnc_vmi.name)
-
-    def _create_vmi(self, vmi):
-        self.vnc_lib.virtual_machine_interface_create(vmi)
-        logger.info('Virtual Machine Interface %s created in VNC', vmi.display_name)
 
     def delete_vmi(self, uuid):
         vmi = self.read_vmi(uuid)
@@ -306,11 +302,7 @@ class VNCAPIClient(object):
         return [self.read_vmi(vmi['uuid']) for vmi in vmis]
 
     def read_vmi(self, uuid):
-        try:
-            return self.vnc_lib.virtual_machine_interface_read(id=uuid)
-        except NoIdError:
-            logger.error('Virtual Machine Interface %s not found in VNC', uuid)
-            return None
+        return self.vnc_lib.virtual_machine_interface_read(id=uuid)
 
     def read_vn(self, fq_name):
         try:

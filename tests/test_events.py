@@ -287,8 +287,8 @@ def test_vm_created(vcenter_api_client, vn_model_1, vm_created_update,
 
     # Check if VMI Model has been saved properly:
     # - in VNC
-    vnc_api_client.update_or_create_vmi.assert_called_once()
-    vnc_vmi = vnc_api_client.update_or_create_vmi.call_args[0][0]
+    vnc_api_client.update_vmi.assert_called_once()
+    vnc_vmi = vnc_api_client.update_vmi.call_args[0][0]
     assert_vnc_vmi_state(vnc_vmi, mac_address='11:11:11:11:11:11',
                          vnc_vm_uuid=vnc_vm.uuid, vnc_vn_uuid=vnc_vn_1.uuid)
 
@@ -358,7 +358,7 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
 
     # Check if VM Model has been saved properly:
     # - in VNC:
-    assert vnc_api_client.update_or_create_vmi.call_count == 2
+    assert vnc_api_client.update_vmi.call_count == 2
     vnc_vm = vnc_api_client.update_or_create_vm.call_args[0][0]
     assert_vnc_vm_state(vnc_vm, uuid='12345678-1234-1234-1234-123456789012',
                         name='12345678-1234-1234-1234-123456789012')
@@ -369,8 +369,8 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
 
     # Check if VMI Model has been saved properly:
     # - in VNC
-    assert vnc_api_client.update_or_create_vmi.call_count == 2
-    vnc_vmi = vnc_api_client.update_or_create_vmi.call_args[0][0]
+    assert vnc_api_client.update_vmi.call_count == 2
+    vnc_vmi = vnc_api_client.update_vmi.call_args[0][0]
     assert_vnc_vmi_state(vnc_vmi, mac_address='11:11:11:11:11:11', vnc_vm_uuid=vnc_vm.uuid)
 
     # - in Database
@@ -455,8 +455,8 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
 
     # - in VNC
     vnc_api_client.delete_vmi.assert_called_once_with(vmi_model.uuid)
-    assert vnc_api_client.update_or_create_vmi.call_count == 2
-    vnc_vmi = vnc_api_client.update_or_create_vmi.call_args[0][0]
+    assert vnc_api_client.update_vmi.call_count == 2
+    vnc_vmi = vnc_api_client.update_vmi.call_args[0][0]
     assert_vnc_vmi_state(vnc_vmi, mac_address='11:11:11:11:11:11', vnc_vn_uuid=vnc_vn_2.uuid)
 
     # Check if VMI Model's Instance IP has been updated in VNC:
@@ -560,7 +560,7 @@ def test_contrail_vm(vcenter_api_client, vm_created_update, esxi_api_client,
 
     # There were no calls to vnc_api
     vnc_api_client.update_or_create_vm.assert_not_called()
-    vnc_api_client.update_or_create_vmi.assert_not_called()
+    vnc_api_client.update_vmi.assert_not_called()
 
     # There were no calls to vrouter_api
     vrouter_api_client.add_port.assert_not_called()
@@ -606,4 +606,4 @@ def test_external_ipam(vcenter_api_client, vm_created_update, esxi_api_client,
     vrouter_api_client.delete_port.assert_called_once()
 
     # The VMI itself should not be updated, since there's no new info
-    vnc_api_client.update_or_create_vmi.assert_called_once()
+    vnc_api_client.update_vmi.assert_called_once()

@@ -285,7 +285,7 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.assertEqual(self.vm_model, saved_vmi.vm_model)
         self.assertEqual(self.vn_model, saved_vmi.vn_model)
         self.assertIn(saved_vmi, self.database.ports_to_update)
-        vnc_vmi = self.vnc_client.update_or_create_vmi.call_args[0][0]
+        vnc_vmi = self.vnc_client.update_vmi.call_args[0][0]
         self.assertIn(self.vn_model.uuid, [ref['uuid'] for ref in vnc_vmi.get_virtual_network_refs()])
 
     def test_no_update_for_no_dpgs(self):
@@ -297,7 +297,7 @@ class TestVirtualMachineInterfaceService(TestCase):
         self.vmi_service.update_vmis()
 
         self.assertEqual(0, len(self.database.get_all_vmi_models()))
-        self.vnc_client.update_or_create_vmi.assert_not_called()
+        self.vnc_client.update_vmi.assert_not_called()
         self.assertEqual([], self.database.ports_to_update)
 
     def test_update_existing_vmi(self):
@@ -328,7 +328,7 @@ class TestVirtualMachineInterfaceService(TestCase):
         saved_vmi = self.database.get_all_vmi_models()[0]
         self.assertEqual(self.vm_model, saved_vmi.vm_model)
         self.assertEqual(second_vn_model, saved_vmi.vn_model)
-        vnc_vmi = self.vnc_client.update_or_create_vmi.call_args[0][0]
+        vnc_vmi = self.vnc_client.update_vmi.call_args[0][0]
         self.assertIn(second_vn_model.uuid, [ref['uuid'] for ref in vnc_vmi.get_virtual_network_refs()])
         self.assertIn(saved_vmi, self.database.ports_to_update)
 
@@ -412,7 +412,7 @@ class TestVirtualMachineInterfaceService(TestCase):
 
         self.assertEqual('vmi-VM Portgroup-VM-renamed', vmi_model.display_name)
         self.assertEqual(0, self.vnc_client.create_and_read_instance_ip.call_count)
-        self.vnc_client.update_or_create_vmi.assert_called_once()
+        self.vnc_client.update_vmi.assert_called_once()
         self.assertIn(vmi_model, self.database.ports_to_update)
 
     def test_update_nic(self):
