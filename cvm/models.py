@@ -40,10 +40,9 @@ class VirtualMachineModel(object):
     def rename(self, name):
         self.vm_properties['name'] = name
 
-    def update_ports(self):
+    def update_interfaces(self, vmware_vm):
+        self.devices = vmware_vm.config.hardware.device
         self.ports = self._read_ports()
-
-    def update_vmis(self):
         self.vmi_models = self._construct_interfaces()
 
     def update_tools_running_status(self, tools_running_status):
