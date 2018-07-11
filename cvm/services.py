@@ -125,8 +125,7 @@ class VirtualMachineService(Service):
     def update_vm_models_interfaces(self, vmware_vm):
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
         old_vmi_models = {vmi_model.uuid: vmi_model for vmi_model in vm_model.vmi_models}
-        vm_model.update_ports()
-        vm_model.update_vmis()
+        vm_model.update_interfaces(vmware_vm)
         new_vmi_models = {vmi_model.uuid: vmi_model for vmi_model in vm_model.vmi_models}
 
         for uuid, new_vmi_model in new_vmi_models.items():
