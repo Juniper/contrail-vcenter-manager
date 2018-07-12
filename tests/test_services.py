@@ -29,7 +29,7 @@ class TestVirtualMachineService(TestCase):
             vmware_dpg,
             Mock(spec=vim.Network),
         ])
-        self.vnc_client = Mock()
+        self.vnc_client = create_vnc_client_mock()
         self.vcenter_client = create_vcenter_client_mock()
         self.database = Mock()
         self.database.get_vm_model_by_uuid.return_value = None
@@ -206,6 +206,12 @@ class TestVirtualMachineService(TestCase):
         self.database.save.assert_not_called()
         self.assertTrue(vm_model.is_powered_on)
         self.assertEqual([], self.database.ports_to_update)
+
+    def test_set_vm_owner(self):
+        self.vm_service.update(self.vmware_vm)
+
+        vnc_vm = self.vnc_client.update_or_create_vm.call_args[0][0]
+        self.assertEqual('project-uuid', vnc_vm.get_perms2().get_owner())
 
 
 class TestVirtualNetworkService(TestCase):

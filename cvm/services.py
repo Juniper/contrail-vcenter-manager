@@ -1,6 +1,8 @@
 import ipaddress
 import logging
 
+from vnc_api.vnc_api import PermType2
+
 from cvm.constants import (CONTRAIL_VM_NAME, VM_UPDATE_FILTERS,
                            VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT)
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
@@ -72,13 +74,22 @@ class VirtualMachineService(Service):
         for vmi_model in vm_model.vmi_models:
             self._database.vmis_to_update.append(vmi_model)
         self._add_property_filter_for_vm(vm_model, vmware_vm, VM_UPDATE_FILTERS)
-        self._vnc_api_client.update_or_create_vm(vm_model.vnc_vm)
+        self._update_in_vnc(vm_model.vnc_vm)
         logger.info('Created %s', vm_model)
         self._database.save(vm_model)
 
     def _add_property_filter_for_vm(self, vm_model, vmware_vm, filters):
         property_filter = self._esxi_api_client.add_filter(vmware_vm, filters)
         vm_model.property_filter = property_filter
+
+    def _update_in_vnc(self, vnc_vm):
+        self._add_owner_to(vnc_vm)
+        self._vnc_api_client.update_or_create_vm(vnc_vm)
+
+    def _add_owner_to(self, vnc_vm):
+        perms2 = PermType2()
+        perms2.set_owner(self._project.get_uuid())
+        vnc_vm.set_perms2(perms2)
 
     def get_vms_from_vmware(self):
         vmware_vms = self._esxi_api_client.get_all_vms()
@@ -119,7 +130,7 @@ class VirtualMachineService(Service):
         vm_model = self._database.get_vm_model_by_name(old_name)
         vm_model.rename(new_name)
         if self._can_modify_in_vnc(vm_model.vnc_vm):
-            self._vnc_api_client.update_or_create_vm(vm_model.vnc_vm)
+            self._update_in_vnc(vm_model.vnc_vm)
         self._database.save(vm_model)
 
     def update_vm_models_interfaces(self, vmware_vm):
