@@ -160,7 +160,9 @@ def vm_reconfigured_update(vmware_vm_1):
 @pytest.fixture()
 def vnc_api_client():
     vnc_client = Mock()
-    vnc_client.read_or_create_project.return_value = Project()
+    project = Project()
+    project.set_uuid('project-uuid')
+    vnc_client.read_or_create_project.return_value = project
     vnc_client.create_and_read_instance_ip.side_effect = assign_ip_to_instance_ip
     return vnc_client
 
@@ -243,11 +245,15 @@ def assert_vnc_vmi_state(vnc_vmi, mac_address=None, vnc_vm_uuid=None, vnc_vn_uui
         assert vnc_vn_uuid in [ref['uuid'] for ref in vnc_vmi.get_virtual_network_refs()]
 
 
-def assert_vnc_vm_state(vnc_vm, uuid=None, name=None):
+def assert_vnc_vm_state(vnc_vm, uuid=None, name=None, display_name=None, owner=None):
     if uuid is not None:
         assert vnc_vm.uuid == uuid
     if name is not None:
         assert vnc_vm.name == name
+    if display_name is not None:
+        assert vnc_vm.display_name == display_name
+    if owner is not None:
+        assert vnc_vm.get_perms2().get_owner() == owner
 
 
 def test_vm_created(vcenter_api_client, vn_model_1, vm_created_update,
@@ -279,7 +285,7 @@ def test_vm_created(vcenter_api_client, vn_model_1, vm_created_update,
     vnc_api_client.update_or_create_vm.assert_called_once()
     vnc_vm = vnc_api_client.update_or_create_vm.call_args[0][0]
     assert_vnc_vm_state(vnc_vm, uuid='12345678-1234-1234-1234-123456789012',
-                        name='12345678-1234-1234-1234-123456789012')
+                        name='12345678-1234-1234-1234-123456789012', owner='project-uuid')
 
     # - in Database:
     vm_model = database.get_vm_model_by_uuid('12345678-1234-1234-1234-123456789012')
@@ -361,7 +367,7 @@ def test_vm_renamed(vcenter_api_client, vn_model_1, vm_created_update,
     assert vnc_api_client.update_vmi.call_count == 2
     vnc_vm = vnc_api_client.update_or_create_vm.call_args[0][0]
     assert_vnc_vm_state(vnc_vm, uuid='12345678-1234-1234-1234-123456789012',
-                        name='12345678-1234-1234-1234-123456789012')
+                        name='12345678-1234-1234-1234-123456789012', display_name='VM1-renamed')
 
     # - in Database:
     vm_model = database.get_vm_model_by_uuid('12345678-1234-1234-1234-123456789012')

@@ -46,7 +46,9 @@ def create_vcenter_client_mock():
 
 def create_vnc_client_mock():
     vnc_client = Mock()
-    vnc_client.read_or_create_project.return_value = vnc_api.Project()
+    project = vnc_api.Project()
+    project.set_uuid('project-uuid')
+    vnc_client.read_or_create_project.return_value = project
     vnc_client.read_security_group.return_value = vnc_api.SecurityGroup()
     return vnc_client
 
