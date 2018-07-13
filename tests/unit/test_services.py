@@ -18,7 +18,7 @@ from cvm.services import (Service, VirtualMachineInterfaceService,
 from tests.utils import (create_dpg_mock, create_property_filter,
                          create_vcenter_client_mock, create_vmware_vm_mock,
                          create_vn_model, create_vnc_client_mock,
-                         reserve_vlan_ids)
+                         reserve_vlan_ids, create_vnc_vn)
 
 
 class TestVirtualMachineService(TestCase):
@@ -272,7 +272,8 @@ class TestVirtualMachineInterfaceService(TestCase):
             vlan_id_pool=Mock()
         )
 
-        self.vn_model = create_vn_model(name='VM Portgroup', key='dportgroup-50')
+        vnc_vn = create_vnc_vn('VM Portgroup', 'vn-uuid')
+        self.vn_model = create_vn_model(vnc_vn, 'dportgroup-50')
         self.database.save(self.vn_model)
         vmware_vm, vm_properties = create_vmware_vm_mock([self.vn_model.vmware_vn])
         self.vm_model = VirtualMachineModel(vmware_vm, vm_properties)
@@ -281,7 +282,8 @@ class TestVirtualMachineInterfaceService(TestCase):
         """ A new VMI is being created with proper VM/DPG pair. """
         self.database.save(self.vm_model)
         self.database.vmis_to_update.append(self.vm_model.vmi_models[0])
-        other_vn_model = create_vn_model(name='DPortGroup', key='dportgroup-51', uuid='uuid_2')
+        other_vnc_vn = create_vnc_vn('DPortGroup', 'uuid_2')
+        other_vn_model = create_vn_model(other_vnc_vn, 'dportgroup-51')
         self.database.save(other_vn_model)
 
         self.vmi_service.update_vmis()
@@ -309,7 +311,8 @@ class TestVirtualMachineInterfaceService(TestCase):
     def test_update_existing_vmi(self):
         """ Existing VMI is updated when VM changes the DPG to which it is connected. """
         self.database.save(self.vm_model)
-        second_vn_model = create_vn_model(name='DPortGroup', key='dportgroup-51')
+        second_vnc_vn = create_vnc_vn('DPortGroup', 'uuid_2')
+        second_vn_model = create_vn_model(second_vnc_vn, 'dportgroup-51')
         self.database.save(second_vn_model)
         device = Mock(macAddress='c8:5b:76:53:0f:f5')
         device.backing.port.portgroupKey = 'dportgroup-50'
