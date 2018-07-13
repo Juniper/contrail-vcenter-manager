@@ -109,7 +109,8 @@ class VirtualMachineService(Service):
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
         if not vm_model:
             return
-        if vm_model.update_tools_running_status(tools_running_status):
+        if vm_model.is_tools_running_status_changed(tools_running_status):
+            vm_model.update_tools_running_status(tools_running_status)
             logger.info('VMware tools on VM %s are %s', vm_model.name,
                         'running' if vm_model.tools_running else 'not running')
             self._database.save(vm_model)
@@ -136,7 +137,8 @@ class VirtualMachineService(Service):
 
     def update_power_state(self, vmware_vm, power_state):
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
-        if vm_model.update_power_state(power_state):
+        if vm_model.is_power_state_changed(power_state):
+            vm_model.update_power_state(power_state)
             logger.info('VM %s was powered %s', vm_model.name, power_state[7:].lower())
             for vmi_model in vm_model.vmi_models:
                 self._database.ports_to_update.append(vmi_model)
