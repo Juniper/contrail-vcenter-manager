@@ -45,17 +45,17 @@ class VirtualMachineModel(object):
         self.ports = self._read_ports()
         self.vmi_models = self._construct_interfaces()
 
+    def is_tools_running_status_changed(self, tools_running_status):
+        return tools_running_status != self.vm_properties['guest.toolsRunningStatus']
+
     def update_tools_running_status(self, tools_running_status):
-        if tools_running_status != self.vm_properties['guest.toolsRunningStatus']:
-            self.vm_properties['guest.toolsRunningStatus'] = tools_running_status
-            return True
-        return False
+        self.vm_properties['guest.toolsRunningStatus'] = tools_running_status
+
+    def is_power_state_changed(self, power_state):
+        return power_state != self.vm_properties['runtime.powerState']
 
     def update_power_state(self, power_state):
-        if power_state != self.vm_properties['runtime.powerState']:
-            self.vm_properties['runtime.powerState'] = power_state
-            return True
-        return False
+        self.vm_properties['runtime.powerState'] = power_state
 
     def _read_ports(self):
         try:
