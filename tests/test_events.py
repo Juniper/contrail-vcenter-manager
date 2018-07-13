@@ -8,7 +8,8 @@ from vnc_api.vnc_api import Project, VirtualNetwork
 
 from cvm.controllers import (GuestNetHandler, UpdateHandler,
                              VmReconfiguredHandler, VmRenamedHandler,
-                             VmUpdatedHandler, VmwareController)
+                             VmUpdatedHandler, VmwareController, VmwareToolsStatusHandler,
+                             PowerStateHandler)
 from cvm.database import Database
 from cvm.models import VirtualNetworkModel, VlanIdPool
 from cvm.services import (VirtualMachineInterfaceService,
@@ -65,7 +66,7 @@ def vn_model_2(vnc_vn_2):
 
 @pytest.fixture()
 def vmware_vm_1():
-    vmware_vm = Mock()
+    vmware_vm = Mock(spec=vim.VirtualMachine)
     vmware_vm.summary.runtime.host.vm = []
     vmware_vm.config.instanceUuid = '12345678-1234-1234-1234-123456789012'
     backing = Mock(spec=vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo)
@@ -78,7 +79,9 @@ def vmware_vm_1():
 def vm_properties_1():
     return {
         'config.instanceUuid': '12345678-1234-1234-1234-123456789012',
-        'name': 'VM1'
+        'name': 'VM1',
+        'runtime.powerState': 'poweredOn',
+        'guest.toolsRunningStatus': 'guestToolsRunning',
     }
 
 
@@ -86,7 +89,9 @@ def vm_properties_1():
 def vm_properties_renamed():
     return {
         'config.instanceUuid': '12345678-1234-1234-1234-123456789012',
-        'name': 'VM1-renamed'
+        'name': 'VM1-renamed',
+        'runtime.powerState': 'poweredOn',
+        'guest.toolsRunningStatus': 'guestToolsRunning',
     }
 
 
@@ -94,7 +99,9 @@ def vm_properties_renamed():
 def contrail_vm_properties():
     return {
         'config.instanceUuid': '12345678-1234-1234-1234-123456789012',
-        'name': 'ContrailVM'
+        'name': 'ContrailVM',
+        'runtime.powerState': 'poweredOn',
+        'guest.toolsRunningStatus': 'guestToolsRunning',
     }
 
 
@@ -107,18 +114,17 @@ def dont_assign_ip_to_instance_ip(instance_ip):
     return instance_ip
 
 
-def wrap_event_into_change(event):
-    change = vmodl.query.PropertyCollector.Change()
-    change.name = 'latestPage'
-    change.val = event
-    return change
-
-
-def wrap_into_update_set(change):
+def wrap_into_update_set(event=None, change=None, obj=None):
     update_set = vmodl.query.PropertyCollector.UpdateSet()
     filter_update = vmodl.query.PropertyCollector.FilterUpdate()
+    if change is None:
+        change = vmodl.query.PropertyCollector.Change()
+        change.name = 'latestPage'
+        change.val = event
     object_update = vmodl.query.PropertyCollector.ObjectUpdate()
     object_update.changeSet = [change]
+    if obj is not None:
+        object_update.obj = obj
     object_set = [object_update]
     filter_update.objectSet = object_set
     update_set.filterSet = [filter_update]
@@ -129,8 +135,7 @@ def wrap_into_update_set(change):
 def vm_created_update(vmware_vm_1):
     event = Mock(spec=vim.event.VmCreatedEvent())
     event.vm.vm = vmware_vm_1
-    change = wrap_event_into_change(event)
-    return wrap_into_update_set(change)
+    return wrap_into_update_set(event=event)
 
 
 @pytest.fixture()
@@ -138,8 +143,7 @@ def vm_renamed_update():
     event = Mock(spec=vim.event.VmRenamedEvent())
     event.oldName = 'VM1'
     event.newName = 'VM1-renamed'
-    change = wrap_event_into_change(event)
-    return wrap_into_update_set(change)
+    return wrap_into_update_set(event=event)
 
 
 @pytest.fixture()
@@ -153,8 +157,7 @@ def vm_reconfigured_update(vmware_vm_1):
     device.macAddress = '11:11:11:11:11:11'
     device_spec = Mock(spec=vim.vm.device.VirtualDeviceSpec(), device=device)
     event.configSpec.deviceChange = [device_spec]
-    change = wrap_event_into_change(event)
-    return wrap_into_update_set(change)
+    return wrap_into_update_set(event=event)
 
 
 @pytest.fixture()
@@ -203,7 +206,39 @@ def nic_info_update():
     change = Mock(spec=vmodl.query.PropertyCollector.Change())
     change.name = 'guest.net'
     change.val = [nic_info]
-    return wrap_into_update_set(change)
+    return wrap_into_update_set(change=change)
+
+
+@pytest.fixture()
+def vm_power_off_state_update(vmware_vm_1):
+    change = Mock(spec=vmodl.query.PropertyCollector.Change())
+    change.name = 'runtime.powerState'
+    change.val = 'poweredOff'
+    return wrap_into_update_set(change=change, obj=vmware_vm_1)
+
+
+@pytest.fixture()
+def vm_power_on_state_update(vmware_vm_1):
+    change = Mock(spec=vmodl.query.PropertyCollector.Change())
+    change.name = 'runtime.powerState'
+    change.val = 'poweredOn'
+    return wrap_into_update_set(change=change, obj=vmware_vm_1)
+
+
+@pytest.fixture()
+def vm_disable_running_tools_update(vmware_vm_1):
+    change = Mock(spec=vmodl.query.PropertyCollector.Change())
+    change.name = 'guest.toolsRunningStatus'
+    change.val = 'guestToolsNotRunning'
+    return wrap_into_update_set(change=change, obj=vmware_vm_1)
+
+
+@pytest.fixture()
+def vm_enable_running_tools_update(vmware_vm_1):
+    change = Mock(spec=vmodl.query.PropertyCollector.Change())
+    change.name = 'guest.toolsRunningStatus'
+    change.val = 'guestToolsRunning'
+    return wrap_into_update_set(change=change, obj=vmware_vm_1)
 
 
 def assert_vmi_model_state(vmi_model, mac_address=None, ip_address=None,
@@ -222,11 +257,16 @@ def assert_vmi_model_state(vmi_model, mac_address=None, ip_address=None,
         assert vmi_model.vm_model == vm_model
 
 
-def assert_vm_model_state(vm_model, uuid=None, name=None, has_ports=None):
+def assert_vm_model_state(vm_model, uuid=None, name=None, has_ports=None,
+                          is_powered_on=None, tools_running=None):
     if uuid is not None:
         assert vm_model.uuid == uuid
     if name is not None:
         assert vm_model.name == name
+    if is_powered_on is not None:
+        assert vm_model.is_powered_on == is_powered_on
+    if tools_running is not None:
+        assert vm_model.tools_running == tools_running
     if has_ports is None:
         has_ports = {}
     for mac_address, portgroup_key in has_ports.items():
@@ -486,6 +526,104 @@ def test_vm_reconfigured(vcenter_api_client, vn_model_1, vn_model_2, vm_created_
         display_name='vmi-DPG2-VM1',
         vn_model=vn_model_2
     )
+
+
+def test_vm_power_state_update(vcenter_api_client, esxi_api_client, vnc_api_client,
+                            vn_model_1, vm_created_update, vm_power_off_state_update,
+                            vm_power_on_state_update, lock, vlan_id_pool):
+    vrouter_api_client = Mock()
+    database = Database()
+    vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
+    vn_service = VirtualNetworkService(vcenter_api_client, vnc_api_client, database)
+    vmi_service = VirtualMachineInterfaceService(
+        vcenter_api_client,
+        vnc_api_client,
+        database,
+        vlan_id_pool=vlan_id_pool
+    )
+    vrouter_port_service = VRouterPortService(vrouter_api_client, database)
+    vm_updated_handler = VmUpdatedHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
+    power_state_handler = PowerStateHandler(vm_service, vrouter_port_service)
+    update_handler = UpdateHandler([vm_updated_handler, power_state_handler])
+    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service,
+                                  update_handler, lock)
+
+    # Virtual Networks are already created for us and after synchronization,
+    # their models are stored in our database
+    database.save(vn_model_1)
+
+    # A new update containing VmCreatedEvent arrives and is being handled by the controller
+    controller.handle_update(vm_created_update)
+
+    vm_model = database.get_vm_model_by_uuid('12345678-1234-1234-1234-123456789012')
+    # Assumption that VM is in powerOn state
+    assert_vm_model_state(vm_model, is_powered_on=True)
+
+    # Then VM power state change is being handled
+    controller.handle_update(vm_power_off_state_update)
+
+    # Check that VM is in powerOff state
+    assert_vm_model_state(vm_model, is_powered_on=False)
+
+    vmi_models = database.get_vmi_models_by_vm_uuid('12345678-1234-1234-1234-123456789012')
+    assert len(vmi_models) == 1
+    vmi_model = vmi_models[0]
+
+    # Check that vRouter Port was disabled
+    vrouter_api_client.disable_port.assert_called_once_with(vmi_model.uuid)
+
+    controller.handle_update(vm_power_on_state_update)
+
+    # Check that VM is in powerOn state
+    assert_vm_model_state(vm_model, is_powered_on=True)
+
+    # Check that vRouter Port was enabled
+    vrouter_api_client.enable_port.assert_called_with(vmi_model.uuid)
+
+
+def test_vm_running_tools_update(vcenter_api_client, esxi_api_client, vnc_api_client,
+                            vn_model_1, vm_created_update, vm_disable_running_tools_update,
+                            vm_enable_running_tools_update, lock, vlan_id_pool):
+    vrouter_api_client = Mock()
+    database = Database()
+    vm_service = VirtualMachineService(esxi_api_client, vnc_api_client, database)
+    vn_service = VirtualNetworkService(vcenter_api_client, vnc_api_client, database)
+    vmi_service = VirtualMachineInterfaceService(
+        vcenter_api_client,
+        vnc_api_client,
+        database,
+        vlan_id_pool=vlan_id_pool
+    )
+    vrouter_port_service = VRouterPortService(vrouter_api_client, database)
+    vm_updated_handler = VmUpdatedHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
+    tools_status_handler = VmwareToolsStatusHandler(vm_service)
+    update_handler = UpdateHandler([vm_updated_handler, tools_status_handler])
+    controller = VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service,
+                                  update_handler, lock)
+
+    # Virtual Networks are already created for us and after synchronization,
+    # their models are stored in our database
+    database.save(vn_model_1)
+
+    # A new update containing VmCreatedEvent arrives and is being handled by the controller
+    controller.handle_update(vm_created_update)
+
+    vm_model = database.get_vm_model_by_uuid('12345678-1234-1234-1234-123456789012')
+
+    # Assumption that VM tools running
+    assert_vm_model_state(vm_model, tools_running=True)
+
+    # Then VM disable vmware tools event is being handled
+    controller.handle_update(vm_disable_running_tools_update)
+
+    # Check that VM  vmware tools is not running
+    assert_vm_model_state(vm_model, tools_running=False)
+
+    # Then VM enable vmware tools event is being handled
+    controller.handle_update(vm_enable_running_tools_update)
+
+    # Check that VM  vmware tools is running
+    assert_vm_model_state(vm_model, tools_running=True)
 
 
 def test_vm_created_vlan_id(vcenter_api_client, vn_model_1, vm_created_update,
