@@ -45,17 +45,17 @@ class VirtualMachineModel(object):
         self.ports = self._read_ports()
         self.vmi_models = self._construct_interfaces()
 
+    def is_tools_running_status_changed(self, tools_running_status):
+        return tools_running_status != self.vm_properties['guest.toolsRunningStatus']
+
     def update_tools_running_status(self, tools_running_status):
-        if tools_running_status != self.vm_properties['guest.toolsRunningStatus']:
-            self.vm_properties['guest.toolsRunningStatus'] = tools_running_status
-            return True
-        return False
+        self.vm_properties['guest.toolsRunningStatus'] = tools_running_status
+
+    def is_power_state_changed(self, power_state):
+        return power_state != self.vm_properties['runtime.powerState']
 
     def update_power_state(self, power_state):
-        if power_state != self.vm_properties['runtime.powerState']:
-            self.vm_properties['runtime.powerState'] = power_state
-            return True
-        return False
+        self.vm_properties['runtime.powerState'] = power_state
 
     def _read_ports(self):
         try:
@@ -144,12 +144,6 @@ class VirtualMachineInterfaceModel(object):
         self.parent = None
         self.security_group = None
 
-    def update_ip_address(self, ip_address):
-        if ip_address != self._ip_address:
-            self._ip_address = ip_address
-            return True
-        return False
-
     @property
     def uuid(self):
         return self.get_uuid(self.vcenter_port.mac_address)
@@ -182,6 +176,15 @@ class VirtualMachineInterfaceModel(object):
         )
         return vnc_vmi
 
+    def update_ip_address(self, ip_address):
+        if ip_address != self._ip_address:
+            self._ip_address = ip_address
+            return True
+        return False
+
+    def is_ip_address_changed(self, ip_address):
+        return ip_address != self._ip_address
+
     def construct_instance_ip(self):
         if not self._should_construct_instance_ip():
             return
@@ -189,7 +192,7 @@ class VirtualMachineInterfaceModel(object):
         logger.info('Constructing Instance IP for %s', self.display_name)
 
         instance_ip_name = 'ip-' + self.vn_model.name + '-' + self.vm_model.name
-        instance_ip_uuid = str(uuid.uuid3(uuid.NAMESPACE_DNS, instance_ip_name.encode('utf-8')))
+        instance_ip_uuid = self.construct_instance_ip_uuid(instance_ip_name)
 
         instance_ip = InstanceIp(
             name=instance_ip_uuid,
@@ -212,6 +215,10 @@ class VirtualMachineInterfaceModel(object):
                 and (self.ip_address or not self.vn_model.has_external_ipam))
 
     @staticmethod
+    def construct_instance_ip_uuid(name):
+        return str(uuid.uuid3(uuid.NAMESPACE_DNS, name.encode('utf-8')))
+
+    @staticmethod
     def get_uuid(mac_address):
         return str(uuid.uuid3(uuid.NAMESPACE_DNS, mac_address.encode('utf-8')))
 
@@ -226,7 +233,9 @@ class VirtualMachineInterfaceModel(object):
 
 class VlanIdPool(object):
     def __init__(self, start, end):
-        self._available_ids = deque(range(start, end + 1))
+        self._start = start
+        self._end = end
+        self._available_ids = deque(xrange(start, end + 1))
 
     def reserve(self, vlan_id):
         try:
@@ -234,14 +243,22 @@ class VlanIdPool(object):
         except ValueError:
             pass
 
-    def get_available(self):
-        try:
-            return self._available_ids.popleft()
-        except IndexError:
-            return None
+    def get_available(self, exclude=None):
+        if not exclude:
+            exclude = []
+
+        for vlan_id in list(self._available_ids):
+            if vlan_id not in exclude:
+                self.reserve(vlan_id)
+                return vlan_id
+        return None
 
     def free(self, vlan_id):
-        self._available_ids.append(vlan_id)
+        if vlan_id not in self._available_ids:
+            self._available_ids.append(vlan_id)
+
+    def is_available(self, vlan_id):
+        return vlan_id in self._available_ids
 
 
 class VCenterPort(object):

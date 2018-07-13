@@ -120,7 +120,8 @@ class VirtualMachineService(Service):
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
         if not vm_model:
             return
-        if vm_model.update_tools_running_status(tools_running_status):
+        if vm_model.is_tools_running_status_changed(tools_running_status):
+            vm_model.update_tools_running_status(tools_running_status)
             logger.info('VMware tools on VM %s are %s', vm_model.name,
                         'running' if vm_model.tools_running else 'not running')
             self._database.save(vm_model)
@@ -147,7 +148,8 @@ class VirtualMachineService(Service):
 
     def update_power_state(self, vmware_vm, power_state):
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
-        if vm_model.update_power_state(power_state):
+        if vm_model.is_power_state_changed(power_state):
+            vm_model.update_power_state(power_state)
             logger.info('VM %s was powered %s', vm_model.name, power_state[7:].lower())
             for vmi_model in vm_model.vmi_models:
                 self._database.ports_to_update.append(vmi_model)
@@ -192,8 +194,9 @@ class VirtualMachineInterfaceService(Service):
         self._delete_unused_vmis()
 
     def sync_vlan_ids(self):
+        vrouter_uuid = self._esxi_api_client.read_vrouter_uuid()
         with self._vcenter_api_client:
-            reserved_vlan_ids = self._vcenter_api_client.get_reserved_vlan_ids()
+            reserved_vlan_ids = self._vcenter_api_client.get_reserved_vlan_ids(vrouter_uuid)
             for vlan_id in reserved_vlan_ids:
                 self._vlan_id_pool.reserve(vlan_id)
 
@@ -228,8 +231,14 @@ class VirtualMachineInterfaceService(Service):
     def _assign_vlan_id(self, vmi_model):
         with self._vcenter_api_client:
             current_vlan_id = self._vcenter_api_client.get_vlan_id(vmi_model.vcenter_port)
-            vmi_model.vcenter_port.vlan_id = current_vlan_id or self._vlan_id_pool.get_available()
-            if not current_vlan_id:
+            if current_vlan_id and self._vlan_id_pool.is_available(current_vlan_id):
+                vmi_model.vcenter_port.vlan_id = current_vlan_id
+                self._vlan_id_pool.reserve(current_vlan_id)
+            else:
+                reserved_vlans = self._vcenter_api_client.get_reserved_vlans_for_dpg(
+                    vmi_model.vn_model.key
+                )
+                vmi_model.vcenter_port.vlan_id = self._vlan_id_pool.get_available(exclude=reserved_vlans)
                 self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
 
     def _add_vnc_info_to(self, vmi_model):
@@ -269,11 +278,11 @@ class VirtualMachineInterfaceService(Service):
     def _update_ip_address(self, vmi_model, ip_address):
         if not isinstance(ipaddress.ip_address(ip_address.decode('utf-8')), ipaddress.IPv4Address):
             return
-        if not vmi_model.update_ip_address(ip_address):
-            return
-        self._add_instance_ip_to(vmi_model)
-        logger.info('IP address of %s updated to %s',
-                    vmi_model.display_name, vmi_model.vnc_instance_ip.instance_ip_address)
+        if vmi_model.is_ip_address_changed(ip_address):
+            vmi_model.update_ip_address(ip_address)
+            self._add_instance_ip_to(vmi_model)
+            logger.info('IP address of %s updated to %s',
+                        vmi_model.display_name, vmi_model.vnc_instance_ip.instance_ip_address)
 
     def _delete(self, vmi_model):
         self._delete_from_vnc(vmi_model)
@@ -285,10 +294,12 @@ class VirtualMachineInterfaceService(Service):
         self._vnc_api_client.delete_vmi(vmi_model.uuid)
 
     def _restore_vlan_id(self, vmi_model):
+        self._restore_vcenter_vlan_id(vmi_model)
+        self._vlan_id_pool.free(vmi_model.vcenter_port.vlan_id)
+
+    def _restore_vcenter_vlan_id(self, vmi_model):
         with self._vcenter_api_client:
             self._vcenter_api_client.restore_vlan_id(vmi_model.vcenter_port)
-        self._vlan_id_pool.free(vmi_model.vcenter_port.vlan_id)
-        vmi_model.vcenter_port.vlan_id = None
 
     def _delete_vrouter_port(self, uuid):
         self._database.ports_to_delete.append(uuid)
@@ -301,7 +312,8 @@ class VirtualMachineInterfaceService(Service):
         for vmi_model in vmi_models:
             if self._can_modify_in_vnc(vmi_model.vnc_vmi):
                 self._delete_from_vnc(vmi_model)
-                self._restore_vlan_id(vmi_model)
+                self._restore_vcenter_vlan_id(vmi_model)
+            self._vlan_id_pool.free(vmi_model.vcenter_port.vlan_id)
             self._database.delete_vmi_model(vmi_model.uuid)
             self._delete_vrouter_port(vmi_model.uuid)
 
