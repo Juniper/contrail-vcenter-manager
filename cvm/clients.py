@@ -158,7 +158,7 @@ class VCenterAPIClient(VSphereAPIClient):
             preferredApiVersions=self._vcenter_cfg.get('preferred_api_versions')
         )
         self._datacenter = self._get_datacenter(self._vcenter_cfg.get('datacenter'))
-        self._dvs = self._get_object([vim.dvs.VmwareDistributedVirtualSwitch], self._vcenter_cfg.get('dvswitch'))
+        self._dvs = self._get_dvswitch(self._vcenter_cfg.get('dvswitch'))
 
     def __exit__(self, *args):
         Disconnect(self._si)
@@ -193,16 +193,27 @@ class VCenterAPIClient(VSphereAPIClient):
         self._dvs.ReconfigureDVPort_Task(port=[dv_port_config_spec])
 
     def get_reserved_vlan_ids(self):
+        criteria = vim.dvs.PortCriteria()
+        criteria.connected = True
         logger.info('Retrieving reserved VLAN IDs')
-        return [port.config.setting.vlan.vlanId for port in self._dvs.FetchDVPorts()
+        return [port.config.setting.vlan.vlanId
+                for port in self._dvs.FetchDVPorts(criteria=criteria)
                 if isinstance(port.config.setting.vlan, vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec)]
 
-    def _get_dvs_by_uuid(self, uuid):
-        dvs_manager = self._si.content.dvSwitchManager
-        return dvs_manager.QueryDvsByUuid(uuid)
+    def get_reserved_vlans_for_dpg(self, portgroup_key):
+        criteria = vim.dvs.PortCriteria()
+        criteria.portgroupKey = portgroup_key
+        criteria.inside = True
+        criteria.connected = True
+        return [port.config.setting.vlan.vlanId
+                for port in self._dvs.FetchDVPorts(criteria=criteria)
+                if isinstance(port.config.setting.vlan, vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec)]
 
     def _get_datacenter(self, name):
         return self._get_object([vim.Datacenter], name)
+
+    def _get_dvswitch(self, name):
+        return self._get_object([vim.dvs.VmwareDistributedVirtualSwitch], name)
 
     def _fetch_port_from_dvs(self, port_key):
         criteria = vim.dvs.PortCriteria()
