@@ -58,8 +58,9 @@ class TestVirtualMachineModel(TestCase):
     def test_update_power_state(self):
         vm_model = VirtualMachineModel(self.vmware_vm, self.vm_properties)
 
-        result = vm_model.update_power_state('poweredOff')
-        result2 = vm_model.update_power_state('poweredOff')
+        result = vm_model.is_power_state_changed('poweredOff')
+        vm_model.update_power_state('poweredOff')
+        result2 = vm_model.is_power_state_changed('poweredOff')
 
         self.assertTrue(result)
         self.assertFalse(result2)
@@ -68,8 +69,9 @@ class TestVirtualMachineModel(TestCase):
     def test_update_tools_running(self):
         vm_model = VirtualMachineModel(self.vmware_vm, self.vm_properties)
 
-        result = vm_model.update_tools_running_status('guestToolsNotRunning')
-        result2 = vm_model.update_tools_running_status('guestToolsNotRunning')
+        result = vm_model.is_tools_running_status_changed('guestToolsNotRunning')
+        vm_model.update_tools_running_status('guestToolsNotRunning')
+        result2 = vm_model.is_tools_running_status_changed('guestToolsNotRunning')
 
         self.assertTrue(result)
         self.assertFalse(result2)
