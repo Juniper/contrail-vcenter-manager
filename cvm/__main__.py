@@ -7,7 +7,13 @@ import sys
 
 import gevent
 import yaml
+from cfgm_common.uve.nodeinfo.ttypes import NodeStatus, NodeStatusUVE
+from pysandesh.connection_info import ConnectionState
 from pysandesh.sandesh_base import Sandesh
+from sandesh_common.vns.constants import (INSTANCE_ID_DEFAULT, Module2NodeType,
+                                          ModuleNames, NodeTypeNames,
+                                          ServiceHttpPortMap)
+from sandesh_common.vns.ttypes import Module
 
 import cvm.constants as const
 from cvm.clients import (ESXiAPIClient, VCenterAPIClient, VNCAPIClient,
@@ -29,15 +35,11 @@ gevent.monkey.patch_all()
 
 def load_config(config_file):
     with open(config_file, 'r') as ymlfile:
-        cfg = yaml.load(ymlfile)
-        esxi_cfg = cfg['esxi']
-        vcenter_cfg = cfg['vcenter']
-        vnc_cfg = cfg['vnc']
-    return esxi_cfg, vcenter_cfg, vnc_cfg
+        return yaml.load(ymlfile)
 
 
-def build_monitor(config_file, lock, database):
-    esxi_cfg, vcenter_cfg, vnc_cfg = load_config(config_file)
+def build_monitor(config, lock, database):
+    esxi_cfg, vcenter_cfg, vnc_cfg = config['esxi'], config['vcenter'], config['vnc']
 
     esxi_api_client = ESXiAPIClient(esxi_cfg)
     event_history_collector = esxi_api_client.create_event_history_collector(const.EVENTS_TO_OBSERVE)
@@ -94,23 +96,58 @@ def build_monitor(config_file, lock, database):
     return VMwareMonitor(esxi_api_client, vmware_controller)
 
 
-def run_introspect(args, database, lock):
+def run_introspect(cfg, database, lock):
+    sandesh_config = cfg['sandesh']
+    sandesh_config.update({
+        'id': Module.VCENTER_MANAGER,
+        'hostname': socket.gethostname(),
+        'table': 'ObjectContrailvCenterManagerNode',
+        'instance_id': INSTANCE_ID_DEFAULT,
+        'introspect_port': ServiceHttpPortMap['contrail-vcenter-manager'],
+    })
+    sandesh_config['name'] = ModuleNames[sandesh_config['id']]
+    sandesh_config['node_type'] = Module2NodeType[sandesh_config['id']]
+    sandesh_config['node_type_name'] = NodeTypeNames[sandesh_config['node_type']]
+
     sandesh = Sandesh()
     sandesh_handler = SandeshHandler(database, lock)
     sandesh_handler.bind_handlers()
-    sandesh.init_generator('cvm', socket.gethostname(),
-                           'contrail-vcenter-manager', '0', [],
-                           'cvm_context', args.introspect_port, ['cvm'])
+    sandesh.init_generator(
+        module='cvm',
+        source=sandesh_config['hostname'],
+        node_type=sandesh_config['node_type_name'],
+        instance_id=sandesh_config['instance_id'],
+        collectors=sandesh_config['collectors'],
+        client_context='cvm_context',
+        http_port=sandesh_config['introspect_port'],
+        sandesh_req_uve_pkg_list=['cfgm_common', 'cvm']
+    )
     sandesh.sandesh_logger().set_logger_params(
-        sandesh.logger(), True, 'SYS_INFO', const.LOG_FILE, False, None
+        logger=sandesh.logger(),
+        enable_local_log=True,
+        level=sandesh_config['logging_level'],
+        file=sandesh_config['log_file'],
+        enable_syslog=False,
+        syslog_facility=None
+    )
+    ConnectionState.init(
+        sandesh=sandesh,
+        hostname=sandesh_config['hostname'],
+        module_id=sandesh_config['name'],
+        instance_id=sandesh_config['instance_id'],
+        conn_status_cb=staticmethod(ConnectionState.get_conn_state_cb),
+        uve_type_cls=NodeStatusUVE,
+        uve_data_type_cls=NodeStatus,
+        table=sandesh_config['table']
     )
 
 
 def main(args):
     database = Database()
     lock = gevent.lock.BoundedSemaphore()
-    vmware_monitor = build_monitor(args.config_file, lock, database)
-    run_introspect(args, database, lock)
+    cfg = load_config(args.config_file)
+    vmware_monitor = build_monitor(cfg, lock, database)
+    run_introspect(cfg, database, lock)
     vmware_monitor.sync()
     greenlets = [
         gevent.spawn(vmware_monitor.start()),
@@ -122,8 +159,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", action="store", dest="config_file",
                         default='/etc/contrail/contrail-vcenter-manager/config.yaml')
-    parser.add_argument("-p", type=int, action="store", dest="introspect_port",
-                        default=9090)
     parsed_args = parser.parse_args()
     try:
         main(parsed_args)
