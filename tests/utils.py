@@ -153,6 +153,20 @@ def assert_vm_model_state(vm_model, uuid=None, name=None, has_ports=None,
         assert next(port.portgroup_key for port in vm_model.ports if port.mac_address == mac_address) == portgroup_key
 
 
+def assert_vn_model_state(vn_model, uuid=None, name=None, key=None,
+                          vnc_vn=None, vmware_vn=None):
+    if uuid is not None:
+        assert vn_model.uuid == uuid
+    if name is not None:
+        assert vn_model.name == name
+    if key is not None:
+        assert vn_model.key == key
+    if vnc_vn is not None:
+        assert vn_model.vnc_vn == vnc_vn
+    if vmware_vn is not None:
+        assert vn_model.vmware_vn == vmware_vn
+
+
 def assert_vnc_vmi_state(vnc_vmi, mac_address=None, vnc_vm_uuid=None, vnc_vn_uuid=None):
     if mac_address is not None:
         assert vnc_vmi.get_virtual_machine_interface_mac_addresses().mac_address == [mac_address]

@@ -20,18 +20,18 @@ def test_vm_created(controller, database, vcenter_api_client, vnc_api_client, vr
     # - in VNC:
     vnc_api_client.update_or_create_vm.assert_called_once()
     vnc_vm = vnc_api_client.update_or_create_vm.call_args[0][0]
-    assert_vnc_vm_state(vnc_vm, uuid='12345678-1234-1234-1234-123456789012',
-                        name='12345678-1234-1234-1234-123456789012', owner='project-uuid')
+    assert_vnc_vm_state(vnc_vm, uuid='vmware-vm-uuid-1',
+                        name='vmware-vm-uuid-1', owner='project-uuid')
 
     # - in Database:
-    vm_model = database.get_vm_model_by_uuid('12345678-1234-1234-1234-123456789012')
-    assert_vm_model_state(vm_model, uuid='12345678-1234-1234-1234-123456789012', name='VM1')
+    vm_model = database.get_vm_model_by_uuid('vmware-vm-uuid-1')
+    assert_vm_model_state(vm_model, uuid='vmware-vm-uuid-1', name='VM1')
 
     # Check if VMI Model has been saved properly:
     # - in VNC
     vnc_api_client.update_vmi.assert_called_once()
     vnc_vmi = vnc_api_client.update_vmi.call_args[0][0]
-    assert_vnc_vmi_state(vnc_vmi, mac_address='11:11:11:11:11:11',
+    assert_vnc_vmi_state(vnc_vmi, mac_address='mac-address',
                          vnc_vm_uuid=vnc_vm.uuid, vnc_vn_uuid=vnc_vn_1.uuid)
 
     # - in Database
@@ -51,7 +51,7 @@ def test_vm_created(controller, database, vcenter_api_client, vnc_api_client, vr
     # Check inner VMI model state
     assert_vmi_model_state(
         vmi_model,
-        mac_address='11:11:11:11:11:11',
+        mac_address='mac-address',
         ip_address='192.168.100.5',
         vlan_id=2,
         display_name='vmi-DPG1-VM1',
