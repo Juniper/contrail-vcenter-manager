@@ -26,12 +26,12 @@ def test_vm_renamed(controller, database, esxi_api_client, vcenter_api_client, v
     # - in VNC:
     assert vnc_api_client.update_vmi.call_count == 2
     vnc_vm = vnc_api_client.update_or_create_vm.call_args[0][0]
-    assert_vnc_vm_state(vnc_vm, uuid='12345678-1234-1234-1234-123456789012',
-                        name='12345678-1234-1234-1234-123456789012', display_name='VM1-renamed')
+    assert_vnc_vm_state(vnc_vm, uuid='vmware_vm_uuid_1',
+                        name='vmware_vm_uuid_1', display_name='VM1-renamed')
 
     # - in Database:
-    vm_model = database.get_vm_model_by_uuid('12345678-1234-1234-1234-123456789012')
-    assert_vm_model_state(vm_model, uuid='12345678-1234-1234-1234-123456789012', name='VM1-renamed')
+    vm_model = database.get_vm_model_by_uuid('vmware_vm_uuid_1')
+    assert_vm_model_state(vm_model, uuid='vmware_vm_uuid_1', name='VM1-renamed')
 
     # Check if VMI Model has been saved properly:
     # - in VNC

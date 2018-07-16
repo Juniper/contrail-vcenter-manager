@@ -4,11 +4,13 @@ from mock import Mock
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 
-from cvm.controllers import (GuestNetHandler, UpdateHandler,
-                             VmReconfiguredHandler, VmRenamedHandler,
-                             VmUpdatedHandler, VmwareController, PowerStateHandler, VmwareToolsStatusHandler)
+from cvm.controllers import (GuestNetHandler, PowerStateHandler, UpdateHandler,
+                             VmReconfiguredHandler, VmRemovedHandler,
+                             VmRenamedHandler, VmUpdatedHandler,
+                             VmwareController, VmwareToolsStatusHandler)
 from cvm.database import Database
-from cvm.models import VlanIdPool
+from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
+                        VlanIdPool)
 from cvm.services import (VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService,
                           VRouterPortService)
@@ -40,7 +42,7 @@ def vn_model_2(vnc_vn_2):
 def vmware_vm_1():
     vmware_vm = Mock(spec=vim.VirtualMachine)
     vmware_vm.summary.runtime.host.vm = []
-    vmware_vm.config.instanceUuid = '12345678-1234-1234-1234-123456789012'
+    vmware_vm.config.instanceUuid = 'vmware_vm_uuid_1'
     backing = Mock(spec=vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo)
     backing.port = Mock(portgroupKey='dvportgroup-1', portKey='10')
     vmware_vm.config.hardware.device = [Mock(backing=backing, macAddress='11:11:11:11:11:11')]
@@ -50,7 +52,7 @@ def vmware_vm_1():
 @pytest.fixture()
 def vm_properties_1():
     return {
-        'config.instanceUuid': '12345678-1234-1234-1234-123456789012',
+        'config.instanceUuid': 'vmware_vm_uuid_1',
         'name': 'VM1',
         'runtime.powerState': 'poweredOn',
         'guest.toolsRunningStatus': 'guestToolsRunning',
@@ -60,7 +62,7 @@ def vm_properties_1():
 @pytest.fixture()
 def vm_properties_renamed():
     return {
-        'config.instanceUuid': '12345678-1234-1234-1234-123456789012',
+        'config.instanceUuid': 'vmware_vm_uuid_1',
         'name': 'VM1-renamed',
         'runtime.powerState': 'poweredOn',
         'guest.toolsRunningStatus': 'guestToolsRunning',
@@ -75,6 +77,16 @@ def contrail_vm_properties():
         'runtime.powerState': 'poweredOn',
         'guest.toolsRunningStatus': 'guestToolsRunning',
     }
+
+
+@pytest.fixture()
+def vm_model(vmware_vm_1, vm_properties_1):
+    return VirtualMachineModel(vmware_vm_1, vm_properties_1)
+
+
+@pytest.fixture()
+def vmi_model(vm_model, vn_model_1):
+    return VirtualMachineInterfaceModel(vm_model, vn_model_1, Mock(mac_address='mac-address'))
 
 
 @pytest.fixture()
@@ -107,13 +119,31 @@ def vm_reconfigured_update(vmware_vm_1):
 
 
 @pytest.fixture()
-def vnc_api_client():
+def vm_removed_update():
+    event = Mock(spec=vim.event.VmRemovedEvent())
+    event.vm.name = 'VM1'
+    return wrap_into_update_set(event=event)
+
+
+@pytest.fixture()
+def project():
+    proj = vnc_api.Project(name='project-name')
+    proj.set_uuid('project-uuid')
+    return proj
+
+@pytest.fixture()
+def security_group():
+    return vnc_api.SecurityGroup()
+
+
+@pytest.fixture()
+def vnc_api_client(project, security_group):
     vnc_client = Mock()
-    project = vnc_api.Project()
-    project.set_uuid('project-uuid')
     vnc_client.read_or_create_project.return_value = project
+    vnc_client.read_or_create_security_group.return_value = security_group
     vnc_client.create_and_read_instance_ip.side_effect = assign_ip_to_instance_ip
     return vnc_client
+
 
 @pytest.fixture()
 def vcenter_api_client():
@@ -141,7 +171,7 @@ def lock():
 
 @pytest.fixture()
 def vlan_id_pool():
-    vlan_pool = VlanIdPool(0, 100)
+    vlan_pool = VlanIdPool(0, 4095)
     return vlan_pool
 
 
@@ -173,7 +203,7 @@ def vm_power_on_state_update(vmware_vm_1):
 
 
 @pytest.fixture()
-def vm_disable_running_tools_update(vmware_vm_1):
+def vmware_tools_not_running_update(vmware_vm_1):
     change = Mock(spec=vmodl.query.PropertyCollector.Change())
     change.name = 'guest.toolsRunningStatus'
     change.val = 'guestToolsNotRunning'
@@ -181,7 +211,7 @@ def vm_disable_running_tools_update(vmware_vm_1):
 
 
 @pytest.fixture()
-def vm_enable_running_tools_update(vmware_vm_1):
+def vmware_tools_running_update(vmware_vm_1):
     change = Mock(spec=vmodl.query.PropertyCollector.Change())
     change.name = 'guest.toolsRunningStatus'
     change.val = 'guestToolsRunning'
@@ -225,6 +255,7 @@ def controller(vm_service, vn_service, vmi_service, vrouter_port_service, lock):
         VmUpdatedHandler(vm_service, vn_service, vmi_service, vrouter_port_service),
         VmRenamedHandler(vm_service, vmi_service, vrouter_port_service),
         VmReconfiguredHandler(vm_service, vn_service, vmi_service, vrouter_port_service),
+        VmRemovedHandler(vm_service, vmi_service, vrouter_port_service),
         GuestNetHandler(vmi_service, vrouter_port_service),
         PowerStateHandler(vm_service, vrouter_port_service),
         VmwareToolsStatusHandler(vm_service)

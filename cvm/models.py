@@ -144,12 +144,6 @@ class VirtualMachineInterfaceModel(object):
         self.parent = None
         self.security_group = None
 
-    def update_ip_address(self, ip_address):
-        if ip_address != self._ip_address:
-            self._ip_address = ip_address
-            return True
-        return False
-
     @property
     def uuid(self):
         return self.get_uuid(self.vcenter_port.mac_address)
@@ -182,6 +176,15 @@ class VirtualMachineInterfaceModel(object):
         )
         return vnc_vmi
 
+    def update_ip_address(self, ip_address):
+        if ip_address != self._ip_address:
+            self._ip_address = ip_address
+            return True
+        return False
+
+    def is_ip_address_changed(self, ip_address):
+        return ip_address != self._ip_address
+
     def construct_instance_ip(self):
         if not self._should_construct_instance_ip():
             return
@@ -189,7 +192,7 @@ class VirtualMachineInterfaceModel(object):
         logger.info('Constructing Instance IP for %s', self.display_name)
 
         instance_ip_name = 'ip-' + self.vn_model.name + '-' + self.vm_model.name
-        instance_ip_uuid = str(uuid.uuid3(uuid.NAMESPACE_DNS, instance_ip_name.encode('utf-8')))
+        instance_ip_uuid = self.construct_instance_ip_uuid(instance_ip_name)
 
         instance_ip = InstanceIp(
             name=instance_ip_uuid,
@@ -212,6 +215,10 @@ class VirtualMachineInterfaceModel(object):
                 and (self.ip_address or not self.vn_model.has_external_ipam))
 
     @staticmethod
+    def construct_instance_ip_uuid(name):
+        return str(uuid.uuid3(uuid.NAMESPACE_DNS, name.encode('utf-8')))
+
+    @staticmethod
     def get_uuid(mac_address):
         return str(uuid.uuid3(uuid.NAMESPACE_DNS, mac_address.encode('utf-8')))
 
@@ -226,7 +233,7 @@ class VirtualMachineInterfaceModel(object):
 
 class VlanIdPool(object):
     def __init__(self, start, end):
-        self._available_ids = deque(range(start, end + 1))
+        self._available_ids = deque(xrange(start, end + 1))
 
     def reserve(self, vlan_id):
         try:
@@ -242,6 +249,9 @@ class VlanIdPool(object):
 
     def free(self, vlan_id):
         self._available_ids.append(vlan_id)
+
+    def is_available(self, vlan_id):
+        return vlan_id in self._available_ids
 
 
 class VCenterPort(object):

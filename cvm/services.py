@@ -271,11 +271,11 @@ class VirtualMachineInterfaceService(Service):
     def _update_ip_address(self, vmi_model, ip_address):
         if not isinstance(ipaddress.ip_address(ip_address.decode('utf-8')), ipaddress.IPv4Address):
             return
-        if not vmi_model.update_ip_address(ip_address):
-            return
-        self._add_instance_ip_to(vmi_model)
-        logger.info('IP address of %s updated to %s',
-                    vmi_model.display_name, vmi_model.vnc_instance_ip.instance_ip_address)
+        if vmi_model.is_ip_address_changed(ip_address):
+            vmi_model.update_ip_address(ip_address)
+            self._add_instance_ip_to(vmi_model)
+            logger.info('IP address of %s updated to %s',
+                        vmi_model.display_name, vmi_model.vnc_instance_ip.instance_ip_address)
 
     def _delete(self, vmi_model):
         self._delete_from_vnc(vmi_model)

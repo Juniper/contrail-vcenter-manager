@@ -10,7 +10,7 @@ def test_vm_power_state_update(controller, database, vrouter_api_client, vm_crea
     # A new update containing VmCreatedEvent arrives and is being handled by the controller
     controller.handle_update(vm_created_update)
 
-    vm_model = database.get_vm_model_by_uuid('12345678-1234-1234-1234-123456789012')
+    vm_model = database.get_vm_model_by_uuid('vmware_vm_uuid_1')
     # Assumption that VM is in powerOn state
     assert_vm_model_state(vm_model, is_powered_on=True)
 
@@ -20,7 +20,7 @@ def test_vm_power_state_update(controller, database, vrouter_api_client, vm_crea
     # Check that VM is in powerOff state
     assert_vm_model_state(vm_model, is_powered_on=False)
 
-    vmi_models = database.get_vmi_models_by_vm_uuid('12345678-1234-1234-1234-123456789012')
+    vmi_models = database.get_vmi_models_by_vm_uuid('vmware_vm_uuid_1')
     assert len(vmi_models) == 1
     vmi_model = vmi_models[0]
 

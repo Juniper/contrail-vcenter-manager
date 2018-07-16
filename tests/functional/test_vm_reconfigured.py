@@ -25,7 +25,7 @@ def test_vm_reconfigured(controller, database, vcenter_api_client, vnc_api_clien
     controller.handle_update(vm_reconfigured_update)
 
     # Check if VM Model has been saved properly in Database:
-    vm_model = database.get_vm_model_by_uuid('12345678-1234-1234-1234-123456789012')
+    vm_model = database.get_vm_model_by_uuid('vmware_vm_uuid_1')
     assert_vm_model_state(vm_model, has_ports={'11:11:11:11:11:11': 'dvportgroup-2'})
 
     # Check that VM was not updated in VNC except VM create event
@@ -34,7 +34,7 @@ def test_vm_reconfigured(controller, database, vcenter_api_client, vnc_api_clien
     # Check if VMI Model has been saved properly:
 
     # - in Database
-    vmi_models = database.get_vmi_models_by_vm_uuid('12345678-1234-1234-1234-123456789012')
+    vmi_models = database.get_vmi_models_by_vm_uuid('vmware_vm_uuid_1')
     assert len(vmi_models) == 1
     vmi_model = vmi_models[0]
 

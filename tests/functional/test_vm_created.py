@@ -20,12 +20,12 @@ def test_vm_created(controller, database, vcenter_api_client, vnc_api_client, vr
     # - in VNC:
     vnc_api_client.update_or_create_vm.assert_called_once()
     vnc_vm = vnc_api_client.update_or_create_vm.call_args[0][0]
-    assert_vnc_vm_state(vnc_vm, uuid='12345678-1234-1234-1234-123456789012',
-                        name='12345678-1234-1234-1234-123456789012', owner='project-uuid')
+    assert_vnc_vm_state(vnc_vm, uuid='vmware_vm_uuid_1',
+                        name='vmware_vm_uuid_1', owner='project-uuid')
 
     # - in Database:
-    vm_model = database.get_vm_model_by_uuid('12345678-1234-1234-1234-123456789012')
-    assert_vm_model_state(vm_model, uuid='12345678-1234-1234-1234-123456789012', name='VM1')
+    vm_model = database.get_vm_model_by_uuid('vmware_vm_uuid_1')
+    assert_vm_model_state(vm_model, uuid='vmware_vm_uuid_1', name='VM1')
 
     # Check if VMI Model has been saved properly:
     # - in VNC
