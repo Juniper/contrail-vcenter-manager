@@ -158,7 +158,7 @@ class VCenterAPIClient(VSphereAPIClient):
             preferredApiVersions=self._vcenter_cfg.get('preferred_api_versions')
         )
         self._datacenter = self._get_datacenter(self._vcenter_cfg.get('datacenter'))
-        self._dvs = self._get_object([vim.dvs.VmwareDistributedVirtualSwitch], self._vcenter_cfg.get('dvswitch'))
+        self._dvs = self._get_dvswitch(self._vcenter_cfg.get('dvswitch'))
 
     def __exit__(self, *args):
         Disconnect(self._si)
@@ -197,12 +197,11 @@ class VCenterAPIClient(VSphereAPIClient):
         return [port.config.setting.vlan.vlanId for port in self._dvs.FetchDVPorts()
                 if isinstance(port.config.setting.vlan, vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec)]
 
-    def _get_dvs_by_uuid(self, uuid):
-        dvs_manager = self._si.content.dvSwitchManager
-        return dvs_manager.QueryDvsByUuid(uuid)
-
     def _get_datacenter(self, name):
         return self._get_object([vim.Datacenter], name)
+
+    def _get_dvswitch(self, name):
+        return self._get_object([vim.dvs.VmwareDistributedVirtualSwitch], name)
 
     def _fetch_port_from_dvs(self, port_key):
         criteria = vim.dvs.PortCriteria()

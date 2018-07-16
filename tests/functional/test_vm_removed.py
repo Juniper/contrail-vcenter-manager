@@ -20,7 +20,7 @@ def test_full_remove_vm(controller, database, vcenter_api_client, vnc_api_client
 
     # After VmCreatedEvent has been handled
     # proper VM model should exists
-    vm_model = database.get_vm_model_by_uuid('12345678-1234-1234-1234-123456789012')
+    vm_model = database.get_vm_model_by_uuid('vmware-vm-uuid-1')
     assert vm_model is not None
     # And associated VMI model
     vmi_models = vm_model.vmi_models
@@ -79,7 +79,7 @@ def test_vm_removed_local_remove(controller, database, vcenter_api_client, vnc_a
 
     # After VmCreatedEvent has been handled
     # proper VM model should exists
-    vm_model = database.get_vm_model_by_uuid('12345678-1234-1234-1234-123456789012')
+    vm_model = database.get_vm_model_by_uuid('vmware-vm-uuid-1')
     assert vm_model is not None
     # And associated VMI model
     vmi_models = vm_model.vmi_models

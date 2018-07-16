@@ -25,8 +25,8 @@ def test_vm_reconfigured(controller, database, vcenter_api_client, vnc_api_clien
     controller.handle_update(vm_reconfigured_update)
 
     # Check if VM Model has been saved properly in Database:
-    vm_model = database.get_vm_model_by_uuid('12345678-1234-1234-1234-123456789012')
-    assert_vm_model_state(vm_model, has_ports={'11:11:11:11:11:11': 'dvportgroup-2'})
+    vm_model = database.get_vm_model_by_uuid('vmware-vm-uuid-1')
+    assert_vm_model_state(vm_model, has_ports={'mac-address': 'dvportgroup-2'})
 
     # Check that VM was not updated in VNC except VM create event
     vnc_api_client.update_or_create_vm.assert_called_once()
@@ -34,7 +34,7 @@ def test_vm_reconfigured(controller, database, vcenter_api_client, vnc_api_clien
     # Check if VMI Model has been saved properly:
 
     # - in Database
-    vmi_models = database.get_vmi_models_by_vm_uuid('12345678-1234-1234-1234-123456789012')
+    vmi_models = database.get_vmi_models_by_vm_uuid('vmware-vm-uuid-1')
     assert len(vmi_models) == 1
     vmi_model = vmi_models[0]
 
@@ -42,7 +42,7 @@ def test_vm_reconfigured(controller, database, vcenter_api_client, vnc_api_clien
     vnc_api_client.delete_vmi.assert_called_once_with(vmi_model.uuid)
     assert vnc_api_client.update_vmi.call_count == 2
     vnc_vmi = vnc_api_client.update_vmi.call_args[0][0]
-    assert_vnc_vmi_state(vnc_vmi, mac_address='11:11:11:11:11:11', vnc_vn_uuid=vnc_vn_2.uuid)
+    assert_vnc_vmi_state(vnc_vmi, mac_address='mac-address', vnc_vn_uuid=vnc_vn_2.uuid)
 
     # Check if VMI Model's Instance IP has been updated in VNC:
     assert vnc_api_client.create_and_read_instance_ip.call_count == 2
@@ -65,7 +65,7 @@ def test_vm_reconfigured(controller, database, vcenter_api_client, vnc_api_clien
     # Check inner VMI model state
     assert_vmi_model_state(
         vmi_model,
-        mac_address='11:11:11:11:11:11',
+        mac_address='mac-address',
         ip_address='192.168.100.5',
         vlan_id=5,
         display_name='vmi-DPG2-VM1',
