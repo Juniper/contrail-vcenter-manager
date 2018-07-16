@@ -29,7 +29,7 @@ def test_vm_created_vlan_id(controller, database, vcenter_api_client, vm_created
     vmi_model = database.get_all_vmi_models()[0]
     assert_vmi_model_state(
         vmi_model,
-        mac_address='11:11:11:11:11:11',
+        mac_address='mac-address',
         ip_address='192.168.100.5',
         vlan_id=5,
         display_name='vmi-DPG1-VM1',
