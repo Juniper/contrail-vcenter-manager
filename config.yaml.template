@@ -22,3 +22,7 @@ vnc:
   username:
   password:
   tenant_name:
+sandesh:
+  collectors:
+  logging_level:
+  log_file:
