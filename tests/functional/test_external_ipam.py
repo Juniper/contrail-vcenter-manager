@@ -1,6 +1,3 @@
-from tests.utils import dont_assign_ip_to_instance_ip
-
-
 def test_external_ipam(controller, database, vnc_api_client, vrouter_api_client, vm_created_update, nic_info_update,
                        vn_model_1):
     """ We don't need ContrailVM model for CVM to operate properly. """
@@ -10,7 +7,7 @@ def test_external_ipam(controller, database, vnc_api_client, vrouter_api_client,
     database.save(vn_model_1)
 
     # We use external IPAM, so there's no assignment of IP addresses
-    vnc_api_client.create_and_read_instance_ip.side_effect = dont_assign_ip_to_instance_ip
+    vnc_api_client.create_and_read_instance_ip.side_effect = lambda x: x
 
     controller.handle_update(vm_created_update)
 
