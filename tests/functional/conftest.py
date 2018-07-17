@@ -6,7 +6,8 @@ from vnc_api import vnc_api
 
 from cvm.controllers import (GuestNetHandler, UpdateHandler,
                              VmReconfiguredHandler, VmRenamedHandler,
-                             VmUpdatedHandler, VmwareController, PowerStateHandler, VmwareToolsStatusHandler)
+                             VmUpdatedHandler, VmwareController, PowerStateHandler,
+                             VmwareToolsStatusHandler, VmRemovedHandler)
 from cvm.database import Database
 from cvm.models import VlanIdPool
 from cvm.services import (VirtualMachineInterfaceService,
@@ -81,6 +82,13 @@ def contrail_vm_properties():
 def vm_created_update(vmware_vm_1):
     event = Mock(spec=vim.event.VmCreatedEvent())
     event.vm.vm = vmware_vm_1
+    return wrap_into_update_set(event=event)
+
+
+@pytest.fixture()
+def vm_removed_update():
+    event = Mock(spec=vim.event.VmRemovedEvent())
+    event.vm.name = 'VM1'
     return wrap_into_update_set(event=event)
 
 
@@ -225,6 +233,7 @@ def controller(vm_service, vn_service, vmi_service, vrouter_port_service, lock):
         VmUpdatedHandler(vm_service, vn_service, vmi_service, vrouter_port_service),
         VmRenamedHandler(vm_service, vmi_service, vrouter_port_service),
         VmReconfiguredHandler(vm_service, vn_service, vmi_service, vrouter_port_service),
+        VmRemovedHandler(vm_service, vmi_service, vrouter_port_service),
         GuestNetHandler(vmi_service, vrouter_port_service),
         PowerStateHandler(vm_service, vrouter_port_service),
         VmwareToolsStatusHandler(vm_service)
