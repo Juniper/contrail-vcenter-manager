@@ -243,6 +243,9 @@ class VlanIdPool(object):
     def free(self, vlan_id):
         self._available_ids.append(vlan_id)
 
+    def is_available(self, vlan_id):
+        return vlan_id in self._available_ids
+
 
 class VCenterPort(object):
     def __init__(self, device):
