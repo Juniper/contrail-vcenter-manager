@@ -4,7 +4,7 @@ from mock import Mock
 
 from cvm.database import Database
 from cvm.models import VirtualMachineInterfaceModel
-from tests.utils import create_vm_model, create_vn_model
+from tests.utils import create_vm_model, create_vn_model, create_vnc_vn
 
 
 class TestFindVirtualMachineIpAddress(TestCase):
@@ -18,13 +18,15 @@ class TestFindVirtualMachineIpAddress(TestCase):
         self.assertEqual(self.database.get_vm_model_by_uuid('dummy-uuid'), None)
 
     def test_get_vn_model_by_uuid(self):
-        vn_model = create_vn_model('vn-model', 'key', uuid='test-uuid')
+        vnc_vn = create_vnc_vn('vn-model', 'test-uuid')
+        vn_model = create_vn_model(vnc_vn, 'key')
         self.database.save(vn_model)
         self.assertEqual(self.database.get_vn_model_by_uuid('test-uuid'), vn_model)
         self.assertEqual(self.database.get_vn_model_by_uuid('dummy-uuid'), None)
 
     def test_get_vn_model_by_key(self):
-        vn_model = create_vn_model('vn-model', 'key')
+        vnc_vn = create_vnc_vn('vn-model', 'test-uuid')
+        vn_model = create_vn_model(vnc_vn, 'key')
         self.database.save(vn_model)
         self.assertEqual(self.database.get_vn_model_by_key('key'), vn_model)
         self.assertEqual(self.database.get_vn_model_by_uuid('dummy-key'), None)
@@ -36,7 +38,8 @@ class TestFindVirtualMachineIpAddress(TestCase):
         self.assertEqual(self.database.get_vm_model_by_uuid('uuid'), None)
 
     def test_delete_vn_model(self):
-        vn_model = create_vn_model('vn-model', 'key')
+        vnc_vn = create_vnc_vn('vn-model', 'test-uuid')
+        vn_model = create_vn_model(vnc_vn, 'key')
         self.database.save(vn_model)
         self.database.delete_vn_model('key')
         self.assertEqual(self.database.get_vn_model_by_key('key'), None)
