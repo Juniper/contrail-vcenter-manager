@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import random
 import socket
 import sys
 
@@ -98,6 +99,8 @@ def build_monitor(config, lock, database):
 
 def run_introspect(cfg, database, lock):
     sandesh_config = cfg['sandesh']
+    sandesh_config['collectors'] = sandesh_config['collectors'].split()
+    random.shuffle(sandesh_config['collectors'])
     sandesh_config.update({
         'id': Module.VCENTER_MANAGER,
         'hostname': socket.gethostname(),
