@@ -1,56 +1,6 @@
-from mock import Mock
-from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
-from vnc_api import vnc_api
+from pyVmomi import vmodl  # pylint: disable=no-name-in-module
 
 from cvm.clients import make_filter_spec
-from cvm.models import VirtualMachineModel, VirtualNetworkModel
-
-
-def create_vmware_vm_mock(network=None, uuid=None, name=None):
-    vmware_vm = Mock(spec=vim.VirtualMachine)
-    vmware_vm.summary.runtime.host = Mock(vm=[vmware_vm])
-    vmware_vm.config.hardware.device = []
-    vm_properties = {
-        'config.instanceUuid': uuid or 'd376b6b4-943d-4599-862f-d852fd6ba425',
-        'name': name or 'VM',
-        'runtime.powerState': 'poweredOn',
-        'guest.toolsRunningStatus': 'guestToolsRunning',
-    }
-    vmware_vm.config.instanceUuid = uuid or 'd376b6b4-943d-4599-862f-d852fd6ba425'
-    vmware_vm.network = network
-    vmware_vm.guest.net = []
-    if network:
-        device = Mock()
-        backing_mock = Mock(spec=vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo())
-        device.backing = backing_mock
-        device.backing.port.portgroupKey = network[0].key
-        device.macAddress = 'c8:5b:76:53:0f:f5'
-        vmware_vm.config.hardware.device = [device]
-    return vmware_vm, vm_properties
-
-
-def create_dpg_mock(**kwargs):
-    dpg_mock = Mock(spec=vim.dvs.DistributedVirtualPortgroup)
-    for kwarg in kwargs:
-        setattr(dpg_mock, kwarg, kwargs[kwarg])
-    dpg_mock.config.distributedVirtualSwitch.FetchDVPorts.return_value = []
-    return dpg_mock
-
-
-def create_vcenter_client_mock():
-    vcenter_client = Mock()
-    vcenter_client.__enter__ = Mock()
-    vcenter_client.__exit__ = Mock()
-    return vcenter_client
-
-
-def create_vnc_client_mock():
-    vnc_client = Mock()
-    project = vnc_api.Project()
-    project.set_uuid('project-uuid')
-    vnc_client.read_or_create_project.return_value = project
-    vnc_client.read_security_group.return_value = vnc_api.SecurityGroup()
-    return vnc_client
 
 
 def create_property_filter(obj, filters):
@@ -58,48 +8,13 @@ def create_property_filter(obj, filters):
     return vmodl.query.PropertyCollector.Filter(filter_spec)
 
 
-def create_vm_model(network=None, uuid=None):
-    vmware_vm, vm_properties = create_vmware_vm_mock(network=network, uuid=uuid)
-    return VirtualMachineModel(vmware_vm, vm_properties)
-
-
-def create_port_mock(vlan_id):
-    port = Mock()
-    port.config.setting.vlan.vlanId = vlan_id
-    return port
-
-
 def reserve_vlan_ids(vlan_id_pool, vlan_ids):
     for vlan_id in vlan_ids:
         vlan_id_pool.reserve(vlan_id)
 
 
-def create_ipam():
-    return vnc_api.NetworkIpam(
-        name='IPAM',
-        parent_obj=vnc_api.Project()
-    )
-
-
-def create_vnc_vn(name, uuid):
-    vnc_vn = vnc_api.VirtualNetwork(name=name, parent=vnc_api.Project())
-    vnc_vn.set_uuid(uuid)
-    vnc_vn.set_network_ipam(create_ipam(), None)
-    return vnc_vn
-
-
-def create_vn_model(vnc_vn, portgroup_key):
-    dpg = Mock()
-    dpg.key = portgroup_key
-    return VirtualNetworkModel(dpg, vnc_vn)
-
-
 def assign_ip_to_instance_ip(instance_ip):
     instance_ip.set_instance_ip_address('192.168.100.5')
-    return instance_ip
-
-
-def dont_assign_ip_to_instance_ip(instance_ip):
     return instance_ip
 
 
@@ -151,6 +66,20 @@ def assert_vm_model_state(vm_model, uuid=None, name=None, has_ports=None,
     for mac_address, portgroup_key in has_ports.items():
         assert mac_address in [port.mac_address for port in vm_model.ports]
         assert next(port.portgroup_key for port in vm_model.ports if port.mac_address == mac_address) == portgroup_key
+
+
+def assert_vn_model_state(vn_model, uuid=None, name=None, key=None,
+                          vnc_vn=None, vmware_vn=None):
+    if uuid is not None:
+        assert vn_model.uuid == uuid
+    if name is not None:
+        assert vn_model.name == name
+    if key is not None:
+        assert vn_model.key == key
+    if vnc_vn is not None:
+        assert vn_model.vnc_vn == vnc_vn
+    if vmware_vn is not None:
+        assert vn_model.vmware_vn == vmware_vn
 
 
 def assert_vnc_vmi_state(vnc_vmi, mac_address=None, vnc_vm_uuid=None, vnc_vn_uuid=None):
