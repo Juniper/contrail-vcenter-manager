@@ -175,6 +175,7 @@ class VirtualNetworkService(Service):
                     logger.info('Fetched new portgroup key: %s name: %s', dpg.key, vnc_vn.name)
                     vn_model = VirtualNetworkModel(dpg, vnc_vn)
                     self._vcenter_api_client.enable_vlan_override(vn_model.vmware_vn)
+                    self._vcenter_api_client.set_vlan_trunk(vn_model.vmware_vn)
                     self._database.save(vn_model)
                     logger.info('Created %s', vn_model)
                 else:
@@ -194,8 +195,9 @@ class VirtualMachineInterfaceService(Service):
         self._delete_unused_vmis()
 
     def sync_vlan_ids(self):
+        vrouter_uuid = self._esxi_api_client.read_vrouter_uuid()
         with self._vcenter_api_client:
-            reserved_vlan_ids = self._vcenter_api_client.get_reserved_vlan_ids()
+            reserved_vlan_ids = self._vcenter_api_client.get_reserved_vlan_ids(vrouter_uuid)
             for vlan_id in reserved_vlan_ids:
                 self._vlan_id_pool.reserve(vlan_id)
 

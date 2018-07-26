@@ -10,7 +10,8 @@ from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 from vnc_api.exceptions import NoIdError
 
-from cvm.constants import (VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
+from cvm.constants import (VLAN_TRUNK_END, VLAN_TRUNK_START,
+                           VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
                            VNC_VCENTER_IPAM, VNC_VCENTER_IPAM_FQN,
                            VNC_VCENTER_PROJECT)
@@ -63,6 +64,25 @@ def make_pg_config_vlan_override(portgroup):
     pg_config_spec.policy.vlanOverrideAllowed = True
     pg_config_spec.configVersion = portgroup.config.configVersion
     return pg_config_spec
+
+
+def make_pg_config_vlan_trunk(portgroup):
+    pg_config_spec = vim.dvs.DistributedVirtualPortgroup.ConfigSpec()
+    pg_config_spec.defaultPortConfig = vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy()
+    vlan_trunk_spec = vim.dvs.VmwareDistributedVirtualSwitch.TrunkVlanSpec()
+    vlan_trunk_spec.vlanId = [vim.NumericRange(start=VLAN_TRUNK_START, end=VLAN_TRUNK_END)]
+    pg_config_spec.defaultPortConfig.vlan = vlan_trunk_spec
+    pg_config_spec.configVersion = portgroup.config.configVersion
+    return pg_config_spec
+
+
+def wait_for_task(task, success_message, fault_message):
+    while task.info.state == 'running':
+        continue
+    if task.info.state == 'success':
+        logger.info(success_message)
+    elif task.info.state == 'error':
+        logger.error(fault_message, task.info.error.msg)
 
 
 class VSphereAPIClient(object):
@@ -192,10 +212,19 @@ class VCenterAPIClient(VSphereAPIClient):
         dv_port_config_spec = make_dv_port_spec(dv_port)
         self._dvs.ReconfigureDVPort_Task(port=[dv_port_config_spec])
 
-    def get_reserved_vlan_ids(self):
+    def get_reserved_vlan_ids(self, vrouter_uuid):
+        """In this method treats vrouter_uuid as esxi host id"""
+        criteria = vim.dvs.PortCriteria()
+        criteria.connected = True
         logger.info('Retrieving reserved VLAN IDs')
-        return [port.config.setting.vlan.vlanId for port in self._dvs.FetchDVPorts()
-                if isinstance(port.config.setting.vlan, vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec)]
+        reserved_vland_ids = []
+        for port in self._dvs.FetchDVPorts(criteria=criteria):
+            if not isinstance(port.config.setting.vlan, vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec):
+                continue
+            if find_vrouter_uuid(port.proxyHost) != vrouter_uuid:
+                continue
+            reserved_vland_ids.append(port.config.setting.vlan.vlanId)
+        return reserved_vland_ids
 
     def _get_datacenter(self, name):
         return self._get_object([vim.Datacenter], name)
@@ -214,8 +243,22 @@ class VCenterAPIClient(VSphereAPIClient):
     @staticmethod
     def enable_vlan_override(portgroup):
         pg_config_spec = make_pg_config_vlan_override(portgroup)
-        portgroup.ReconfigureDVPortgroup_Task(pg_config_spec)
-        logger.info('Enabled vCenter portgroup %s vlan override', portgroup.name)
+        task = portgroup.ReconfigureDVPortgroup_Task(pg_config_spec)
+        success_message = 'Enabled vCenter portgroup %s vlan override' % portgroup.name
+        fault_message = 'Enabling VLAN override on portgroup {} failed: %s'.format(portgroup.name)
+        wait_for_task(task, success_message, fault_message)
+
+    @staticmethod
+    def set_vlan_trunk(portgroup):
+        pg_config_spec = make_pg_config_vlan_trunk(portgroup)
+        task = portgroup.ReconfigureDVPortgroup_Task(pg_config_spec)
+        success_message = 'Set vCenter portgroup %s to VLAN Trunk (start=%d, end=%d)' % (
+            portgroup.name,
+            pg_config_spec.defaultPortConfig.vlan.vlanId[0].start,
+            pg_config_spec.defaultPortConfig.vlan.vlanId[0].end,
+        )
+        fault_message = 'Setting vCenter portgroup {} to VLAN Trunk failed: %s'.format(portgroup.name)
+        wait_for_task(task, success_message, fault_message)
 
 
 class VNCAPIClient(object):

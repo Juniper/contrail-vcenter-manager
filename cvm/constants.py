@@ -41,4 +41,7 @@ CONTRAIL_NETWORK = 'VM-PG'
 VLAN_ID_RANGE_START = 0
 VLAN_ID_RANGE_END = 4095
 
+VLAN_TRUNK_START = 0
+VLAN_TRUNK_END = 4094
+
 ID_PERMS = IdPermsType(creator='vcenter-manager', enable=True)

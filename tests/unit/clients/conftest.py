@@ -5,6 +5,7 @@ from vnc_api import vnc_api
 
 from cvm.clients import VCenterAPIClient, VNCAPIClient
 from cvm.models import VCenterPort
+from tests.utils import create_dv_port
 
 
 @pytest.fixture()
@@ -12,6 +13,21 @@ def dv_port():
     port = Mock(key='8')
     port.config.configVersion = '1'
     return port
+
+
+@pytest.fixture()
+def dv_port_1():
+    return create_dv_port(10, 'vrouter_uuid_1')
+
+
+@pytest.fixture()
+def dv_port_2():
+    return create_dv_port(7, 'vrouter_uuid_1')
+
+
+@pytest.fixture()
+def dv_port_3():
+    return create_dv_port(5, 'vrouter_uuid_2')
 
 
 @pytest.fixture()
@@ -26,6 +42,13 @@ def vcenter_port():
 def dvs(dv_port):
     dvswitch = Mock()
     dvswitch.FetchDVPorts.return_value = [dv_port]
+    return dvswitch
+
+
+@pytest.fixture()
+def dvs_1(dv_port_1, dv_port_2, dv_port_3):
+    dvswitch = Mock()
+    dvswitch.FetchDVPorts.return_value = [dv_port_1, dv_port_2, dv_port_3]
     return dvswitch
 
 
