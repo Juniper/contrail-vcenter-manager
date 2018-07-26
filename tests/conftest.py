@@ -4,7 +4,6 @@ from mock import Mock
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 
-from tests.utils import assign_ip_to_instance_ip, wrap_into_update_set
 from cvm.controllers import (GuestNetHandler, PowerStateHandler, UpdateHandler,
                              VmReconfiguredHandler, VmRemovedHandler,
                              VmRenamedHandler, VmUpdatedHandler,
@@ -15,6 +14,7 @@ from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
 from cvm.services import (VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService,
                           VRouterPortService)
+from tests.utils import assign_ip_to_instance_ip, wrap_into_update_set
 
 
 @pytest.fixture()
@@ -70,6 +70,16 @@ def portgroup():
     pg = Mock(key='dvportgroup-1')
     pg.configure_mock(name='DPG1')
     pg.config.policy = Mock(spec=vim.dvs.DistributedVirtualPortgroup.PortgroupPolicy())
+    pg.config.configVersion = '1'
+    return pg
+
+
+@pytest.fixture()
+def portgroup():
+    pg = Mock(key='dvportgroup-1')
+    pg.configure_mock(name='DPG1')
+    pg.config.policy = Mock(spec=vim.dvs.DistributedVirtualPortgroup.PortgroupPolicy())
+    pg.config.defaultPortConfig = Mock(spec=vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy())
     pg.config.configVersion = '1'
     return pg
 

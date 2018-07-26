@@ -28,7 +28,8 @@ def test_update_vns(vn_service, database, vcenter_api_client, vnc_api_client, vm
         vnc_vn=vnc_vn_1,
         vmware_vn=portgroup,
     )
-    vcenter_api_client.get_dpg_by_key.called_once_with('dvportgroup-1')
-    vcenter_api_client.enable_vlan_override.called_once_with(portgroup)
+    vcenter_api_client.get_dpg_by_key.assert_called_once_with('dvportgroup-1')
+    vcenter_api_client.enable_vlan_override.assert_called_once_with(portgroup)
+    vcenter_api_client.set_vlan_trunk.assert_called_once_with(portgroup)
     fq_name = [VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, 'DPG1']
-    vnc_api_client.read_vn.called_once_with(fq_name)
+    vnc_api_client.read_vn.assert_called_once_with(fq_name)
