@@ -30,15 +30,24 @@ def test_assign_new_vlan_id(vmi_service, database, vcenter_api_client,
     assert vmi_model.vcenter_port.vlan_id == 2
 
 
-def test_retain_old_vlan_id(vmi_service, database, vcenter_api_client,
-                            vlan_id_pool, vmi_model):
+def test_retain_old_vlan_id(vmi_service, database, vcenter_api_client, vmi_model):
     database.vmis_to_update.append(vmi_model)
-    reserve_vlan_ids(vlan_id_pool, [20])
     vcenter_api_client.get_vlan_id.return_value = 20
 
     vmi_service.update_vmis()
 
     assert vmi_model.vcenter_port.vlan_id == 20
+
+
+def test_current_not_available(vmi_service, database, vcenter_api_client,
+                               vlan_id_pool, vmi_model):
+    database.vmis_to_update.append(vmi_model)
+    vcenter_api_client.get_vlan_id.return_value = 20
+    reserve_vlan_ids(vlan_id_pool, [20])
+
+    vmi_service.update_vmis()
+
+    assert vmi_model.vcenter_port.vlan_id == 0
 
 
 def test_restore_vlan_id(vmi_service, database, vcenter_api_client,
