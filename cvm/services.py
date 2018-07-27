@@ -230,8 +230,11 @@ class VirtualMachineInterfaceService(Service):
     def _assign_vlan_id(self, vmi_model):
         with self._vcenter_api_client:
             current_vlan_id = self._vcenter_api_client.get_vlan_id(vmi_model.vcenter_port)
-            vmi_model.vcenter_port.vlan_id = current_vlan_id or self._vlan_id_pool.get_available()
-            if not current_vlan_id:
+            if current_vlan_id and self._vlan_id_pool.is_available(current_vlan_id):
+                vmi_model.vcenter_port.vlan_id = current_vlan_id
+                self._vlan_id_pool.reserve(current_vlan_id)
+            else:
+                vmi_model.vcenter_port.vlan_id = self._vlan_id_pool.get_available()
                 self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
 
     def _add_vnc_info_to(self, vmi_model):
