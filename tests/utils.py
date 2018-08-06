@@ -1,6 +1,18 @@
-from pyVmomi import vmodl  # pylint: disable=no-name-in-module
+from mock import Mock
+from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 
 from cvm.clients import make_filter_spec
+
+
+def create_dv_port(vlan_id, vrouter_uuid):
+    port = Mock()
+    port.config.setting.vlan = Mock(spec=vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec)
+    port.config.setting.vlan.vlanId = vlan_id
+    vm_mock = Mock()
+    vm_mock.name = 'ContrailVM'
+    vm_mock.config.instanceUuid = vrouter_uuid
+    port.proxyHost.vm = [vm_mock]
+    return port
 
 
 def create_property_filter(obj, filters):
