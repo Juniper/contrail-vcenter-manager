@@ -1,4 +1,7 @@
 import atexit
+import functools
+import gevent
+import itertools
 import json
 import logging
 from uuid import uuid4
@@ -265,6 +268,65 @@ class VCenterAPIClient(VSphereAPIClient):
         )
         fault_message = 'Setting vCenter portgroup {} to VLAN Trunk failed: %s'.format(portgroup.name)
         wait_for_task(task, success_message, fault_message)
+
+
+class NoViableVNCAPIServer(Exception):
+    pass
+
+
+class HAVNCAPIClient(object):
+    ERRORS_THRESHOLD = 2
+    SLEEP_TIMEOUT = 5
+
+    def __init__(self, vnc_cfg):
+        self._servers_ip = vnc_cfg.pop('api_server_host')
+        self._vnc_cfg = vnc_cfg
+        self._servers_iter = itertools.cycle(self._servers_ip)
+        self._servers_errors = {ip: 0 for ip in self._servers_ip}
+        self._client = None
+        self._current_server_ip = None
+
+    def _create_client(self):
+        current_server_ip = next(self._servers_iter)
+        self._vnc_cfg['api_server_host'] = current_server_ip
+        self._client = VNCAPIClient(self._vnc_cfg)
+        self._current_server_ip = current_server_ip
+
+    def _notice_server_error(self, server_ip):
+        self._servers_errors[server_ip] += 1
+
+    def _has_server_error(self, server_ip):
+        return self._servers_errors[server_ip] > 0
+
+    def _wipe_server_errors(self, server_ip):
+        self._servers_errors[server_ip] = 0
+
+    def _is_available_server(self):
+        return not all(error_num > self.ERRORS_THRESHOLD for error_num in self._servers_errors.values())
+
+    def __getattr__(self, attr):
+        if self._client is None:
+            self._create_client()
+        client_attr = self._client.__getattribute__(attr)
+        if not callable(client_attr):
+            return client_attr
+
+        #TODO: add logging
+
+        @functools.wraps(client_attr)
+        def wrapper(*args, **kwargs):
+            while True:
+                try:
+                    if self._has_server_error(self._current_server_ip):
+                        gevent.sleep(self.SLEEP_TIMEOUT)
+                    result = client_attr(*args, **kwargs)
+                    self._wipe_server_errors(self._current_server_ip)
+                    return result
+                except requests.exceptions.ConnectionError:
+                    if self._is_available_server():
+                        self._create_client()
+                    raise NoViableVNCAPIServer()
+        return wrapper
 
 
 class VNCAPIClient(object):
