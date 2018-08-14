@@ -11,8 +11,7 @@ from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 from vnc_api.exceptions import NoIdError
 
-from cvm.constants import (VLAN_TRUNK_END, VLAN_TRUNK_START,
-                           VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
+from cvm.constants import (VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
                            VNC_VCENTER_IPAM, VNC_VCENTER_IPAM_FQN,
                            VNC_VCENTER_PROJECT)
@@ -63,16 +62,6 @@ def make_pg_config_vlan_override(portgroup):
     pg_config_spec = vim.dvs.DistributedVirtualPortgroup.ConfigSpec()
     pg_config_spec.policy = portgroup.config.policy
     pg_config_spec.policy.vlanOverrideAllowed = True
-    pg_config_spec.configVersion = portgroup.config.configVersion
-    return pg_config_spec
-
-
-def make_pg_config_vlan_trunk(portgroup):
-    pg_config_spec = vim.dvs.DistributedVirtualPortgroup.ConfigSpec()
-    pg_config_spec.defaultPortConfig = vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy()
-    vlan_trunk_spec = vim.dvs.VmwareDistributedVirtualSwitch.TrunkVlanSpec()
-    vlan_trunk_spec.vlanId = [vim.NumericRange(start=VLAN_TRUNK_START, end=VLAN_TRUNK_END)]
-    pg_config_spec.defaultPortConfig.vlan = vlan_trunk_spec
     pg_config_spec.configVersion = portgroup.config.configVersion
     return pg_config_spec
 
@@ -253,18 +242,6 @@ class VCenterAPIClient(VSphereAPIClient):
         task = portgroup.ReconfigureDVPortgroup_Task(pg_config_spec)
         success_message = 'Enabled vCenter portgroup %s vlan override' % portgroup.name
         fault_message = 'Enabling VLAN override on portgroup {} failed: %s'.format(portgroup.name)
-        wait_for_task(task, success_message, fault_message)
-
-    @staticmethod
-    def set_vlan_trunk(portgroup):
-        pg_config_spec = make_pg_config_vlan_trunk(portgroup)
-        task = portgroup.ReconfigureDVPortgroup_Task(pg_config_spec)
-        success_message = 'Set vCenter portgroup %s to VLAN Trunk (start=%d, end=%d)' % (
-            portgroup.name,
-            pg_config_spec.defaultPortConfig.vlan.vlanId[0].start,
-            pg_config_spec.defaultPortConfig.vlan.vlanId[0].end,
-        )
-        fault_message = 'Setting vCenter portgroup {} to VLAN Trunk failed: %s'.format(portgroup.name)
         wait_for_task(task, success_message, fault_message)
 
 
