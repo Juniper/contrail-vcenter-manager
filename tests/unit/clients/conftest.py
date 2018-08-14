@@ -65,7 +65,7 @@ def vnc_lib():
 @pytest.fixture()
 def vnc_api_client(vnc_lib):
     with patch.object(vnc_api, 'VncApi', return_value=vnc_lib):
-        return VNCAPIClient({})
+        return VNCAPIClient({'api_server_host': '', 'auth_host': ''})
 
 
 @pytest.fixture()
