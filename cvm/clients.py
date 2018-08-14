@@ -255,18 +255,6 @@ class VCenterAPIClient(VSphereAPIClient):
         fault_message = 'Enabling VLAN override on portgroup {} failed: %s'.format(portgroup.name)
         wait_for_task(task, success_message, fault_message)
 
-    @staticmethod
-    def set_vlan_trunk(portgroup):
-        pg_config_spec = make_pg_config_vlan_trunk(portgroup)
-        task = portgroup.ReconfigureDVPortgroup_Task(pg_config_spec)
-        success_message = 'Set vCenter portgroup %s to VLAN Trunk (start=%d, end=%d)' % (
-            portgroup.name,
-            pg_config_spec.defaultPortConfig.vlan.vlanId[0].start,
-            pg_config_spec.defaultPortConfig.vlan.vlanId[0].end,
-        )
-        fault_message = 'Setting vCenter portgroup {} to VLAN Trunk failed: %s'.format(portgroup.name)
-        wait_for_task(task, success_message, fault_message)
-
 
 class VNCAPIClient(object):
     def __init__(self, vnc_cfg):

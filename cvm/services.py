@@ -189,7 +189,6 @@ class VirtualNetworkService(Service):
         logger.info('Fetched new portgroup key: %s name: %s', dpg.key, vnc_vn.name)
         vn_model = VirtualNetworkModel(dpg, vnc_vn)
         self._vcenter_api_client.enable_vlan_override(vn_model.vmware_vn)
-        self._vcenter_api_client.set_vlan_trunk(vn_model.vmware_vn)
         self._database.save(vn_model)
         logger.info('Created %s', vn_model)
 
