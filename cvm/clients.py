@@ -63,6 +63,7 @@ def make_pg_config_vlan_override(portgroup):
     pg_config_spec.policy = portgroup.config.policy
     pg_config_spec.policy.vlanOverrideAllowed = True
     pg_config_spec.configVersion = portgroup.config.configVersion
+    pg_config_spec.defaultPortConfig = portgroup.config.defaultPortConfig
     return pg_config_spec
 
 
