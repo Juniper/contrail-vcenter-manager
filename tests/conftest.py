@@ -70,17 +70,14 @@ def portgroup():
     pg = Mock(key='dvportgroup-1')
     pg.configure_mock(name='DPG1')
     pg.config.policy = Mock(spec=vim.dvs.DistributedVirtualPortgroup.PortgroupPolicy())
-    pg.config.configVersion = '1'
-    return pg
-
-
-@pytest.fixture()
-def portgroup():
-    pg = Mock(key='dvportgroup-1')
-    pg.configure_mock(name='DPG1')
-    pg.config.policy = Mock(spec=vim.dvs.DistributedVirtualPortgroup.PortgroupPolicy())
     pg.config.defaultPortConfig = Mock(spec=vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy())
     pg.config.configVersion = '1'
+    pg.config.name = 'portgroup'
+    pg.config.numPorts = 100
+    pg.config.type = 'portgroup-type'
+    pg.config.autoExpand = True
+    pg.config.vmVnicNetworkResourcePoolKey = 'poolkey'
+    pg.config.description = 'description'
     return pg
 
 
