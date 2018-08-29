@@ -60,9 +60,16 @@ def make_dv_port_spec(dv_port, vlan_id=None):
 
 def make_pg_config_vlan_override(portgroup):
     pg_config_spec = vim.dvs.DistributedVirtualPortgroup.ConfigSpec()
+    pg_config_spec.configVersion = portgroup.config.configVersion
+    pg_config_spec.name = portgroup.config.name
+    pg_config_spec.numPorts = portgroup.config.numPorts
+    pg_config_spec.defaultPortConfig = portgroup.config.defaultPortConfig
+    pg_config_spec.type = portgroup.config.type
     pg_config_spec.policy = portgroup.config.policy
     pg_config_spec.policy.vlanOverrideAllowed = True
-    pg_config_spec.configVersion = portgroup.config.configVersion
+    pg_config_spec.autoExpand = portgroup.config.autoExpand
+    pg_config_spec.vmVnicNetworkResourcePoolKey = portgroup.config.vmVnicNetworkResourcePoolKey
+    pg_config_spec.description = portgroup.config.description
     return pg_config_spec
 
 
