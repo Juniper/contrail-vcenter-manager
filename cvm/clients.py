@@ -1,6 +1,7 @@
 import atexit
 import json
 import logging
+import random
 from uuid import uuid4
 
 import requests
@@ -253,6 +254,10 @@ class VCenterAPIClient(VSphereAPIClient):
 
 class VNCAPIClient(object):
     def __init__(self, vnc_cfg):
+        vnc_cfg['api_server_host'] = vnc_cfg['api_server_host'].split()
+        random.shuffle(vnc_cfg['api_server_host'])
+        vnc_cfg['auth_host'] = vnc_cfg['auth_host'].split()
+        random.shuffle(vnc_cfg['auth_host'])
         self.vnc_lib = vnc_api.VncApi(
             username=vnc_cfg.get('username'),
             password=vnc_cfg.get('password'),
