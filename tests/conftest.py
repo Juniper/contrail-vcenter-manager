@@ -70,6 +70,7 @@ def portgroup():
     pg = Mock(key='dvportgroup-1')
     pg.configure_mock(name='DPG1')
     pg.config.policy = Mock(spec=vim.dvs.DistributedVirtualPortgroup.PortgroupPolicy())
+    pg.config.policy.vlanOverrideAllowed = False
     pg.config.defaultPortConfig = Mock(spec=vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy())
     pg.config.configVersion = '1'
     pg.config.name = 'portgroup'
