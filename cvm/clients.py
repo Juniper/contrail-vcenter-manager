@@ -245,6 +245,9 @@ class VCenterAPIClient(VSphereAPIClient):
 
     @staticmethod
     def enable_vlan_override(portgroup):
+        if portgroup.config.policy.vlanOverrideAllowed:
+            logger.info('VLAN Override for portgroup %s already allowed.', portgroup.name)
+            return
         pg_config_spec = make_pg_config_vlan_override(portgroup)
         task = portgroup.ReconfigureDVPortgroup_Task(pg_config_spec)
         success_message = 'Enabled vCenter portgroup %s vlan override' % portgroup.name

@@ -1,5 +1,4 @@
 from mock import patch
-from pyVmomi import vim
 
 from cvm.clients import VCenterAPIClient
 
@@ -29,6 +28,16 @@ def test_enable_vlan_override(vcenter_api_client, portgroup):
     config = portgroup.ReconfigureDVPortgroup_Task.call_args[0][0]
     assert config.policy.vlanOverrideAllowed is True
     assert config.configVersion == '1'
+
+
+def test_vlan_override_enabled(vcenter_api_client, portgroup):
+    portgroup.config.policy.vlanOverrideAllowed = True
+
+    with patch('cvm.clients.SmartConnectNoSSL'):
+        with vcenter_api_client:
+            vcenter_api_client.enable_vlan_override(portgroup=portgroup)
+
+    portgroup.ReconfigureDVPortgroup_Task.assert_not_called()
 
 
 def test_get_vlan_id(vcenter_api_client, dvs, vcenter_port, dv_port):
