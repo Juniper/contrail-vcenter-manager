@@ -344,5 +344,5 @@ def controller(vm_service, vn_service, vmi_service, vrouter_port_service, lock):
         PowerStateHandler(vm_service, vrouter_port_service),
         VmwareToolsStatusHandler(vm_service)
     ]
-    update_handler = UpdateHandler(handlers)
+    update_handler = UpdateHandler(*handlers)
     return VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, update_handler, lock)
