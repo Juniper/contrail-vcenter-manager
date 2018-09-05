@@ -44,15 +44,19 @@ def make_filter_spec(obj, filters):
 
 def make_dv_port_spec(dv_port, vlan_id=None):
     dv_port_config_spec = vim.dvs.DistributedVirtualPort.ConfigSpec()
-    dv_port_config_spec.key = dv_port.key
     dv_port_config_spec.operation = 'edit'
+    dv_port_config_spec.key = str(dv_port.key)
     dv_port_config_spec.configVersion = dv_port.config.configVersion
     vlan_spec = vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec()
     if vlan_id:
-        vlan_spec.vlanId = vlan_id
+        vlan_spec.vlanId = int(vlan_id)
+        vlan_spec.inherited = False
     else:
         vlan_spec.inherited = True
     dv_port_setting = vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy()
+    dv_port_setting.setting.blocked = vim.BoolPolicy()
+    dv_port_setting.setting.blocked.inherited = True
+    dv_port_setting.setting.blocked.value = False
     dv_port_setting.vlan = vlan_spec
     dv_port_config_spec.setting = dv_port_setting
     return dv_port_config_spec
@@ -76,6 +80,7 @@ def make_pg_config_vlan_override(portgroup):
 def wait_for_task(task, success_message, fault_message):
     while task.info.state == 'running':
         continue
+    logger.info('Task info: %s', task.info)
     if task.info.state == 'success':
         logger.info(success_message)
     elif task.info.state == 'error':
@@ -196,9 +201,16 @@ class VCenterAPIClient(VSphereAPIClient):
         dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
         if not dv_port:
             return
+        dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
+        logger.info('Port config before setting vlan id: %s', dv_port.config)
         dv_port_spec = make_dv_port_spec(dv_port, vcenter_port.vlan_id)
         logger.info('Setting vCenter VLAN ID of port %s to %d', vcenter_port.port_key, vcenter_port.vlan_id)
-        self._dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
+        task = self._dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
+        success_message = 'Successfully set VLAN ID: %d for port: %s' % (vcenter_port.vlan_id, vcenter_port.port_key)
+        fault_message = 'Failed to set VLAN ID: %d for port: %s' % (vcenter_port.vlan_id, vcenter_port.port_key)
+        wait_for_task(task, success_message, fault_message)
+        dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
+        logger.info('Port config after setting vlan id: %s', dv_port.config)
 
     def get_vlan_id(self, vcenter_port):
         logger.info('Reading VLAN ID of port %s', vcenter_port.port_key)
@@ -207,13 +219,17 @@ class VCenterAPIClient(VSphereAPIClient):
             vlan_id = dv_port.config.setting.vlan.vlanId
             logger.info('Port: %s VLAN ID: %s', vcenter_port.port_key, vlan_id)
             return vlan_id
+        logger.info('Port: %s has no VLAN ID', vcenter_port.port_key)
         return None
 
     def restore_vlan_id(self, vcenter_port):
         logger.info('Restoring VLAN ID of port %s to inherited value', vcenter_port.port_key)
         dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
         dv_port_config_spec = make_dv_port_spec(dv_port)
-        self._dvs.ReconfigureDVPort_Task(port=[dv_port_config_spec])
+        task = self._dvs.ReconfigureDVPort_Task(port=[dv_port_config_spec])
+        success_message = 'Successfully restored VLAN ID for port: %s' % (vcenter_port.port_key,)
+        fault_message = 'Failed to restore VLAN ID for port: %s' % (vcenter_port.port_key,)
+        wait_for_task(task, success_message, fault_message)
 
     def get_reserved_vlan_ids(self, vrouter_uuid):
         """In this method treats vrouter_uuid as esxi host id"""
