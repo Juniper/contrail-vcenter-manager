@@ -7,7 +7,7 @@ from cvm.clients import (ESXiAPIClient, VCenterAPIClient, VNCAPIClient,
                          VRouterAPIClient)
 from cvm.controllers import (GuestNetHandler, PowerStateHandler, UpdateHandler,
                              VmReconfiguredHandler, VmRemovedHandler,
-                             VmRenamedHandler, VmUpdatedHandler,
+                             VmRenamedHandler, VmUpdatedHandler, VmRegisteredHandler,
                              VmwareController, VmwareToolsStatusHandler)
 from cvm.database import Database
 from cvm.logger import CVMLogger
@@ -62,6 +62,9 @@ class CVMContainer(containers.DeclarativeContainer):
     vm_removed_handler = providers.Factory(
         VmRemovedHandler, vm_service, vmi_service, vrouter_port_service
     )
+    vm_registered_handler = providers.Factory(
+        VmRegisteredHandler, vm_service, vn_service, vmi_service, vrouter_port_service
+    )
     guest_net_handler = providers.Factory(
         GuestNetHandler, vmi_service, vrouter_port_service
     )
@@ -77,6 +80,7 @@ class CVMContainer(containers.DeclarativeContainer):
                                        vm_renamed_handler,
                                        vm_reconfigured_handler,
                                        vm_removed_handler,
+                                       vm_registered_handler,
                                        guest_net_handler,
                                        vmware_tools_status_handler,
                                        power_state_handler)

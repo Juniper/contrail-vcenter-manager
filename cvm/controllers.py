@@ -78,13 +78,6 @@ class VmUpdatedHandler(AbstractEventHandler):
         vim.event.VmDeployedEvent,
         vim.event.VmMacChangedEvent,
         vim.event.VmMacAssignedEvent,
-        vim.event.DrsVmMigratedEvent,
-        vim.event.DrsVmPoweredOnEvent,
-        vim.event.VmMigratedEvent,
-        vim.event.VmRegisteredEvent,
-        vim.event.VmPoweredOnEvent,
-        vim.event.VmPoweredOffEvent,
-        vim.event.VmSuspendedEvent,
     )
 
     def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service):
@@ -99,6 +92,26 @@ class VmUpdatedHandler(AbstractEventHandler):
             self._vm_service.update(vmware_vm)
             self._vn_service.update_vns()
             self._vmi_service.update_vmis()
+            self._vrouter_port_service.sync_ports()
+        except vmodl.fault.ManagedObjectNotFound:
+            logger.info('Skipping event for a non-existent VM.')
+
+
+class VmRegisteredHandler(AbstractEventHandler):
+    EVENTS = (vim.event.VmRegisteredEvent,)
+
+    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service):
+        self._vm_service = vm_service
+        self._vn_service = vn_service
+        self._vmi_service = vmi_service
+        self._vrouter_port_service = vrouter_port_service
+
+    def _handle_event(self, event):
+        vmware_vm = event.vm.vm
+        try:
+            self._vm_service.update(vmware_vm)
+            self._vn_service.update_vns()
+            self._vmi_service.update_vmis(vm_registered=True)
             self._vrouter_port_service.sync_ports()
         except vmodl.fault.ManagedObjectNotFound:
             logger.info('Skipping event for a non-existent VM.')

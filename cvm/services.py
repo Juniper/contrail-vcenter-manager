@@ -1,5 +1,6 @@
 import ipaddress
 import logging
+import time
 
 from vnc_api.vnc_api import PermType2
 
@@ -212,11 +213,11 @@ class VirtualMachineInterfaceService(Service):
             for vlan_id in reserved_vlan_ids:
                 self._vlan_id_pool.reserve(vlan_id)
 
-    def update_vmis(self):
+    def update_vmis(self, vm_registered=False):
         vmis_to_update = [vmi_model for vmi_model in self._database.vmis_to_update]
         for vmi_model in vmis_to_update:
             logger.info('Updating %s', vmi_model)
-            self._update_vmis_vn(vmi_model)
+            self._update_vmis_vn(vmi_model, vm_registered=vm_registered)
             self._database.vmis_to_update.remove(vmi_model)
             logger.info('Updated %s', vmi_model)
 
@@ -225,36 +226,50 @@ class VirtualMachineInterfaceService(Service):
             self._delete(vmi_model)
             self._database.vmis_to_delete.remove(vmi_model)
 
-    def _update_vmis_vn(self, new_vmi_model):
+    def _update_vmis_vn(self, new_vmi_model, vm_registered=False):
         old_vmi_model = self._database.get_vmi_model_by_uuid(new_vmi_model.uuid)
         new_vmi_model.vn_model = self._database.get_vn_model_by_key(new_vmi_model.vcenter_port.portgroup_key)
         if old_vmi_model and old_vmi_model.vn_model != new_vmi_model.vn_model:
             self._delete(old_vmi_model)
         if new_vmi_model.vn_model is not None:
-            self._create_or_update(new_vmi_model)
+            self._create_or_update(new_vmi_model, vm_registered=vm_registered)
         else:
             with self._vcenter_api_client:
                 dpg = self._vcenter_api_client.get_dpg_by_key(new_vmi_model.vcenter_port.portgroup_key)
                 logger.error('Interface of VM: %s is connected to portgroup: %s, which is not handled by Contrail',
                              new_vmi_model.vm_model.name, dpg.name)
 
-    def _create_or_update(self, vmi_model):
-        self._assign_vlan_id(vmi_model)
+    def _create_or_update(self, vmi_model, vm_registered=False):
+        self._assign_vlan_id(vmi_model, vm_registered=vm_registered)
         self._add_vnc_info_to(vmi_model)
         self._update_in_vnc(vmi_model)
         self._add_instance_ip_to(vmi_model)
         self._update_vrouter_port(vmi_model)
         self._database.save(vmi_model)
 
-    def _assign_vlan_id(self, vmi_model):
+    def _assign_vlan_id(self, vmi_model, vm_registered=False):
         with self._vcenter_api_client:
             current_vlan_id = self._vcenter_api_client.get_vlan_id(vmi_model.vcenter_port)
-            if current_vlan_id and self._vlan_id_pool.is_available(current_vlan_id):
-                vmi_model.vcenter_port.vlan_id = current_vlan_id
-                self._vlan_id_pool.reserve(current_vlan_id)
+            if vm_registered:
+                if current_vlan_id and self._vlan_id_pool.is_available(current_vlan_id):
+                    self._preserve_old_vlan_id(current_vlan_id, vmi_model)
+                else:
+                    self._assign_new_vlan_id(vmi_model)
+                return
+            if current_vlan_id:
+                self._preserve_old_vlan_id(current_vlan_id, vmi_model)
             else:
-                vmi_model.vcenter_port.vlan_id = self._vlan_id_pool.get_available()
-                self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
+                self._assign_new_vlan_id(vmi_model)
+
+    def _preserve_old_vlan_id(self, current_vlan_id, vmi_model):
+        vmi_model.vcenter_port.vlan_id = current_vlan_id
+        self._vlan_id_pool.reserve(current_vlan_id)
+
+    def _assign_new_vlan_id(self, vmi_model):
+        vmi_model.vcenter_port.vlan_id = self._vlan_id_pool.get_available()
+        # Purpose of this sleep is avoid to race in vmware code
+        time.sleep(3)
+        self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
 
     def _add_vnc_info_to(self, vmi_model):
         vmi_model.parent = self._project
