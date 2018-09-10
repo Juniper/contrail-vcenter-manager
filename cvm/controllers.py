@@ -63,6 +63,7 @@ class AbstractEventHandler(AbstractChangeHandler):
 
     def _handle_change(self, obj, value):
         if isinstance(value, self.EVENTS):
+            logger.info('Detected event: %s', type(value))
             self._handle_event(value)
 
     @abstractmethod
@@ -129,7 +130,6 @@ class VmReconfiguredHandler(AbstractEventHandler):
         self._vrouter_port_service = vrouter_port_service
 
     def _handle_event(self, event):
-        logger.info('Detected VmReconfiguredEvent')
         vmware_vm = event.vm.vm
         for device_spec in event.configSpec.deviceChange:
             device = device_spec.device
@@ -140,7 +140,7 @@ class VmReconfiguredHandler(AbstractEventHandler):
                 self._vmi_service.update_vmis()
                 self._vrouter_port_service.sync_ports()
             else:
-                logger.info('Detected VmReconfiguredEvent with unsupported %s device', type(device))
+                logger.info('Detected VmReconfiguredEvent with unsupported %s device type', type(device))
 
 
 class VmRemovedHandler(AbstractEventHandler):
@@ -191,6 +191,7 @@ class PowerStateHandler(AbstractChangeHandler):
         self._vm_service = vm_service
         self._vrouter_port_service = vrouter_port_service
 
-    def _handle_change(self, obj, value):
-        self._vm_service.update_power_state(obj, value)
+    def _handle_change(self, vmware_vm, power_state):
+        logger.info('Detected power state change for VM: %s to %s', vmware_vm.name, power_state)
+        self._vm_service.update_power_state(vmware_vm, power_state)
         self._vrouter_port_service.sync_port_states()
