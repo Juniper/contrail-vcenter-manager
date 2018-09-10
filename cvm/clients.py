@@ -196,9 +196,12 @@ class VCenterAPIClient(VSphereAPIClient):
         dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
         if not dv_port:
             return
-        dv_port_spec = make_dv_port_spec(dv_port, vcenter_port.vlan_id)
         logger.info('Setting vCenter VLAN ID of port %s to %d', vcenter_port.port_key, vcenter_port.vlan_id)
-        self._dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
+        dv_port_spec = make_dv_port_spec(dv_port, vcenter_port.vlan_id)
+        task = self._dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
+        success_message = 'Successfully set VLAN ID: %d for port: %s' % (vcenter_port.vlan_id, vcenter_port.port_key)
+        fault_message = 'Failed to set VLAN ID: %d for port: %s' % (vcenter_port.vlan_id, vcenter_port.port_key)
+        wait_for_task(task, success_message, fault_message)
 
     def get_vlan_id(self, vcenter_port):
         logger.info('Reading VLAN ID of port %s', vcenter_port.port_key)
@@ -207,13 +210,17 @@ class VCenterAPIClient(VSphereAPIClient):
             vlan_id = dv_port.config.setting.vlan.vlanId
             logger.info('Port: %s VLAN ID: %s', vcenter_port.port_key, vlan_id)
             return vlan_id
+        logger.info('Port: %s has no VLAN ID', vcenter_port.port_key)
         return None
 
     def restore_vlan_id(self, vcenter_port):
         logger.info('Restoring VLAN ID of port %s to inherited value', vcenter_port.port_key)
         dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
         dv_port_config_spec = make_dv_port_spec(dv_port)
-        self._dvs.ReconfigureDVPort_Task(port=[dv_port_config_spec])
+        task = self._dvs.ReconfigureDVPort_Task(port=[dv_port_config_spec])
+        success_message = 'Successfully restored VLAN ID for port: %s' % (vcenter_port.port_key,)
+        fault_message = 'Failed to restore VLAN ID for port: %s' % (vcenter_port.port_key,)
+        wait_for_task(task, success_message, fault_message)
 
     def get_reserved_vlan_ids(self, vrouter_uuid):
         """In this method treats vrouter_uuid as esxi host id"""
