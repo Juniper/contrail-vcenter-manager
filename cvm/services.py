@@ -230,7 +230,13 @@ class VirtualMachineInterfaceService(Service):
         new_vmi_model.vn_model = self._database.get_vn_model_by_key(new_vmi_model.vcenter_port.portgroup_key)
         if old_vmi_model and old_vmi_model.vn_model != new_vmi_model.vn_model:
             self._delete(old_vmi_model)
-        self._create_or_update(new_vmi_model)
+        if new_vmi_model.vn_model is not None:
+            self._create_or_update(new_vmi_model)
+        else:
+            with self._vcenter_api_client:
+                dpg = self._vcenter_api_client.get_dpg_by_key(new_vmi_model.vcenter_port.portgroup_key)
+                logger.error('Interface of VM: %s is connected to portgroup: %s, which is not handled by Contrail',
+                             new_vmi_model.vm_model.name, dpg.name)
 
     def _create_or_update(self, vmi_model):
         self._assign_vlan_id(vmi_model)
