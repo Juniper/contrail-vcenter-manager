@@ -450,7 +450,7 @@ def construct_security_group(project):
         direction='>',
         protocol='any',
         src_addresses=[vnc_api.AddressType(
-            security_group=VNC_VCENTER_DEFAULT_SG_FQN)],
+            security_group=':'.join(VNC_VCENTER_DEFAULT_SG_FQN))],
         src_ports=[vnc_api.PortType(0, 65535)],
         dst_addresses=[vnc_api.AddressType(security_group='local')],
         dst_ports=[vnc_api.PortType(0, 65535)],
@@ -463,7 +463,7 @@ def construct_security_group(project):
         protocol='any',
         src_addresses=[vnc_api.AddressType(security_group='local')],
         src_ports=[vnc_api.PortType(0, 65535)],
-        dst_addresses=[vnc_api.AddressType(vnc_api.SubnetType('0.0.0.0', 0))],
+        dst_addresses=[vnc_api.AddressType(subnet=vnc_api.SubnetType('0.0.0.0', 0))],
         dst_ports=[vnc_api.PortType(0, 65535)],
         ethertype='IPv4',
     )
