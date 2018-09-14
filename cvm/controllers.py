@@ -31,7 +31,7 @@ class VmwareController(object):
 
 
 class UpdateHandler(object):
-    def __init__(self, handlers):
+    def __init__(self, *handlers):
         self._handlers = handlers
 
     def handle_update(self, update_set):
