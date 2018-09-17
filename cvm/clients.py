@@ -234,7 +234,14 @@ class VCenterAPIClient(VSphereAPIClient):
             if find_vrouter_uuid(port.proxyHost) != vrouter_uuid:
                 continue
             reserved_vland_ids.append(port.config.setting.vlan.vlanId)
+        reserved_vland_ids.extend(self._get_private_vlan_ids())
         return reserved_vland_ids
+
+    def _get_private_vlan_ids(self):
+        for pvlan_entry in self._dvs.config.pvlanConfig:
+            yield pvlan_entry.primaryVlanId
+            if pvlan_entry.secondaryVlanId is not None:
+                yield pvlan_entry.secondaryVlanId
 
     def _get_datacenter(self, name):
         return self._get_object([vim.Datacenter], name)
