@@ -245,7 +245,7 @@ class VlanIdPool(object):
         try:
             return self._available_ids.popleft()
         except IndexError:
-            return None
+            raise Exception('No viable VLAN ID')
 
     def free(self, vlan_id):
         self._available_ids.append(vlan_id)
