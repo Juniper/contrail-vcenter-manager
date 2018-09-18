@@ -38,13 +38,13 @@ class Service(object):
                                              for pair in existing_obj.get_annotations().key_value_pair
                                              if pair.key == 'vrouter-uuid')
         except (AttributeError, StopIteration):
-            logger.error('Cannot read vrouter-uuid annotation for %s %s.', vnc_obj.get_type(), vnc_obj.name)
+            logger.warning('Cannot read vrouter-uuid annotation for %s %s.', vnc_obj.get_type(), vnc_obj.name)
             return False
 
         if existing_obj_vrouter_uuid == self._vrouter_uuid:
             return True
-        logger.error('%s %s is managed by vRouter %s and cannot be modified in VNC.',
-                     vnc_obj.get_type(), vnc_obj.name, existing_obj_vrouter_uuid)
+        logger.warning('%s %s is managed by vRouter %s and cannot be modified in VNC.',
+                       vnc_obj.get_type(), vnc_obj.name, existing_obj_vrouter_uuid)
         return False
 
 
@@ -63,9 +63,9 @@ class VirtualMachineService(Service):
         self._create(vmware_vm, vm_properties)
 
     def _update(self, vm_model, vmware_vm, vm_properties):
-        logger.info('Updating %s', vm_model)
+        logger.warning('Updating %s', vm_model)
         vm_model.update(vmware_vm, vm_properties)
-        logger.info('Updated %s', vm_model)
+        logger.warning('Updated %s', vm_model)
         for vmi_model in vm_model.vmi_models:
             self._database.vmis_to_update.append(vmi_model)
         self._database.save(vm_model)
@@ -76,7 +76,7 @@ class VirtualMachineService(Service):
             self._database.vmis_to_update.append(vmi_model)
         self._add_property_filter_for_vm(vm_model, vmware_vm, VM_UPDATE_FILTERS)
         self._update_in_vnc(vm_model.vnc_vm)
-        logger.info('Created %s', vm_model)
+        logger.warning('Created %s', vm_model)
         self._database.save(vm_model)
 
     def _add_property_filter_for_vm(self, vm_model, vmware_vm, filters):
@@ -104,12 +104,12 @@ class VirtualMachineService(Service):
             if vm_model:
                 continue
             if self._can_modify_in_vnc(vnc_vm):
-                logger.info('Deleting %s from VNC', vnc_vm.name)
+                logger.warning('Deleting %s from VNC', vnc_vm.name)
                 self._vnc_api_client.delete_vm(vnc_vm.uuid)
 
     def remove_vm(self, name):
         vm_model = self._database.get_vm_model_by_name(name)
-        logger.info('Deleting %s', vm_model)
+        logger.warning('Deleting %s', vm_model)
         if not vm_model:
             return
         if self._can_modify_in_vnc(vm_model.vnc_vm):
@@ -123,12 +123,12 @@ class VirtualMachineService(Service):
             return
         if vm_model.is_tools_running_status_changed(tools_running_status):
             vm_model.update_tools_running_status(tools_running_status)
-            logger.info('VMware tools on VM %s are %s', vm_model.name,
-                        'running' if vm_model.tools_running else 'not running')
+            logger.warning('VMware tools on VM %s are %s', vm_model.name,
+                           'running' if vm_model.tools_running else 'not running')
             self._database.save(vm_model)
 
     def rename_vm(self, old_name, new_name):
-        logger.info('Renaming %s to %s', old_name, new_name)
+        logger.warning('Renaming %s to %s', old_name, new_name)
         vm_model = self._database.get_vm_model_by_name(old_name)
         vm_model.rename(new_name)
         if self._can_modify_in_vnc(vm_model.vnc_vm):
@@ -151,7 +151,7 @@ class VirtualMachineService(Service):
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
         if vm_model.is_power_state_changed(power_state):
             vm_model.update_power_state(power_state)
-            logger.info('VM %s was powered %s', vm_model.name, power_state[7:].lower())
+            logger.warning('VM %s was powered %s', vm_model.name, power_state[7:].lower())
             for vmi_model in vm_model.vmi_models:
                 self._database.ports_to_update.append(vmi_model)
             self._database.save(vm_model)
@@ -169,14 +169,14 @@ class VirtualNetworkService(Service):
                 if vnc_vn and dpg:
                     self._create_vn_model(dpg, vnc_vn)
                 else:
-                    logger.error('Unable to fetch new portgroup for name: %s', vnc_vn.name)
+                    logger.warning('Unable to fetch new portgroup for name: %s', vnc_vn.name)
 
     def update_vns(self):
         for vmi_model in self._database.vmis_to_update:
             portgroup_key = vmi_model.vcenter_port.portgroup_key
             if self._database.get_vn_model_by_key(portgroup_key) is not None:
                 continue
-            logger.info('Fetching new portgroup for key: %s', portgroup_key)
+            logger.warning('Fetching new portgroup for key: %s', portgroup_key)
             with self._vcenter_api_client:
                 dpg = self._vcenter_api_client.get_dpg_by_key(portgroup_key)
                 fq_name = [VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT, dpg.name]
@@ -184,14 +184,14 @@ class VirtualNetworkService(Service):
                 if dpg and vnc_vn:
                     self._create_vn_model(dpg, vnc_vn)
                 else:
-                    logger.error('Unable to fetch new portgroup for key: %s', portgroup_key)
+                    logger.warning('Unable to fetch new portgroup for key: %s', portgroup_key)
 
     def _create_vn_model(self, dpg, vnc_vn):
-        logger.info('Fetched new portgroup key: %s name: %s', dpg.key, vnc_vn.name)
+        logger.warning('Fetched new portgroup key: %s name: %s', dpg.key, vnc_vn.name)
         vn_model = VirtualNetworkModel(dpg, vnc_vn)
         self._vcenter_api_client.enable_vlan_override(vn_model.vmware_vn)
         self._database.save(vn_model)
-        logger.info('Created %s', vn_model)
+        logger.warning('Created %s', vn_model)
 
 
 class VirtualMachineInterfaceService(Service):
@@ -216,10 +216,10 @@ class VirtualMachineInterfaceService(Service):
     def update_vmis(self, vm_registered=False):
         vmis_to_update = [vmi_model for vmi_model in self._database.vmis_to_update]
         for vmi_model in vmis_to_update:
-            logger.info('Updating %s', vmi_model)
+            logger.warning('Updating %s', vmi_model)
             self._update_vmis_vn(vmi_model, vm_registered=vm_registered)
             self._database.vmis_to_update.remove(vmi_model)
-            logger.info('Updated %s', vmi_model)
+            logger.warning('Updated %s', vmi_model)
 
         vmis_to_delete = [vmi_model for vmi_model in self._database.vmis_to_delete]
         for vmi_model in vmis_to_delete:
@@ -236,8 +236,8 @@ class VirtualMachineInterfaceService(Service):
         else:
             with self._vcenter_api_client:
                 dpg = self._vcenter_api_client.get_dpg_by_key(new_vmi_model.vcenter_port.portgroup_key)
-                logger.error('Interface of VM: %s is connected to portgroup: %s, which is not handled by Contrail',
-                             new_vmi_model.vm_model.name, dpg.name)
+                logger.warning('Interface of VM: %s is connected to portgroup: %s, which is not handled by Contrail',
+                               new_vmi_model.vm_model.name, dpg.name)
 
     def _create_or_update(self, vmi_model, vm_registered=False):
         self._assign_vlan_id(vmi_model, vm_registered=vm_registered)
@@ -293,7 +293,7 @@ class VirtualMachineInterfaceService(Service):
             if vmi_model:
                 continue
             if self._can_modify_in_vnc(vnc_vmi):
-                logger.info('Deleting %s from VNC.', vnc_vmi.name)
+                logger.warning('Deleting %s from VNC.', vnc_vmi.name)
                 self._vnc_api_client.delete_vmi(vnc_vmi.get_uuid())
             self._delete_vrouter_port(vnc_vmi.get_uuid())
 
@@ -311,8 +311,8 @@ class VirtualMachineInterfaceService(Service):
         if vmi_model.is_ip_address_changed(ip_address):
             vmi_model.update_ip_address(ip_address)
             self._add_instance_ip_to(vmi_model)
-            logger.info('IP address of %s updated to %s',
-                        vmi_model.display_name, vmi_model.vnc_instance_ip.instance_ip_address)
+            logger.warning('IP address of %s updated to %s',
+                           vmi_model.display_name, vmi_model.vnc_instance_ip.instance_ip_address)
 
     def _delete(self, vmi_model):
         self._delete_from_vnc(vmi_model)

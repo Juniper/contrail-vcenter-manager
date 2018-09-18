@@ -189,7 +189,7 @@ class VirtualMachineInterfaceModel(object):
         if not self._should_construct_instance_ip():
             return
 
-        logger.info('Constructing Instance IP for %s', self.display_name)
+        logger.warning('Constructing Instance IP for %s', self.display_name)
 
         instance_ip_name = 'ip-' + self.vn_model.name + '-' + self.vm_model.name
         instance_ip_uuid = self.construct_instance_ip_uuid(instance_ip_name)
