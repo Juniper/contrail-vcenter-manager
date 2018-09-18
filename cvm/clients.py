@@ -5,12 +5,12 @@ import random
 from uuid import uuid4
 
 import requests
-from contrail_vrouter_api.vrouter_api import ContrailVRouterApi
 from pyVim.connect import Disconnect, SmartConnectNoSSL
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 from vnc_api.exceptions import NoIdError
 
+from contrail_vrouter_api.vrouter_api import ContrailVRouterApi
 from cvm.constants import (VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
                            VNC_VCENTER_IPAM, VNC_VCENTER_IPAM_FQN,
@@ -264,9 +264,9 @@ class VCenterAPIClient(VSphereAPIClient):
 
 class VNCAPIClient(object):
     def __init__(self, vnc_cfg):
-        vnc_cfg['api_server_host'] = vnc_cfg['api_server_host'].split()
+        vnc_cfg['api_server_host'] = vnc_cfg['api_server_host'].split(',')
         random.shuffle(vnc_cfg['api_server_host'])
-        vnc_cfg['auth_host'] = vnc_cfg['auth_host'].split()
+        vnc_cfg['auth_host'] = vnc_cfg['auth_host'].split(',')
         random.shuffle(vnc_cfg['auth_host'])
         self.vnc_lib = vnc_api.VncApi(
             username=vnc_cfg.get('username'),
