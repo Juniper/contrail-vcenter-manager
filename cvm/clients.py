@@ -77,7 +77,7 @@ def wait_for_task(task, success_message, fault_message):
     while task.info.state == 'running':
         continue
     if task.info.state == 'success':
-        logger.info(success_message)
+        logger.warning(success_message)
     elif task.info.state == 'error':
         logger.error(fault_message, task.info.error.msg)
 
@@ -152,7 +152,7 @@ class ESXiAPIClient(VSphereAPIClient):
         object_set = self._property_collector.RetrievePropertiesEx([filter_spec], options=options).objects
         prop_set = object_set[0].propSet
         properties = {prop.name: prop.val for prop in prop_set}
-        logger.info('Read from ESXi API %s properties: %s', vmware_vm.name, properties)
+        logger.warning('Read from ESXi API %s properties: %s', vmware_vm.name, properties)
         return properties
 
     def read_vrouter_uuid(self):
@@ -196,7 +196,7 @@ class VCenterAPIClient(VSphereAPIClient):
         dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
         if not dv_port:
             return
-        logger.info('Setting vCenter VLAN ID of port %s to %d', vcenter_port.port_key, vcenter_port.vlan_id)
+        logger.warning('Setting vCenter VLAN ID of port %s to %d', vcenter_port.port_key, vcenter_port.vlan_id)
         dv_port_spec = make_dv_port_spec(dv_port, vcenter_port.vlan_id)
         task = self._dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
         success_message = 'Successfully set VLAN ID: %d for port: %s' % (vcenter_port.vlan_id, vcenter_port.port_key)
@@ -204,17 +204,17 @@ class VCenterAPIClient(VSphereAPIClient):
         wait_for_task(task, success_message, fault_message)
 
     def get_vlan_id(self, vcenter_port):
-        logger.info('Reading VLAN ID of port %s', vcenter_port.port_key)
+        logger.warning('Reading VLAN ID of port %s', vcenter_port.port_key)
         dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
         if not dv_port.config.setting.vlan.inherited:
             vlan_id = dv_port.config.setting.vlan.vlanId
-            logger.info('Port: %s VLAN ID: %s', vcenter_port.port_key, vlan_id)
+            logger.warning('Port: %s VLAN ID: %s', vcenter_port.port_key, vlan_id)
             return vlan_id
-        logger.info('Port: %s has no VLAN ID', vcenter_port.port_key)
+        logger.warning('Port: %s has no VLAN ID', vcenter_port.port_key)
         return None
 
     def restore_vlan_id(self, vcenter_port):
-        logger.info('Restoring VLAN ID of port %s to inherited value', vcenter_port.port_key)
+        logger.warning('Restoring VLAN ID of port %s to inherited value', vcenter_port.port_key)
         dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
         dv_port_config_spec = make_dv_port_spec(dv_port)
         task = self._dvs.ReconfigureDVPort_Task(port=[dv_port_config_spec])
@@ -226,7 +226,7 @@ class VCenterAPIClient(VSphereAPIClient):
         """In this method treats vrouter_uuid as esxi host id"""
         criteria = vim.dvs.PortCriteria()
         criteria.connected = True
-        logger.info('Retrieving reserved VLAN IDs')
+        logger.warning('Retrieving reserved VLAN IDs')
         reserved_vland_ids = []
         for port in self._dvs.FetchDVPorts(criteria=criteria):
             if not isinstance(port.config.setting.vlan, vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec):
@@ -253,7 +253,7 @@ class VCenterAPIClient(VSphereAPIClient):
     @staticmethod
     def enable_vlan_override(portgroup):
         if portgroup.config.policy.vlanOverrideAllowed:
-            logger.info('VLAN Override for portgroup %s already allowed.', portgroup.name)
+            logger.warning('VLAN Override for portgroup %s already allowed.', portgroup.name)
             return
         pg_config_spec = make_pg_config_vlan_override(portgroup)
         task = portgroup.ReconfigureDVPortgroup_Task(pg_config_spec)
@@ -282,31 +282,31 @@ class VNCAPIClient(object):
         self.id_perms.set_enable(True)
 
     def delete_vm(self, uuid):
-        logger.info('Attempting to delete Virtual Machine %s from VNC...', uuid)
+        logger.warning('Attempting to delete Virtual Machine %s from VNC...', uuid)
         vm = self.read_vm(uuid)
         for vmi_ref in vm.get_virtual_machine_interface_back_refs() or []:
             self.delete_vmi(vmi_ref.get('uuid'))
         try:
             self.vnc_lib.virtual_machine_delete(id=uuid)
-            logger.info('Virtual Machine %s removed from VNC', uuid)
+            logger.warning('Virtual Machine %s removed from VNC', uuid)
         except NoIdError:
             logger.error('Virtual Machine %s not found in VNC. Unable to delete', uuid)
 
     def update_or_create_vm(self, vnc_vm):
         try:
-            logger.info('Attempting to update Virtual Machine %s in VNC', vnc_vm.name)
+            logger.warning('Attempting to update Virtual Machine %s in VNC', vnc_vm.name)
             self._update_vm(vnc_vm)
         except NoIdError:
-            logger.info('Virtual Machine %s not found in VNC - creating', vnc_vm.name)
+            logger.warning('Virtual Machine %s not found in VNC - creating', vnc_vm.name)
             self._create_vm(vnc_vm)
 
     def _update_vm(self, vnc_vm):
         self.vnc_lib.virtual_machine_update(vnc_vm)
-        logger.info('Virtual Machine %s updated in VNC', vnc_vm.name)
+        logger.warning('Virtual Machine %s updated in VNC', vnc_vm.name)
 
     def _create_vm(self, vnc_vm):
         self.vnc_lib.virtual_machine_create(vnc_vm)
-        logger.info('Virtual Machine %s created in VNC', vnc_vm.name)
+        logger.warning('Virtual Machine %s created in VNC', vnc_vm.name)
 
     def get_all_vms(self):
         vms = self.vnc_lib.virtual_machines_list().get('virtual-machines')
@@ -317,15 +317,15 @@ class VNCAPIClient(object):
 
     def update_vmi(self, vnc_vmi):
         try:
-            logger.info('Attempting to update Virtual Machine Interface %s in VNC', vnc_vmi.name)
+            logger.warning('Attempting to update Virtual Machine Interface %s in VNC', vnc_vmi.name)
             self.delete_vmi(vnc_vmi.get_uuid())
         except NoIdError:
-            logger.info('Virtual Machine Interface %s not found in VNC - creating', vnc_vmi.name)
+            logger.warning('Virtual Machine Interface %s not found in VNC - creating', vnc_vmi.name)
         self._create_vmi(vnc_vmi)
 
     def _create_vmi(self, vnc_vmi):
         self.vnc_lib.virtual_machine_interface_create(vnc_vmi)
-        logger.info('Virtual Machine Interface %s updated in VNC', vnc_vmi.name)
+        logger.warning('Virtual Machine Interface %s updated in VNC', vnc_vmi.name)
 
     def delete_vmi(self, uuid):
         vmi = self.read_vmi(uuid)
@@ -334,7 +334,7 @@ class VNCAPIClient(object):
 
         try:
             self.vnc_lib.virtual_machine_interface_delete(id=uuid)
-            logger.info('Virtual Machine Interface %s removed from VNC', uuid)
+            logger.warning('Virtual Machine Interface %s removed from VNC', uuid)
         except NoIdError:
             logger.error('Virtual Machine Interface %s not found in VNC. Unable to delete', uuid)
 
@@ -366,14 +366,14 @@ class VNCAPIClient(object):
         try:
             return self._read_project()
         except NoIdError:
-            logger.error('Project not found: %s, creating...', VNC_VCENTER_PROJECT)
+            logger.warning('Project not found: %s, creating...', VNC_VCENTER_PROJECT)
             return self._create_project()
 
     def _create_project(self):
         project = construct_project()
         project.set_id_perms(self.id_perms)
         self.vnc_lib.project_create(project)
-        logger.info('Project created: %s', project.name)
+        logger.warning('Project created: %s', project.name)
         return project
 
     def _read_project(self):
@@ -384,7 +384,7 @@ class VNCAPIClient(object):
         try:
             return self._read_security_group()
         except NoIdError:
-            logger.error('Security group not found: %s, creating...', VNC_VCENTER_DEFAULT_SG_FQN)
+            logger.warning('Security group not found: %s, creating...', VNC_VCENTER_DEFAULT_SG_FQN)
             return self._create_security_group()
 
     def _read_security_group(self):
@@ -394,14 +394,14 @@ class VNCAPIClient(object):
         project = self._read_project()
         security_group = construct_security_group(project)
         self.vnc_lib.security_group_create(security_group)
-        logger.info('Security group created: %s', security_group.name)
+        logger.warning('Security group created: %s', security_group.name)
         return security_group
 
     def read_or_create_ipam(self):
         try:
             return self._read_ipam()
         except NoIdError:
-            logger.error('Ipam not found: %s, creating...', VNC_VCENTER_IPAM_FQN)
+            logger.warning('Ipam not found: %s, creating...', VNC_VCENTER_IPAM_FQN)
             return self._create_ipam()
 
     def _read_ipam(self):
@@ -411,7 +411,7 @@ class VNCAPIClient(object):
         project = self._read_project()
         ipam = construct_ipam(project)
         self.vnc_lib.network_ipam_create(ipam)
-        logger.info('Network IPAM created: %s', ipam.name)
+        logger.warning('Network IPAM created: %s', ipam.name)
         return ipam
 
     def create_and_read_instance_ip(self, instance_ip):
@@ -509,7 +509,7 @@ class VRouterAPIClient(object):
                 vm_project_id=vmi_model.vn_model.vnc_vn.parent_uuid.replace('-', ''),
             )
             self.vrouter_api.add_port(**parameters)
-            logger.info('Added port to vRouter with parameters: %s', parameters)
+            logger.warning('Added port to vRouter with parameters: %s', parameters)
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
 
@@ -517,21 +517,21 @@ class VRouterAPIClient(object):
         """ Delete port from VRouter Agent. """
         try:
             self.vrouter_api.delete_port(vmi_uuid)
-            logger.info('Removed port from vRouter with uuid: %s', vmi_uuid)
+            logger.warning('Removed port from vRouter with uuid: %s', vmi_uuid)
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
 
     def enable_port(self, vmi_uuid):
         try:
             self.vrouter_api.enable_port(vmi_uuid)
-            logger.info('Enabled vRouter port with uuid: %s', vmi_uuid)
+            logger.warning('Enabled vRouter port with uuid: %s', vmi_uuid)
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
 
     def disable_port(self, vmi_uuid):
         try:
             self.vrouter_api.disable_port(vmi_uuid)
-            logger.info('Disabled vRouter port with uuid: %s', vmi_uuid)
+            logger.warning('Disabled vRouter port with uuid: %s', vmi_uuid)
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
 
@@ -541,9 +541,9 @@ class VRouterAPIClient(object):
                                                          uuid=vmi_uuid)
         response = requests.get(request_url)
         if response.status_code != requests.codes.ok:
-            logger.error('Unable to read vRouter port with uuid: %s', vmi_uuid)
+            logger.warning('Unable to read vRouter port with uuid: %s', vmi_uuid)
             return None
 
         port_properties = json.loads(response.content)
-        logger.info('Read vRouter port with uuid: %s, port properties: %s', vmi_uuid, port_properties)
+        logger.warning('Read vRouter port with uuid: %s, port properties: %s', vmi_uuid, port_properties)
         return port_properties
