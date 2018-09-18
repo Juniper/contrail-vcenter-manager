@@ -6,7 +6,7 @@ from vnc_api import vnc_api
 
 from cvm.controllers import (GuestNetHandler, PowerStateHandler, UpdateHandler,
                              VmReconfiguredHandler, VmRemovedHandler,
-                             VmRenamedHandler, VmUpdatedHandler,
+                             VmRenamedHandler, VmUpdatedHandler, VmRegisteredHandler,
                              VmwareController, VmwareToolsStatusHandler)
 from cvm.database import Database
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
@@ -155,6 +155,13 @@ def vmi_model(vm_model, vn_model_1, project, security_group):
 @pytest.fixture()
 def vm_created_update(vmware_vm_1):
     event = Mock(spec=vim.event.VmCreatedEvent())
+    event.vm.vm = vmware_vm_1
+    return wrap_into_update_set(event=event)
+
+
+@pytest.fixture()
+def vm_registered_update(vmware_vm_1):
+    event = Mock(spec=vim.event.VmRegisteredEvent())
     event.vm.vm = vmware_vm_1
     return wrap_into_update_set(event=event)
 
@@ -341,6 +348,7 @@ def controller(vm_service, vn_service, vmi_service, vrouter_port_service, lock):
         VmRenamedHandler(vm_service, vmi_service, vrouter_port_service),
         VmReconfiguredHandler(vm_service, vn_service, vmi_service, vrouter_port_service),
         VmRemovedHandler(vm_service, vmi_service, vrouter_port_service),
+        VmRegisteredHandler(vm_service, vn_service, vmi_service, vrouter_port_service),
         GuestNetHandler(vmi_service, vrouter_port_service),
         PowerStateHandler(vm_service, vrouter_port_service),
         VmwareToolsStatusHandler(vm_service)

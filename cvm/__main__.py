@@ -21,7 +21,7 @@ from cvm.clients import (ESXiAPIClient, VCenterAPIClient, VNCAPIClient,
                          VRouterAPIClient)
 from cvm.controllers import (GuestNetHandler, PowerStateHandler, UpdateHandler,
                              VmReconfiguredHandler, VmRemovedHandler,
-                             VmRenamedHandler, VmUpdatedHandler,
+                             VmRenamedHandler, VmUpdatedHandler, VmRegisteredHandler,
                              VmwareController, VmwareToolsStatusHandler)
 from cvm.database import Database
 from cvm.models import VlanIdPool
@@ -79,6 +79,7 @@ def build_monitor(config, lock, database):
     vm_reconfigured_handler = VmReconfiguredHandler(vm_service, vn_service,
                                                     vmi_service, vrouter_port_service)
     vm_removed_handler = VmRemovedHandler(vm_service, vmi_service, vrouter_port_service)
+    vm_registered_handler = VmRegisteredHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
     guest_net_handler = GuestNetHandler(vmi_service, vrouter_port_service)
     vmware_tools_status_handler = VmwareToolsStatusHandler(vm_service)
     power_state_handler = PowerStateHandler(vm_service, vrouter_port_service)
@@ -87,6 +88,7 @@ def build_monitor(config, lock, database):
         vm_renamed_handler,
         vm_reconfigured_handler,
         vm_removed_handler,
+        vm_registered_handler,
         guest_net_handler,
         vmware_tools_status_handler,
         power_state_handler,
