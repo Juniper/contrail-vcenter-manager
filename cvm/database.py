@@ -20,13 +20,13 @@ class Database(object):
     def save(self, obj):
         if isinstance(obj, VirtualMachineModel):
             self.vm_models[obj.uuid] = obj
-            logger.info('Saved Virtual Machine model for %s', obj.name)
+            logger.warning('Saved Virtual Machine model for %s', obj.name)
         if isinstance(obj, VirtualNetworkModel):
             self.vn_models[obj.key] = obj
-            logger.info('Saved Virtual Network model for %s', obj.name)
+            logger.warning('Saved Virtual Network model for %s', obj.name)
         if isinstance(obj, VirtualMachineInterfaceModel):
             self.vmi_models[obj.uuid] = obj
-            logger.info('Saved Virtual Machine Interface model for %s', obj.display_name)
+            logger.warning('Saved Virtual Machine Interface model for %s', obj.display_name)
 
     def get_all_vm_models(self):
         return self.vm_models.values()
@@ -34,27 +34,27 @@ class Database(object):
     def get_vm_model_by_uuid(self, uuid):
         vm_model = self.vm_models.get(uuid, None)
         if not vm_model:
-            logger.info('Could not find VM model with uuid %s.', uuid)
+            logger.warning('Could not find VM model with uuid %s.', uuid)
         return vm_model
 
     def get_vm_model_by_name(self, name):
         try:
             return [vm_model for vm_model in self.vm_models.values() if vm_model.name == name][0]
         except IndexError:
-            logger.info('Could not find VM model with name %s.', name)
+            logger.warning('Could not find VM model with name %s.', name)
             return None
 
     def get_vn_model_by_key(self, key):
         vn_model = self.vn_models.get(key, None)
         if not vn_model:
-            logger.info('Could not find VN model with key %s.', key)
+            logger.warning('Could not find VN model with key %s.', key)
         return vn_model
 
     def get_vn_model_by_uuid(self, uuid):
         try:
             return [vn_model for vn_model in self.vn_models.values() if vn_model.uuid == uuid][0]
         except IndexError:
-            logger.info('Could not find VN model with UUID %s.', uuid)
+            logger.warning('Could not find VN model with UUID %s.', uuid)
             return None
 
     def get_all_vn_models(self):
@@ -76,16 +76,16 @@ class Database(object):
         try:
             self.vm_models.pop(uid)
         except KeyError:
-            logger.info('Could not delete VM model with uuid %s.', uid)
+            logger.warning('Could not delete VM model with uuid %s.', uid)
 
     def delete_vn_model(self, key):
         try:
             self.vn_models.pop(key)
         except KeyError:
-            logger.info('Could not find VN model with key %s. Nothing to delete.', key)
+            logger.warning('Could not find VN model with key %s. Nothing to delete.', key)
 
     def delete_vmi_model(self, uuid):
         try:
             self.vmi_models.pop(uuid)
         except KeyError:
-            logger.info('Could not find VMI model with uuid %s. Nothing to delete.', uuid)
+            logger.warning('Could not find VMI model with uuid %s. Nothing to delete.', uuid)

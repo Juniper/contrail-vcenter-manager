@@ -16,7 +16,7 @@ class VmwareController(object):
         self._lock = lock
 
     def initialize_database(self):
-        logger.info('Initializing database...')
+        logger.warning('Initializing database...')
         with self._lock:
             self._vmi_service.sync_vlan_ids()
             self._vm_service.get_vms_from_vmware()
@@ -63,7 +63,7 @@ class AbstractEventHandler(AbstractChangeHandler):
 
     def _handle_change(self, obj, value):
         if isinstance(value, self.EVENTS):
-            logger.info('Detected event: %s', type(value))
+            logger.warning('Detected event: %s', type(value))
             self._handle_event(value)
 
     @abstractmethod
@@ -94,7 +94,7 @@ class VmUpdatedHandler(AbstractEventHandler):
             self._vmi_service.update_vmis()
             self._vrouter_port_service.sync_ports()
         except vmodl.fault.ManagedObjectNotFound:
-            logger.info('Skipping event for a non-existent VM.')
+            logger.warning('Skipping event for a non-existent VM.')
 
 
 class VmRegisteredHandler(AbstractEventHandler):
@@ -114,7 +114,7 @@ class VmRegisteredHandler(AbstractEventHandler):
             self._vmi_service.update_vmis(vm_registered=True)
             self._vrouter_port_service.sync_ports()
         except vmodl.fault.ManagedObjectNotFound:
-            logger.info('Skipping event for a non-existent VM.')
+            logger.warning('Skipping event for a non-existent VM.')
 
 
 class VmRenamedHandler(AbstractEventHandler):
@@ -147,13 +147,13 @@ class VmReconfiguredHandler(AbstractEventHandler):
         for device_spec in event.configSpec.deviceChange:
             device = device_spec.device
             if isinstance(device, vim.vm.device.VirtualEthernetCard):
-                logger.info('Detected VmReconfiguredEvent with %s device', type(device))
+                logger.warning('Detected VmReconfiguredEvent with %s device', type(device))
                 self._vm_service.update_vm_models_interfaces(vmware_vm)
                 self._vn_service.update_vns()
                 self._vmi_service.update_vmis()
                 self._vrouter_port_service.sync_ports()
             else:
-                logger.info('Detected VmReconfiguredEvent with unsupported %s device type', type(device))
+                logger.warning('Detected VmReconfiguredEvent with unsupported %s device type', type(device))
 
 
 class VmRemovedHandler(AbstractEventHandler):
@@ -204,7 +204,7 @@ class PowerStateHandler(AbstractChangeHandler):
         self._vm_service = vm_service
         self._vrouter_port_service = vrouter_port_service
 
-    def _handle_change(self, vmware_vm, power_state):
-        logger.info('Detected power state change for VM: %s to %s', vmware_vm.name, power_state)
-        self._vm_service.update_power_state(vmware_vm, power_state)
+    def _handle_change(self, obj, value):
+        logger.warning('Detected power state change for VM: %s to %s', obj.name, value)
+        self._vm_service.update_power_state(obj, value)
         self._vrouter_port_service.sync_port_states()
