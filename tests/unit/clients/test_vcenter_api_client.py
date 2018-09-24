@@ -73,5 +73,5 @@ def test_get_reserved_vlan_ids(vcenter_api_client, dvs_1):
                 vlans_1 = vcenter_api_client.get_reserved_vlan_ids('vrouter_uuid_1')
                 vlans_2 = vcenter_api_client.get_reserved_vlan_ids('vrouter_uuid_2')
 
-    assert vlans_1 == [10, 7]
-    assert vlans_2 == [5]
+    assert vlans_1 == [10, 7, 1, 2]
+    assert vlans_2 == [5, 1, 2]

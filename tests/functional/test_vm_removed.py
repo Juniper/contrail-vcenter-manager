@@ -3,9 +3,10 @@ from mock import Mock, patch
 from tests.utils import reserve_vlan_ids
 
 
+@patch('cvm.services.time.sleep', return_value=None)
 @patch('cvm.services.VirtualMachineService._can_modify_in_vnc', Mock(return_value=True))
 @patch('cvm.services.VirtualMachineInterfaceService._can_modify_in_vnc', Mock(return_value=True))
-def test_full_remove_vm(controller, database, vcenter_api_client, vnc_api_client, vrouter_api_client,
+def test_full_remove_vm(_, controller, database, vcenter_api_client, vnc_api_client, vrouter_api_client,
                         vm_created_update, vm_removed_update, vn_model_1, vlan_id_pool):
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
@@ -57,9 +58,10 @@ def test_full_remove_vm(controller, database, vcenter_api_client, vnc_api_client
     assert vlan_id_pool.is_available(4)
 
 
+@patch('cvm.services.time.sleep', return_value=None)
 @patch('cvm.services.VirtualMachineService._can_modify_in_vnc', Mock(return_value=False))
 @patch('cvm.services.VirtualMachineInterfaceService._can_modify_in_vnc', Mock(return_value=False))
-def test_vm_removed_local_remove(controller, database, vcenter_api_client, vnc_api_client, vrouter_api_client,
+def test_vm_removed_local_remove(_, controller, database, vcenter_api_client, vnc_api_client, vrouter_api_client,
                                  vm_created_update, vm_removed_update, vn_model_1, vlan_id_pool):
     """
     Same situation as in test_full_remove_vm, but between VmCreatedEvent and VmDeletedEvent VM
