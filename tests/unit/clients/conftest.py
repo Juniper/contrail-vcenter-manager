@@ -48,6 +48,8 @@ def dvs(dv_port):
 @pytest.fixture()
 def dvs_1(dv_port_1, dv_port_2, dv_port_3):
     dvswitch = Mock()
+    pvlan_entry = Mock(primaryVlanId=1, secondaryVlanId=2)
+    dvswitch.config.pvlanConfig = [pvlan_entry]
     dvswitch.FetchDVPorts.return_value = [dv_port_1, dv_port_2, dv_port_3]
     return dvswitch
 
