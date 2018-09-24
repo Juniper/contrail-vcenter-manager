@@ -4,9 +4,10 @@ from tests.utils import (assert_vm_model_state, assert_vmi_model_state,
                          assert_vnc_vm_state, assert_vnc_vmi_state)
 
 
+@patch('cvm.services.time.sleep', return_value=None)
 @patch('cvm.services.VirtualMachineService._can_modify_in_vnc', Mock(return_value=True))
 @patch('cvm.services.VirtualMachineInterfaceService._can_modify_in_vnc', Mock(return_value=True))
-def test_vm_renamed(controller, database, esxi_api_client, vcenter_api_client, vnc_api_client, vrouter_api_client,
+def test_vm_renamed(_, controller, database, esxi_api_client, vcenter_api_client, vnc_api_client, vrouter_api_client,
                     vm_created_update, vm_renamed_update, vm_properties_renamed, vn_model_1):
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
