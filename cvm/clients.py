@@ -373,7 +373,7 @@ class VNCAPIClient(object):
         try:
             return self._read_project()
         except NoIdError:
-            logger.error('Project not found: %s, creating...', VNC_VCENTER_PROJECT)
+            logger.warn('Project not found: %s, creating...', VNC_VCENTER_PROJECT)
             return self._create_project()
 
     def _create_project(self):
@@ -391,7 +391,7 @@ class VNCAPIClient(object):
         try:
             return self._read_security_group()
         except NoIdError:
-            logger.error('Security group not found: %s, creating...', VNC_VCENTER_DEFAULT_SG_FQN)
+            logger.warn('Security group not found: %s, creating...', VNC_VCENTER_DEFAULT_SG_FQN)
             return self._create_security_group()
 
     def _read_security_group(self):
@@ -408,7 +408,7 @@ class VNCAPIClient(object):
         try:
             return self._read_ipam()
         except NoIdError:
-            logger.error('Ipam not found: %s, creating...', VNC_VCENTER_IPAM_FQN)
+            logger.warn('Ipam not found: %s, creating...', VNC_VCENTER_IPAM_FQN)
             return self._create_ipam()
 
     def _read_ipam(self):
@@ -533,7 +533,7 @@ class VRouterAPIClient(object):
             self.vrouter_api.enable_port(vmi_uuid)
             logger.info('Enabled vRouter port with uuid: %s', vmi_uuid)
         except Exception, e:
-            logger.error('There was a problem with vRouter API Client: %s', e)
+            logger.info('There was a problem with vRouter API Client: %s', e)
 
     def disable_port(self, vmi_uuid):
         try:
