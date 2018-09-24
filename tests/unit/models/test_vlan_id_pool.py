@@ -1,3 +1,6 @@
+import pytest
+
+
 def test_reserve(vlan_id_pool):
     vlan_id_pool.reserve(0)
 
@@ -24,9 +27,8 @@ def test_no_available(vlan_id_pool):
     for i in xrange(4096):
         vlan_id_pool.reserve(i)
 
-    result = vlan_id_pool.get_available()
-
-    assert result is None
+    with pytest.raises(Exception):
+        vlan_id_pool.get_available()
 
 
 def test_free(vlan_id_pool):
