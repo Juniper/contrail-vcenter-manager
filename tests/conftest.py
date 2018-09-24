@@ -5,9 +5,10 @@ from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 
 from cvm.controllers import (GuestNetHandler, PowerStateHandler, UpdateHandler,
-                             VmReconfiguredHandler, VmRemovedHandler,
-                             VmRenamedHandler, VmUpdatedHandler, VmRegisteredHandler,
-                             VmwareController, VmwareToolsStatusHandler)
+                             VmReconfiguredHandler, VmRegisteredHandler,
+                             VmRemovedHandler, VmRenamedHandler,
+                             VmUpdatedHandler, VmwareController,
+                             VmwareToolsStatusHandler)
 from cvm.database import Database
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel, VlanIdPool)
