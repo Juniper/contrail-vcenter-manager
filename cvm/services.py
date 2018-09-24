@@ -43,7 +43,7 @@ class Service(object):
 
         if existing_obj_vrouter_uuid == self._vrouter_uuid:
             return True
-        logger.error('%s %s is managed by vRouter %s and cannot be modified in VNC.',
+        logger.info('%s %s is managed by vRouter %s and cannot be modified in VNC.',
                      vnc_obj.get_type(), vnc_obj.name, existing_obj_vrouter_uuid)
         return False
 
@@ -236,7 +236,7 @@ class VirtualMachineInterfaceService(Service):
         else:
             with self._vcenter_api_client:
                 dpg = self._vcenter_api_client.get_dpg_by_key(new_vmi_model.vcenter_port.portgroup_key)
-                logger.error('Interface of VM: %s is connected to portgroup: %s, which is not handled by Contrail',
+                logger.info('Interface of VM: %s is connected to portgroup: %s, which is not handled by Contrail',
                              new_vmi_model.vm_model.name, dpg.name)
 
     def _create_or_update(self, vmi_model, vm_registered=False):

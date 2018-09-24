@@ -1,6 +1,6 @@
 # pylint: disable=redefined-outer-name
 import pytest
-from mock import Mock
+from mock import Mock, mock
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 
