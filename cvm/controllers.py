@@ -111,7 +111,7 @@ class VmRegisteredHandler(AbstractEventHandler):
         try:
             self._vm_service.update(vmware_vm)
             self._vn_service.update_vns()
-            self._vmi_service.update_vmis(vm_registered=True)
+            self._vmi_service.register_vmis()
             self._vrouter_port_service.sync_ports()
         except vmodl.fault.ManagedObjectNotFound:
             logger.info('Skipping event for a non-existent VM.')
