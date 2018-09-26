@@ -77,4 +77,7 @@ def vnc_vm():
 
 @pytest.fixture()
 def vnc_vmi():
-    return Mock(uuid='vmi-uuid')
+    vmi = Mock(uuid='vmi-uuid')
+    vmi.get_annotations.return_value = vnc_api.KeyValuePairs(
+        [vnc_api.KeyValuePair('vrouter-uuid', 'vrouter-uuid-1')])
+    return vmi

@@ -45,3 +45,16 @@ def test_get_all_vms(vnc_api_client, vnc_lib, vnc_vm):
 
     vnc_lib.virtual_machine_read.assert_called_once_with(id=u'vm-uuid')
     assert all_vms == [vnc_vm]
+
+
+def test_update_vmi_vrouter_uuid(vnc_api_client, vnc_lib, vnc_vmi):
+    vnc_api_client.update_vmi_vrouter_uuid(vnc_vmi, 'vrouter-uuid-2')
+
+    updated_vmi = vnc_lib.virtual_machine_interface_update.call_args[0][0]
+    assert 'vrouter-uuid-2' == next(pair.value
+                                    for pair in updated_vmi.get_annotations().key_value_pair
+                                    if pair.key == 'vrouter-uuid')
+
+
+def test_update_ip_vrouter_uuid():
+    assert False

@@ -78,8 +78,10 @@ def wait_for_task(task, success_message, fault_message):
         continue
     if task.info.state == 'success':
         logger.info(success_message)
-    elif task.info.state == 'error':
+    if task.info.state == 'error':
         logger.error(fault_message, task.info.error.msg)
+    else:
+        logger.error('vCenter task in unknown state: %s', task.info.state)
 
 
 class VSphereAPIClient(object):
@@ -345,6 +347,12 @@ class VNCAPIClient(object):
         except NoIdError:
             logger.error('Virtual Machine Interface %s not found in VNC. Unable to delete', uuid)
 
+    def update_vmi_vrouter_uuid(self, vnc_vmi, vrouter_uuid):
+        for pair in vnc_vmi.get_annotations().key_value_pair:
+            if pair.key == 'vrouter-uuid':
+                pair.value = vrouter_uuid
+        self.vnc_lib.virtual_machine_interface_update(vnc_vmi)
+
     def get_vmis_by_project(self, project):
         vmis = self.vnc_lib.virtual_machine_interfaces_list(parent_id=project.uuid).get('virtual-machine-interfaces')
         return [self.vnc_lib.virtual_machine_interface_read(vmi['fq_name']) for vmi in vmis]
@@ -423,11 +431,11 @@ class VNCAPIClient(object):
 
     def create_and_read_instance_ip(self, instance_ip):
         try:
-            return self._read_instance_ip(instance_ip.uuid)
+            return self.read_instance_ip(instance_ip.uuid)
         except NoIdError:
             self.vnc_lib.instance_ip_create(instance_ip)
-            logger.debug("Created instanceIP: %s", instance_ip.name)
-        return self._read_instance_ip(instance_ip.uuid)
+            logger.info("Created Instance IP: %s", instance_ip.name)
+        return self.read_instance_ip(instance_ip.uuid)
 
     def delete_instance_ip(self, uuid):
         try:
@@ -435,7 +443,7 @@ class VNCAPIClient(object):
         except NoIdError:
             logger.error('Instance IP not found: %s', uuid)
 
-    def _read_instance_ip(self, uuid):
+    def read_instance_ip(self, uuid):
         return self.vnc_lib.instance_ip_read(id=uuid)
 
 
