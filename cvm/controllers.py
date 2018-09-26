@@ -15,8 +15,8 @@ class VmwareController(object):
         self._update_handler = update_handler
         self._lock = lock
 
-    def initialize_database(self):
-        logger.info('Initializing database...')
+    def sync(self):
+        logger.info('Synchronizing CVM...')
         with self._lock:
             self._vmi_service.sync_vlan_ids()
             self._vm_service.get_vms_from_vmware()
@@ -24,6 +24,7 @@ class VmwareController(object):
             self._vmi_service.sync_vmis()
             self._vm_service.delete_unused_vms_in_vnc()
             self._vrouter_port_service.sync_ports()
+        logger.info('Synchronization complete')
 
     def handle_update(self, update_set):
         with self._lock:
@@ -50,6 +51,9 @@ class AbstractChangeHandler(object):
         value = getattr(property_change, 'val', None)
         if value:
             if name.startswith(self.PROPERTY_NAME):
+                if isinstance(value, list):
+                    for change in sorted(value, key=lambda e: e.key):
+                        self._handle_change(obj, change)
                 self._handle_change(obj, value)
 
     @abstractmethod
@@ -204,7 +208,7 @@ class PowerStateHandler(AbstractChangeHandler):
         self._vm_service = vm_service
         self._vrouter_port_service = vrouter_port_service
 
-    def _handle_change(self, vmware_vm, power_state):
-        logger.info('Detected power state change for VM: %s to %s', vmware_vm.name, power_state)
-        self._vm_service.update_power_state(vmware_vm, power_state)
+    def _handle_change(self, obj, value):
+        logger.info('Detected power state change for VM: %s to %s', obj.name, value)
+        self._vm_service.update_power_state(obj, value)
         self._vrouter_port_service.sync_port_states()
