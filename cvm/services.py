@@ -44,7 +44,7 @@ class Service(object):
         if existing_obj_vrouter_uuid == self._vrouter_uuid:
             return True
         logger.info('%s %s is managed by vRouter %s and cannot be modified in VNC.',
-                     vnc_obj.get_type(), vnc_obj.name, existing_obj_vrouter_uuid)
+                    vnc_obj.get_type(), vnc_obj.name, existing_obj_vrouter_uuid)
         return False
 
 
@@ -72,8 +72,7 @@ class VirtualMachineService(Service):
 
     def _create(self, vmware_vm, vm_properties):
         vm_model = VirtualMachineModel(vmware_vm, vm_properties)
-        for vmi_model in vm_model.vmi_models:
-            self._database.vmis_to_update.append(vmi_model)
+        self._database.vmis_to_update += vm_model.vmi_models
         self._add_property_filter_for_vm(vm_model, vmware_vm, VM_UPDATE_FILTERS)
         self._update_in_vnc(vm_model.vnc_vm)
         logger.info('Created %s', vm_model)
@@ -214,15 +213,13 @@ class VirtualMachineInterfaceService(Service):
                 self._vlan_id_pool.reserve(vlan_id)
 
     def update_vmis(self, vm_registered=False):
-        vmis_to_update = [vmi_model for vmi_model in self._database.vmis_to_update]
-        for vmi_model in vmis_to_update:
+        for vmi_model in list(self._database.vmis_to_update):
             logger.info('Updating %s', vmi_model)
             self._update_vmis_vn(vmi_model, vm_registered=vm_registered)
             self._database.vmis_to_update.remove(vmi_model)
             logger.info('Updated %s', vmi_model)
 
-        vmis_to_delete = [vmi_model for vmi_model in self._database.vmis_to_delete]
-        for vmi_model in vmis_to_delete:
+        for vmi_model in list(self._database.vmis_to_delete):
             self._delete(vmi_model)
             self._database.vmis_to_delete.remove(vmi_model)
 
@@ -237,7 +234,7 @@ class VirtualMachineInterfaceService(Service):
             with self._vcenter_api_client:
                 dpg = self._vcenter_api_client.get_dpg_by_key(new_vmi_model.vcenter_port.portgroup_key)
                 logger.info('Interface of VM: %s is connected to portgroup: %s, which is not handled by Contrail',
-                             new_vmi_model.vm_model.name, dpg.name)
+                            new_vmi_model.vm_model.name, dpg.name)
 
     def _create_or_update(self, vmi_model, vm_registered=False):
         self._assign_vlan_id(vmi_model, vm_registered=vm_registered)
@@ -356,13 +353,30 @@ class VirtualMachineInterfaceService(Service):
                 self._update_in_vnc(vmi_model)
             self._update_vrouter_port(vmi_model)
 
-    @staticmethod
-    def _get_vn_from_vmi(vnc_vmi):
-        return vnc_vmi.get_virtual_network_refs()[0]
+    def register_vmis(self):
+        for vmi_model in list(self._database.vmis_to_update):
+            logger.info('Updating %s', vmi_model)
+            existing_vnc_vmi = self._vnc_api_client.read_vmi(vmi_model.uuid)
+            if existing_vnc_vmi:
+                self._vnc_api_client.update_vmi_vrouter_uuid(
+                    existing_vnc_vmi, vmi_model.vm_model.vrouter_uuid)
+                vn_model_uuid = self._vnc_api_client.get_vn_uuid_for_vmi(existing_vnc_vmi)
+                vmi_model.vn_model = self._database.get_vn_model_by_uuid(vn_model_uuid)
+                self._register_instance_ip(existing_vnc_vmi, vmi_model)
+                self._database.save(vmi_model)
+            else:
+                self._update_vmis_vn(vmi_model, vm_registered=True)
+            self._database.vmis_to_update.remove(vmi_model)
+            logger.info('Updated %s', vmi_model)
 
-    @staticmethod
-    def _get_vm_from_vmi(vnc_vmi):
-        return vnc_vmi.get_virtual_machine_refs()[0]
+    def _register_instance_ip(self, vnc_vmi, vmi_model):
+        instance_ip = self._vnc_api_client.get_instance_ip_for_vmi(vnc_vmi)
+        if instance_ip:
+            self._vnc_api_client.update_instance_ip_vrouter_uuid(
+                instance_ip, vmi_model.vm_model.vrouter_uuid)
+            vmi_model.vnc_instance_ip = instance_ip
+        else:
+            self._add_instance_ip_to(vmi_model)
 
 
 class VRouterPortService(object):

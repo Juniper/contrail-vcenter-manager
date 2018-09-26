@@ -68,3 +68,30 @@ def test_vmotion_vlan_available(controller, database, vcenter_api_client, vm_reg
         vn_model=vn_model_1,
         vm_model=vm_model
     )
+
+
+def test_registered_existing_vmi(controller, database, vnc_api_client,
+                                 vm_registered_update, vn_model_1, vnc_vmi, instance_ip):
+    # Virtual Networks are already created for us and after synchronization,
+    # their models are stored in our database
+    database.save(vn_model_1)
+
+    # VMI already exists in VNC
+    vnc_api_client.read_vmi.return_value = vnc_vmi
+    vnc_api_client.get_instance_ip_for_vmi.return_value = instance_ip
+
+    # A new update containing VmRegisteredEvent arrives and is being handled by the controller
+    controller.handle_update(vm_registered_update)
+
+    vnc_api_client.delete_vmi.assert_not_called()
+    vnc_api_client.delete_instance_ip.assert_not_called()
+
+    vnc_api_client.update_vmi_vrouter_uuid.assert_called_once()
+    assert vnc_api_client.update_vmi_vrouter_uuid.call_args[0][0] == vnc_vmi
+
+    vnc_api_client.update_instance_ip_vrouter_uuid.assert_called_once()
+    print type(instance_ip)
+    print type(vnc_api_client.update_instance_ip_vrouter_uuid.call_args[0][0])
+    assert vnc_api_client.update_instance_ip_vrouter_uuid.call_args[0][0] == instance_ip
+
+    assert len(database.get_all_vmi_models()) == 1
