@@ -4,6 +4,7 @@ from mock import Mock
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 
+from cvm.constants import ID_PERMS
 from cvm.controllers import (GuestNetHandler, PowerStateHandler, UpdateHandler,
                              VmReconfiguredHandler, VmRegisteredHandler,
                              VmRemovedHandler, VmRenamedHandler,
@@ -44,12 +45,36 @@ def vnc_vm():
 
 
 @pytest.fixture()
-def vnc_vmi(project):
+def vnc_vmi(project, vnc_vm, vnc_vn_1):
     vmi = vnc_api.VirtualMachineInterface('vnc-vmi-uuid', parent_obj=project)
     vmi.set_uuid('vnc-vmi-uuid')
+    vmi.add_virtual_machine(vnc_vm)
+    vmi.set_virtual_network(vnc_vn_1)
     vmi.set_annotations(vnc_api.KeyValuePairs(
         [vnc_api.KeyValuePair('vrouter-uuid', 'vrouter-uuid-1')]))
     return vmi
+
+
+@pytest.fixture()
+def instance_ip(vnc_vmi, vnc_vn_1, vnc_vm):
+    ip_name = 'ip-' + vnc_vn_1.name + '-' + vnc_vm.name
+    ip_uuid = VirtualMachineInterfaceModel.construct_instance_ip_uuid(ip_name)
+
+    ip = vnc_api.InstanceIp(
+        name=ip_uuid,
+        display_name=ip_name,
+        id_perms=ID_PERMS,
+    )
+
+    ip.set_instance_ip_address('10.10.10.1')
+    ip.set_uuid(ip_uuid)
+    ip.set_virtual_network(vnc_vn_1)
+    ip.set_virtual_machine_interface(vnc_vmi)
+    ip.annotations = ip.annotations or vnc_api.KeyValuePairs()
+    ip.annotations.add_key_value_pair(
+        vnc_api.KeyValuePair('vrouter-uuid', 'vrouter-uuid-1')
+    )
+    return ip
 
 
 @pytest.fixture()
@@ -228,6 +253,7 @@ def vnc_api_client(project, security_group):
     vnc_client.read_or_create_project.return_value = project
     vnc_client.read_or_create_security_group.return_value = security_group
     vnc_client.create_and_read_instance_ip.side_effect = assign_ip_to_instance_ip
+    vnc_client.read_vmi.return_value = None
     return vnc_client
 
 

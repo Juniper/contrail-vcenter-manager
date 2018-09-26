@@ -68,3 +68,54 @@ def test_vmotion_vlan_available(controller, database, vcenter_api_client, vm_reg
         vn_model=vn_model_1,
         vm_model=vm_model
     )
+
+
+def test_registered_existing_vmi(controller, database, vnc_api_client,
+                                 vm_registered_update, vn_model_1, vnc_vmi, instance_ip):
+    """
+    VmRegisteredEvent may indicate that vMotion occured. Typically, in this
+    situation, VMI and Instance IP already exist in VNC so we don't want to
+    'update' (delete and recreate) them and cause the IP to change.
+    We only need to make sure that vrouter-uuid of these objects is changed.
+    """
+    # Virtual Networks are already created for us and after synchronization,
+    # their models are stored in our database
+    database.save(vn_model_1)
+
+    # VMI and Instance IP already exist in VNC
+    vnc_api_client.read_vmi.return_value = vnc_vmi
+    vnc_api_client.get_instance_ip_for_vmi.return_value = instance_ip
+
+    # A new update containing VmRegisteredEvent arrives and is being handled by the controller
+    controller.handle_update(vm_registered_update)
+
+    vnc_api_client.update_vmi.assert_not_called()
+    vnc_api_client.create_and_read_instance_ip.assert_not_called()
+
+    vnc_api_client.update_vmi_vrouter_uuid.assert_called_once()
+    assert vnc_api_client.update_vmi_vrouter_uuid.call_args[0][0] == vnc_vmi
+
+    vnc_api_client.update_instance_ip_vrouter_uuid.assert_called_once()
+    assert vnc_api_client.update_instance_ip_vrouter_uuid.call_args[0][0] == instance_ip
+
+    assert len(database.get_all_vmi_models()) == 1
+
+
+@patch('cvm.services.time.sleep', return_value=None)
+def test_registered_new_vmi(_, controller, database, vnc_api_client,
+                            vm_registered_update, vn_model_1):
+    # Virtual Networks are already created for us and after synchronization,
+    # their models are stored in our database
+    database.save(vn_model_1)
+
+    # VMI and Instance IP already exist in VNC
+    vnc_api_client.read_vmi.return_value = None
+    vnc_api_client.get_instance_ip_for_vmi.return_value = None
+
+    # A new update containing VmRegisteredEvent arrives and is being handled by the controller
+    controller.handle_update(vm_registered_update)
+
+    vnc_api_client.update_vmi.assert_called_once()
+    vnc_api_client.create_and_read_instance_ip.assert_called_once()
+
+    assert len(database.get_all_vmi_models()) == 1
