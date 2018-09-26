@@ -46,6 +46,7 @@ def build_monitor(config, lock, database):
     event_history_collector = esxi_api_client.create_event_history_collector(const.EVENTS_TO_OBSERVE)
     esxi_api_client.add_filter(event_history_collector, ['latestPage'])
     esxi_api_client.make_wait_options(120)
+    esxi_api_client.wait_for_updates()
 
     vcenter_api_client = VCenterAPIClient(vcenter_cfg)
 
