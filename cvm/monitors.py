@@ -4,7 +4,7 @@ class VMwareMonitor(object):
         self._controller = vmware_controller
 
     def sync(self):
-        self._controller.initialize_database()
+        self._controller.sync()
 
     def start(self):
         while True:
