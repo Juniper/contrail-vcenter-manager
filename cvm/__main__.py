@@ -39,6 +39,16 @@ def load_config(config_file):
         return yaml.load(ymlfile)
 
 
+def translate_logging_level(level):
+    # Default logging level during contrail deployment is SYS_NOTICE,
+    # but python logging library hasn't notice level, so we have to translate
+    # SYS_NOTICE to logging.INFO, because next available level is logging.WARN,
+    # what is too high for normal vcenter-manager logging.
+    if level == 'SYS_NOTICE':
+        return 'SYS_INFO'
+    return level
+
+
 def build_monitor(config, lock, database):
     esxi_cfg, vcenter_cfg, vnc_cfg = config['esxi'], config['vcenter'], config['vnc']
 
@@ -130,7 +140,7 @@ def run_introspect(cfg, database, lock):
     sandesh.sandesh_logger().set_logger_params(
         logger=sandesh.logger(),
         enable_local_log=True,
-        level=sandesh_config['logging_level'],
+        level=translate_logging_level(sandesh_config['logging_level']),
         file=sandesh_config['log_file'],
         enable_syslog=False,
         syslog_facility=None
