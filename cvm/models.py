@@ -27,6 +27,7 @@ class VirtualMachineModel(object):
         self.vm_properties = vm_properties
         self.devices = vmware_vm.config.hardware.device
         self.vrouter_uuid = find_vrouter_uuid(vmware_vm.summary.runtime.host)
+        self.host_name = vmware_vm.summary.runtime.host.name
         self.property_filter = None
         self.ports = self._read_ports()
         self.vmi_models = self._construct_interfaces()
@@ -35,6 +36,7 @@ class VirtualMachineModel(object):
         self.vm_properties = vm_properties
         self.devices = vmware_vm.config.hardware.device
         self.vrouter_uuid = find_vrouter_uuid(vmware_vm.summary.runtime.host)
+        self.host_name = vmware_vm.summary.runtime.host.name
         self.ports = self._read_ports()
 
     def rename(self, name):
