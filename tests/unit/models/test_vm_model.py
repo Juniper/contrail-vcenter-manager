@@ -19,8 +19,6 @@ def test_to_vnc(vm_model):
     assert vnc_vm.name == vm_model.uuid
     assert vnc_vm.uuid == vm_model.uuid
     assert vnc_vm.fq_name == [vm_model.uuid]
-    vrouter_annotation = vnc_vm.get_annotations().get_key_value_pair()[0]
-    assert vrouter_annotation.value == 'vrouter_uuid'
 
 
 def test_update(vm_model, vmware_vm_1_updated, vm_properties_1_updated):
