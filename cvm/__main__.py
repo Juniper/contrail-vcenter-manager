@@ -20,9 +20,10 @@ import cvm.constants as const
 from cvm.clients import (ESXiAPIClient, VCenterAPIClient, VNCAPIClient,
                          VRouterAPIClient)
 from cvm.controllers import (GuestNetHandler, PowerStateHandler, UpdateHandler,
-                             VmReconfiguredHandler, VmRemovedHandler,
-                             VmRenamedHandler, VmUpdatedHandler, VmRegisteredHandler,
-                             VmwareController, VmwareToolsStatusHandler)
+                             VmReconfiguredHandler, VmRegisteredHandler,
+                             VmRemovedHandler, VmRenamedHandler,
+                             VmUpdatedHandler, VmwareController,
+                             VmwareToolsStatusHandler)
 from cvm.database import Database
 from cvm.models import VlanIdPool
 from cvm.monitors import VMwareMonitor
@@ -64,6 +65,7 @@ def build_monitor(config, lock, database):
 
     vm_service = VirtualMachineService(
         esxi_api_client=esxi_api_client,
+        vcenter_api_client=vcenter_api_client,
         vnc_api_client=vnc_api_client,
         database=database
     )
