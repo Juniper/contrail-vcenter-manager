@@ -84,19 +84,30 @@ def wait_for_task(task, success_message, fault_message):
         logger.error('vCenter task in unknown state: %s', task.info.state)
 
 
+def get_vm_uuid_for_vmi(vnc_vmi):
+    refs = vnc_vmi.get_virtual_machine_refs() or []
+    if refs:
+        return refs[0]['uuid']
+
+
 class VSphereAPIClient(object):
     def __init__(self):
         self._si = None
         self._datacenter = None
 
     def _get_object(self, vimtype, name):
-        """
-         Get the vsphere object associated with a given text name
-        """
         content = self._si.content
         container = content.viewManager.CreateContainerView(content.rootFolder, vimtype, True)
         try:
             return [obj for obj in container.view if obj.name == name][0]
+        except IndexError:
+            return None
+
+    def _get_vm_by_uuid(self, uuid):
+        content = self._si.content
+        container = content.viewManager.CreateContainerView(content.rootFolder, [vim.VirtualMachine], True)
+        try:
+            return [vm for vm in container.view if vm.config.instanceUuid == uuid][0]
         except IndexError:
             return None
 
@@ -269,6 +280,29 @@ class VCenterAPIClient(VSphereAPIClient):
         success_message = 'Enabled vCenter portgroup %s vlan override' % portgroup.name
         fault_message = 'Enabling VLAN override on portgroup {} failed: %s'.format(portgroup.name)
         wait_for_task(task, success_message, fault_message)
+
+    def can_remove_vm(self, name=None, uuid=None):
+        if not (name or uuid):
+            return False
+
+        if name and self._get_object([vim.VirtualMachine], name):
+            return False
+
+        if uuid and self._get_vm_by_uuid(uuid):
+            return False
+
+        return True
+
+    def can_rename_vm(self, vm_model, new_name):
+        vmware_vm = self._get_object([vim.VirtualMachine], new_name)
+        return vmware_vm and (vmware_vm.summary.runtime.host.name == vm_model.host_name)
+
+    def can_remove_vmi(self, vnc_vmi):
+        vm_uuid = get_vm_uuid_for_vmi(vnc_vmi)
+        return self.can_remove_vm(uuid=vm_uuid)
+
+    def can_rename_vmi(self, vmi_model, new_name):
+        return self.can_rename_vm(vmi_model.vm_model, new_name)
 
 
 class VNCAPIClient(object):
