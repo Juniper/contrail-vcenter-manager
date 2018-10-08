@@ -4,7 +4,7 @@ from tests.utils import (assert_vm_model_state, assert_vmi_model_state,
                          assert_vnc_vmi_state, reserve_vlan_ids)
 
 
-@patch('cvm.services.time.sleep', return_value=None)
+@patch('cvm.services.virtual_machine_interface_service.time.sleep', return_value=None)
 def test_vm_reconfigured(_, controller, database, vcenter_api_client, vnc_api_client, vrouter_api_client,
                          vm_created_update, vm_reconfigured_update, vmware_vm_1, vn_model_1, vnc_vn_2, vn_model_2,
                          vlan_id_pool):
@@ -42,10 +42,9 @@ def test_vm_reconfigured(_, controller, database, vcenter_api_client, vnc_api_cl
     vmi_model = vmi_models[0]
 
     # - in VNC
-    vnc_api_client.delete_vmi.assert_called_once_with(vmi_model.uuid)
     assert vnc_api_client.update_vmi.call_count == 2
     vnc_vmi = vnc_api_client.update_vmi.call_args[0][0]
-    assert_vnc_vmi_state(vnc_vmi, mac_address='mac-address', vnc_vn_uuid=vnc_vn_2.uuid)
+    assert vnc_vmi.get_virtual_network_refs()[0]['uuid'] == vnc_vn_2.uuid
 
     # Check if VMI Model's Instance IP has been updated in VNC:
     assert vnc_api_client.create_and_read_instance_ip.call_count == 2
@@ -54,7 +53,7 @@ def test_vm_reconfigured(_, controller, database, vcenter_api_client, vnc_api_cl
     assert vnc_vn_2.uuid in [ref['uuid'] for ref in new_instance_ip.get_virtual_network_refs()]
 
     # Check if VMI's vRouter Port has been updated:
-    assert vrouter_api_client.delete_port.call_count == 3
+    assert vrouter_api_client.delete_port.call_count == 2
     assert vrouter_api_client.delete_port.call_args[0][0] == vmi_model.uuid
     assert vrouter_api_client.add_port.call_count == 2
     assert vrouter_api_client.add_port.call_args[0][0] == vmi_model
