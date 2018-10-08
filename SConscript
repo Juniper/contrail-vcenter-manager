@@ -18,8 +18,9 @@ cvm_sandesh = [
 ]
 
 cvm_source_files = [
-    file_ for file_ in os.listdir(Dir('#vcenter-manager/cvm/').abspath)
-    if fnmatch.fnmatch(file_, '*.py')
+    y for x in os.walk('cvm')
+    for y in glob(os.path.join(x[0], '*.py'))
+    if 'cvm/sandesh/' not in y
 ]
 
 cvm = [

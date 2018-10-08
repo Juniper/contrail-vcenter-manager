@@ -1,11 +1,9 @@
-from mock import Mock, patch
+from mock import patch
 
 from tests.utils import reserve_vlan_ids
 
 
-@patch('cvm.services.time.sleep', return_value=None)
-@patch('cvm.services.VirtualMachineService._can_modify_in_vnc', Mock(return_value=True))
-@patch('cvm.services.VirtualMachineInterfaceService._can_modify_in_vnc', Mock(return_value=True))
+@patch('cvm.services.virtual_machine_interface_service.time.sleep', return_value=None)
 def test_full_remove_vm(_, controller, database, vcenter_api_client, vnc_api_client, vrouter_api_client,
                         vm_created_update, vm_removed_update, vn_model_1, vlan_id_pool):
     # Virtual Networks are already created for us and after synchronization,
@@ -30,6 +28,9 @@ def test_full_remove_vm(_, controller, database, vcenter_api_client, vnc_api_cli
     assert vmi_model is not None
     # And proper VLAN ID should be acquired
     assert not vlan_id_pool.is_available(4)
+
+    # The VM is not present on any other ESXi
+    vcenter_api_client.can_remove_vm.return_value = True
 
     # Then VmRemovedEvent is being handled
     controller.handle_update(vm_removed_update)
@@ -58,9 +59,7 @@ def test_full_remove_vm(_, controller, database, vcenter_api_client, vnc_api_cli
     assert vlan_id_pool.is_available(4)
 
 
-@patch('cvm.services.time.sleep', return_value=None)
-@patch('cvm.services.VirtualMachineService._can_modify_in_vnc', Mock(return_value=False))
-@patch('cvm.services.VirtualMachineInterfaceService._can_modify_in_vnc', Mock(return_value=False))
+@patch('cvm.services.virtual_machine_interface_service.time.sleep', return_value=None)
 def test_vm_removed_local_remove(_, controller, database, vcenter_api_client, vnc_api_client, vrouter_api_client,
                                  vm_created_update, vm_removed_update, vn_model_1, vlan_id_pool):
     """
@@ -90,6 +89,9 @@ def test_vm_removed_local_remove(_, controller, database, vcenter_api_client, vn
     assert vmi_model is not None
     # And proper VLAN ID should be acquired
     assert not vlan_id_pool.is_available(4)
+
+    # The VM is present on some other ESXi
+    vcenter_api_client.can_remove_vm.return_value = False
 
     # Then VmRemovedEvent is being handled
     controller.handle_update(vm_removed_update)

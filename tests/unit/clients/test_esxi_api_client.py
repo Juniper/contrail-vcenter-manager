@@ -21,7 +21,7 @@ def property_collector(vm_esxi_properties):
 
 @pytest.fixture()
 def esxi_api_client(property_collector):
-    with patch('cvm.clients.SmartConnectNoSSL') as si_mock:
+    with patch('cvm.clients.esxi_api_client.SmartConnectNoSSL') as si_mock:
         si_mock.return_value.content.propertyCollector = property_collector
         return ESXiAPIClient({})
 

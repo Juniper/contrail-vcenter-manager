@@ -114,9 +114,9 @@ def portgroup():
 
 
 @pytest.fixture()
-def vmware_vm_1():
+def vmware_vm_1(host_1):
     vmware_vm = Mock(spec=vim.VirtualMachine)
-    vmware_vm.summary.runtime.host.vm = []
+    vmware_vm.summary.runtime.host = host_1
     vmware_vm.config.instanceUuid = 'vmware-vm-uuid-1'
     backing = Mock(spec=vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo)
     backing.port = Mock(portgroupKey='dvportgroup-1', portKey='10')
@@ -127,12 +127,26 @@ def vmware_vm_1():
 @pytest.fixture()
 def vmware_vm_1_updated():
     vmware_vm = Mock(spec=vim.VirtualMachine)
-    vmware_vm.summary.runtime.host.vm = []
+    vmware_vm.summary.runtime.host = host_1
     vmware_vm.config.instanceUuid = 'vmware-vm-uuid-1'
     backing = Mock(spec=vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo)
     backing.port = Mock(portgroupKey='dvportgroup-2', portKey='10')
     vmware_vm.config.hardware.device = [Mock(backing=backing, macAddress='mac-address')]
     return vmware_vm
+
+
+@pytest.fixture()
+def host_1():
+    host = Mock(vm=[])
+    host.configure_mock(name='host-1')
+    return host
+
+
+@pytest.fixture()
+def host_2():
+    host = Mock(vm=[])
+    host.configure_mock(name='host-2')
+    return host
 
 
 @pytest.fixture()
@@ -343,8 +357,8 @@ def vmware_tools_running_update(vmware_vm_1):
 
 
 @pytest.fixture()
-def vm_service(esxi_api_client, vnc_api_client, database):
-    return VirtualMachineService(esxi_api_client, vnc_api_client, database)
+def vm_service(esxi_api_client, vcenter_api_client, vnc_api_client, database):
+    return VirtualMachineService(esxi_api_client, vcenter_api_client, vnc_api_client, database)
 
 
 @pytest.fixture()
