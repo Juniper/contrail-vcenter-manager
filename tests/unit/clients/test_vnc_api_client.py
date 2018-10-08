@@ -15,20 +15,29 @@ def test_update_create_new_vm(vnc_api_client, vnc_lib, vnc_vm):
     vnc_lib.virtual_machine_create.called_once_with(vnc_vm)
 
 
-def test_update_create_vmi(vnc_api_client, vnc_lib, vnc_vmi):
-    vnc_lib.virtual_machine_interface_read.side_effect = NoIdError(None)
+def test_update_vmi(vnc_api_client, vnc_lib, vnc_vmi):
+    vnc_lib.virtual_machine_interface_read.return_value = vnc_vmi
 
     vnc_api_client.update_vmi(vnc_vmi)
 
-    vnc_lib.virtual_machine_interface_create.assert_called_once()
+    vnc_lib.virtual_machine_interface_update.assert_called_once_with(vnc_vmi)
 
 
 def test_update_create_new_vmi(vnc_api_client, vnc_lib, vnc_vmi):
-    vnc_lib.virtual_machine_interface_read.side_effect = NoIdError(None)
+    vnc_lib.virtual_machine_interface_update.side_effect = NoIdError(None)
 
     vnc_api_client.update_vmi(vnc_vmi)
 
     vnc_lib.virtual_machine_interface_create.assert_called_once_with(vnc_vmi)
+
+
+def test_update_vmi_vn(vnc_api_client, vnc_lib, vnc_vmi, vnc_vn):
+    vnc_lib.virtual_machine_interface_read.return_value = vnc_vmi
+    vnc_lib.virtual_network_read.return_value = vnc_vn
+
+    vnc_api_client.update_vmi(vnc_vmi)
+
+    vnc_lib.virtual_machine_interface_update.assert_called_once_with(vnc_vmi)
 
 
 def test_get_all_vms(vnc_api_client, vnc_lib, vnc_vm):

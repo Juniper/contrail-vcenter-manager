@@ -1,6 +1,3 @@
-from mock import Mock, patch
-
-
 def test_create_vmis_proper_dpg(vmi_service, database, vnc_api_client, vm_model, vmi_model, vn_model_1, vn_model_2):
     """ A new VMI is being created with proper DPG. """
     vmi_model.vcenter_port.portgroup_key = 'dvportgroup-1'
@@ -83,25 +80,46 @@ def test_sync_no_vmis(vmi_service, database, vnc_api_client):
     assert database.get_all_vmi_models() == []
 
 
-@patch('cvm.services.VirtualMachineInterfaceService._can_modify_in_vnc', Mock(return_value=True))
-def test_sync_deletes_unused_vmis(vmi_service, database, vnc_api_client, vnc_vmi):
+def test_sync_deletes_unused_vmis(vmi_service, database, vnc_api_client, vcenter_api_client, vnc_vmi):
     vnc_api_client.get_vmis_by_project.return_value = [vnc_vmi]
+    vcenter_api_client.can_remove_vmi.side_effect = [True, False]
 
+    vmi_service.sync_vmis()
     vmi_service.sync_vmis()
 
     vnc_api_client.delete_vmi.assert_called_once()
-    assert 'vnc-vmi-uuid' in database.ports_to_delete
+    assert vnc_vmi.uuid in database.ports_to_delete
 
 
-@patch('cvm.services.VirtualMachineInterfaceService._can_modify_in_vnc', Mock(return_value=True))
-def test_remove_vmis_for_vm_model(vmi_service, database, vnc_api_client, vmi_model, vm_model):
+def test_remove_vmis_for_vm_model(vmi_service, database, vcenter_api_client, vnc_api_client, vmi_model, vm_model,
+                                  vlan_id_pool):
     database.save(vm_model)
     database.save(vmi_model)
+    vcenter_api_client.can_remove_vm.return_value = True
 
     vmi_service.remove_vmis_for_vm_model(vm_model.name)
 
     assert vmi_model not in database.get_all_vmi_models()
+    assert vmi_model.uuid in database.ports_to_delete
     vnc_api_client.delete_vmi.assert_called_once_with(vmi_model.uuid)
+    vcenter_api_client.restore_vlan_id.assert_called_once_with(vmi_model.vcenter_port)
+    assert vlan_id_pool.is_available(vmi_model.vcenter_port.vlan_id)
+
+
+def test_remove_vmis_other_host(vmi_service, database, vcenter_api_client, vnc_api_client, vmi_model, vm_model,
+                                vlan_id_pool):
+    """ We can't delete VMIs for VM on other hosts"""
+    database.save(vm_model)
+    database.save(vmi_model)
+    vcenter_api_client.can_remove_vm.return_value = False
+
+    vmi_service.remove_vmis_for_vm_model(vm_model.name)
+
+    assert vmi_model not in database.get_all_vmi_models()
+    assert vmi_model.uuid in database.ports_to_delete
+    vnc_api_client.delete_vmi.assert_not_called()
+    vcenter_api_client.restore_vlan_id.assert_not_called()
+    assert vlan_id_pool.is_available(vmi_model.vcenter_port.vlan_id)
 
 
 def test_remove_vmis_no_vm_model(vmi_service, vnc_api_client):
@@ -114,12 +132,13 @@ def test_remove_vmis_no_vm_model(vmi_service, vnc_api_client):
     vnc_api_client.delete_vmi.assert_not_called()
 
 
-@patch('cvm.services.VirtualMachineInterfaceService._can_modify_in_vnc', Mock(return_value=True))
-def test_rename_vmis(vmi_service, database, vnc_api_client, vmi_model, vm_model):
+def test_rename_vmis(vmi_service, database, vnc_api_client, vcenter_api_client, vmi_model, vm_model):
     database.save(vmi_model)
     vm_model.rename('VM1-renamed')
     database.save(vm_model)
+    vcenter_api_client.can_rename_vmi.side_effect = [True, False]
 
+    vmi_service.rename_vmis('VM1-renamed')
     vmi_service.rename_vmis('VM1-renamed')
 
     assert vmi_model.display_name == 'vmi-DPG1-VM1-renamed'
