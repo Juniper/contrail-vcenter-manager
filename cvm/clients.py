@@ -5,10 +5,10 @@ import random
 from uuid import uuid4
 
 import requests
-from pyVim.connect import Disconnect, SmartConnectNoSSL
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
+from pyVim.connect import Disconnect, SmartConnectNoSSL
 from vnc_api import vnc_api
-from vnc_api.exceptions import NoIdError
+from vnc_api.exceptions import NoIdError, RefsExistError
 
 from contrail_vrouter_api.vrouter_api import ContrailVRouterApi
 from cvm.constants import (VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
@@ -20,83 +20,24 @@ from cvm.models import find_vrouter_uuid
 logger = logging.getLogger(__name__)
 
 
-def make_prop_set(obj, filters):
-    prop_set = []
-    property_spec = vmodl.query.PropertyCollector.PropertySpec(
-        type=type(obj),
-        all=False)
-    property_spec.pathSet.extend(filters)
-    prop_set.append(property_spec)
-    return prop_set
-
-
-def make_object_set(obj):
-    object_set = [vmodl.query.PropertyCollector.ObjectSpec(obj=obj)]
-    return object_set
-
-
-def make_filter_spec(obj, filters):
-    filter_spec = vmodl.query.PropertyCollector.FilterSpec()
-    filter_spec.objectSet = make_object_set(obj)
-    filter_spec.propSet = make_prop_set(obj, filters)
-    return filter_spec
-
-
-def make_dv_port_spec(dv_port, vlan_id=None):
-    dv_port_config_spec = vim.dvs.DistributedVirtualPort.ConfigSpec()
-    dv_port_config_spec.key = dv_port.key
-    dv_port_config_spec.operation = 'edit'
-    dv_port_config_spec.configVersion = dv_port.config.configVersion
-    vlan_spec = vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec()
-    if vlan_id:
-        vlan_spec.vlanId = vlan_id
-    else:
-        vlan_spec.inherited = True
-    dv_port_setting = vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy()
-    dv_port_setting.vlan = vlan_spec
-    dv_port_config_spec.setting = dv_port_setting
-    return dv_port_config_spec
-
-
-def make_pg_config_vlan_override(portgroup):
-    pg_config_spec = vim.dvs.DistributedVirtualPortgroup.ConfigSpec()
-    pg_config_spec.configVersion = portgroup.config.configVersion
-    pg_config_spec.name = portgroup.config.name
-    pg_config_spec.numPorts = portgroup.config.numPorts
-    pg_config_spec.defaultPortConfig = portgroup.config.defaultPortConfig
-    pg_config_spec.type = portgroup.config.type
-    pg_config_spec.policy = portgroup.config.policy
-    pg_config_spec.policy.vlanOverrideAllowed = True
-    pg_config_spec.autoExpand = portgroup.config.autoExpand
-    pg_config_spec.vmVnicNetworkResourcePoolKey = portgroup.config.vmVnicNetworkResourcePoolKey
-    pg_config_spec.description = portgroup.config.description
-    return pg_config_spec
-
-
-def wait_for_task(task, success_message, fault_message):
-    while task.info.state == 'running':
-        continue
-    if task.info.state == 'success':
-        logger.info(success_message)
-    elif task.info.state == 'error':
-        logger.error(fault_message, task.info.error.msg)
-    else:
-        logger.error('vCenter task in unknown state: %s', task.info.state)
-
-
 class VSphereAPIClient(object):
     def __init__(self):
         self._si = None
         self._datacenter = None
 
     def _get_object(self, vimtype, name):
-        """
-         Get the vsphere object associated with a given text name
-        """
         content = self._si.content
         container = content.viewManager.CreateContainerView(content.rootFolder, vimtype, True)
         try:
             return [obj for obj in container.view if obj.name == name][0]
+        except IndexError:
+            return None
+
+    def _get_vm_by_uuid(self, uuid):
+        content = self._si.content
+        container = content.viewManager.CreateContainerView(content.rootFolder, [vim.VirtualMachine], True)
+        try:
+            return [vm for vm in container.view if vm.config.instanceUuid == uuid][0]
         except IndexError:
             return None
 
@@ -160,6 +101,28 @@ class ESXiAPIClient(VSphereAPIClient):
     def read_vrouter_uuid(self):
         host = self._datacenter.hostFolder.childEntity[0].host[0]
         return find_vrouter_uuid(host)
+
+
+def make_prop_set(obj, filters):
+    prop_set = []
+    property_spec = vmodl.query.PropertyCollector.PropertySpec(
+        type=type(obj),
+        all=False)
+    property_spec.pathSet.extend(filters)
+    prop_set.append(property_spec)
+    return prop_set
+
+
+def make_object_set(obj):
+    object_set = [vmodl.query.PropertyCollector.ObjectSpec(obj=obj)]
+    return object_set
+
+
+def make_filter_spec(obj, filters):
+    filter_spec = vmodl.query.PropertyCollector.FilterSpec()
+    filter_spec.objectSet = make_object_set(obj)
+    filter_spec.propSet = make_prop_set(obj, filters)
+    return filter_spec
 
 
 class VCenterAPIClient(VSphereAPIClient):
@@ -270,6 +233,68 @@ class VCenterAPIClient(VSphereAPIClient):
         fault_message = 'Enabling VLAN override on portgroup {} failed: %s'.format(portgroup.name)
         wait_for_task(task, success_message, fault_message)
 
+    def can_remove_vm(self, uuid):
+        return not self._get_vm_by_uuid(uuid)
+
+    def can_rename_vm(self, vm_model, new_name):
+        vmware_vm = self._get_object([vim.VirtualMachine], new_name)
+        return vmware_vm and (vmware_vm.summary.runtime.host.name == vm_model.host_name)
+
+    def can_remove_vmi(self, vnc_vmi):
+        vm_uuid = get_vm_uuid_for_vmi(vnc_vmi)
+        return self.can_remove_vm(uuid=vm_uuid)
+
+    def can_rename_vmi(self, vmi_model, new_name):
+        return self.can_rename_vm(vmi_model.vm_model, new_name)
+
+
+def make_dv_port_spec(dv_port, vlan_id=None):
+    dv_port_config_spec = vim.dvs.DistributedVirtualPort.ConfigSpec()
+    dv_port_config_spec.key = dv_port.key
+    dv_port_config_spec.operation = 'edit'
+    dv_port_config_spec.configVersion = dv_port.config.configVersion
+    vlan_spec = vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec()
+    if vlan_id:
+        vlan_spec.vlanId = vlan_id
+    else:
+        vlan_spec.inherited = True
+    dv_port_setting = vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy()
+    dv_port_setting.vlan = vlan_spec
+    dv_port_config_spec.setting = dv_port_setting
+    return dv_port_config_spec
+
+
+def make_pg_config_vlan_override(portgroup):
+    pg_config_spec = vim.dvs.DistributedVirtualPortgroup.ConfigSpec()
+    pg_config_spec.configVersion = portgroup.config.configVersion
+    pg_config_spec.name = portgroup.config.name
+    pg_config_spec.numPorts = portgroup.config.numPorts
+    pg_config_spec.defaultPortConfig = portgroup.config.defaultPortConfig
+    pg_config_spec.type = portgroup.config.type
+    pg_config_spec.policy = portgroup.config.policy
+    pg_config_spec.policy.vlanOverrideAllowed = True
+    pg_config_spec.autoExpand = portgroup.config.autoExpand
+    pg_config_spec.vmVnicNetworkResourcePoolKey = portgroup.config.vmVnicNetworkResourcePoolKey
+    pg_config_spec.description = portgroup.config.description
+    return pg_config_spec
+
+
+def wait_for_task(task, success_message, fault_message):
+    while task.info.state == 'running':
+        continue
+    if task.info.state == 'success':
+        logger.info(success_message)
+    elif task.info.state == 'error':
+        logger.error(fault_message, task.info.error.msg)
+    else:
+        logger.error('vCenter task in unknown state: %s', task.info.state)
+
+
+def get_vm_uuid_for_vmi(vnc_vmi):
+    refs = vnc_vmi.get_virtual_machine_refs() or []
+    if refs:
+        return refs[0]['uuid']
+
 
 class VNCAPIClient(object):
     def __init__(self, vnc_cfg):
@@ -325,16 +350,32 @@ class VNCAPIClient(object):
         return self.vnc_lib.virtual_machine_read(id=uuid)
 
     def update_vmi(self, vnc_vmi):
+        logger.info('Attempting to update Virtual Machine Interface %s in VNC', vnc_vmi.name)
         try:
-            logger.info('Attempting to update Virtual Machine Interface %s in VNC', vnc_vmi.name)
-            self.delete_vmi(vnc_vmi.get_uuid())
+            old_vmi = self.vnc_lib.virtual_machine_interface_read(id=vnc_vmi.uuid)
+            self._update_vmi_vn(old_vmi, vnc_vmi)
+            self._rename_vmi(old_vmi, vnc_vmi)
+            self.vnc_lib.virtual_machine_interface_update(old_vmi)
         except NoIdError:
             logger.info('Virtual Machine Interface %s not found in VNC - creating', vnc_vmi.name)
-        self._create_vmi(vnc_vmi)
+            self.create_vmi(vnc_vmi)
+        return self.vnc_lib.virtual_machine_interface_read(id=vnc_vmi.uuid)
 
-    def _create_vmi(self, vnc_vmi):
-        self.vnc_lib.virtual_machine_interface_create(vnc_vmi)
-        logger.info('Virtual Machine Interface %s updated in VNC', vnc_vmi.name)
+    def _update_vmi_vn(self, old_vmi, new_vmi):
+        vn_fq_name = new_vmi.get_virtual_network_refs()[0]['to']
+        logger.info('Updating Virtual Network of Interface %s to %s', new_vmi.name, vn_fq_name[2])
+        vnc_vn = self.read_vn(vn_fq_name)
+        old_vmi.set_virtual_network(vnc_vn)
+
+    def _rename_vmi(self, old_vmi, new_vmi):
+        old_vmi.set_display_name(new_vmi.display_name)
+
+    def create_vmi(self, vnc_vmi):
+        try:
+            self.vnc_lib.virtual_machine_interface_create(vnc_vmi)
+            logger.info('Virtual Machine Interface %s created in VNC', vnc_vmi.name)
+        except RefsExistError:
+            logger.info('Virtual Machine Interface %s already exists in VNC', vnc_vmi.name)
 
     def delete_vmi(self, uuid):
         vmi = self.read_vmi(uuid)
@@ -359,11 +400,6 @@ class VNCAPIClient(object):
             vnc_api.KeyValuePair('vrouter-uuid', vrouter_uuid)
         )
         vnc_obj.annotations = new_annotations
-
-    def update_vmi_vrouter_uuid(self, vnc_vmi, vrouter_uuid):
-        self._update_vrouter_uuid(vnc_vmi, vrouter_uuid)
-        self.vnc_lib.virtual_machine_interface_update(vnc_vmi)
-        logger.info('Changed Virtual Machine Interface %s vrouter-uuid to %s', vnc_vmi.get_uuid(), vrouter_uuid)
 
     def get_vmis_by_project(self, project):
         vmis = self.vnc_lib.virtual_machine_interfaces_list(parent_id=project.uuid).get('virtual-machine-interfaces')
@@ -393,7 +429,7 @@ class VNCAPIClient(object):
         try:
             return self.vnc_lib.virtual_network_read(fq_name)
         except NoIdError:
-            logger.error('Not found VN with fq_name: %s in VNC', str(fq_name))
+            logger.error('VN %s not found in VNC', fq_name[2])
         return None
 
     def read_or_create_project(self):
@@ -448,11 +484,6 @@ class VNCAPIClient(object):
         logger.info('Network IPAM created: %s', ipam.name)
         return ipam
 
-    def get_instance_ip_for_vmi(self, vnc_vmi):
-        refs = vnc_vmi.get_instance_ip_back_refs() or []
-        if refs:
-            return self.read_instance_ip(refs[0]['uuid'])
-
     def create_and_read_instance_ip(self, instance_ip):
         try:
             return self.read_instance_ip(instance_ip.uuid)
@@ -469,11 +500,6 @@ class VNCAPIClient(object):
 
     def read_instance_ip(self, uuid):
         return self.vnc_lib.instance_ip_read(id=uuid)
-
-    def update_instance_ip_vrouter_uuid(self, instance_ip, vrouter_uuid):
-        self._update_vrouter_uuid(instance_ip, vrouter_uuid)
-        self.vnc_lib.instance_ip_update(instance_ip)
-        logger.info('Changed Instance IP %s vrouter-uuid to %s', instance_ip.get_uuid(), vrouter_uuid)
 
 
 def construct_ipam(project):
