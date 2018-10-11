@@ -53,7 +53,7 @@ class VirtualMachineService(Service):
         super(VirtualMachineService, self).__init__(vnc_api_client, database, esxi_api_client=esxi_api_client)
 
     def update(self, vmware_vm):
-        vm_properties = self._esxi_api_client.read_vm_properties(vmware_vm)
+        vm_properties = self.get_vm_vmware_properties(vmware_vm)
         if is_contrail_vm_name(vm_properties['name']):
             return
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
@@ -61,6 +61,15 @@ class VirtualMachineService(Service):
             self._update(vm_model, vmware_vm, vm_properties)
             return
         self._create(vmware_vm, vm_properties)
+
+    def get_vm_vmware_properties(self, vmware_vm):
+        return self._esxi_api_client.read_vm_properties(vmware_vm)
+
+    def get_vm_model_by_uuid(self, vm_uuid):
+        return self._database.get_vm_model_by_uuid(vm_uuid)
+
+    def get_vm_model_by_name(self, vm_name):
+        return self._database.get_vm_model_by_name(vm_name)
 
     def _update(self, vm_model, vmware_vm, vm_properties):
         logger.info('Updating %s', vm_model)
