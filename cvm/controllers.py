@@ -74,6 +74,14 @@ class AbstractEventHandler(AbstractChangeHandler):
     def _handle_event(self, event):
         pass
 
+    def _validate_event(self, event):
+        vmware_vm = event.vm.vm
+        vm_properties = self._vm_service.get_vm_vmware_properties(vmware_vm)
+        if 'config.instanceUuid' not in vm_properties:
+            logger.error('Virtual Machine %s has not vCenter uuid. Unable to update.', vm_properties['name'])
+            return False
+        return True
+
 
 class VmUpdatedHandler(AbstractEventHandler):
     EVENTS = (
@@ -91,8 +99,10 @@ class VmUpdatedHandler(AbstractEventHandler):
         self._vrouter_port_service = vrouter_port_service
 
     def _handle_event(self, event):
-        vmware_vm = event.vm.vm
         try:
+            if not self._validate_event(event):
+                return
+            vmware_vm = event.vm.vm
             self._vm_service.update(vmware_vm)
             self._vn_service.update_vns()
             self._vmi_service.update_vmis()
@@ -111,8 +121,11 @@ class VmRegisteredHandler(AbstractEventHandler):
         self._vrouter_port_service = vrouter_port_service
 
     def _handle_event(self, event):
-        vmware_vm = event.vm.vm
         try:
+            logger.info('VmRegisteredEvent: %s', event)
+            if not self._validate_event(event):
+                return
+            vmware_vm = event.vm.vm
             self._vm_service.update(vmware_vm)
             self._vn_service.update_vns()
             self._vmi_service.register_vmis()
@@ -130,11 +143,22 @@ class VmRenamedHandler(AbstractEventHandler):
         self._vrouter_port_service = vrouter_port_service
 
     def _handle_event(self, event):
+        logger.info('VmRenamedEvent: %s', event)
+        if not self._validate_event(event):
+            return
         old_name = event.oldName
         new_name = event.newName
         self._vm_service.rename_vm(old_name, new_name)
         self._vmi_service.rename_vmis(new_name)
         self._vrouter_port_service.sync_ports()
+
+    def _validate_event(self, event):
+        old_name = event.oldName
+        vm_model = self._vm_service.get_vm_model_by_name(old_name)
+        if vm_model is None:
+            logger.error('Virtual Machine %s does not exist in CVM database. Unable to rename', old_name)
+            return False
+        return True
 
 
 class VmReconfiguredHandler(AbstractEventHandler):
@@ -147,6 +171,9 @@ class VmReconfiguredHandler(AbstractEventHandler):
         self._vrouter_port_service = vrouter_port_service
 
     def _handle_event(self, event):
+        logger.info('VmReconfiguredEvent: %s', event)
+        if not self._validate_event(event):
+            return
         vmware_vm = event.vm.vm
         for device_spec in event.configSpec.deviceChange:
             device = device_spec.device
@@ -169,6 +196,8 @@ class VmRemovedHandler(AbstractEventHandler):
         self._vrouter_port_service = vrouter_port_service
 
     def _handle_event(self, event):
+        if not self._validate_event(event):
+            return
         vm_name = event.vm.name
         self._vmi_service.remove_vmis_for_vm_model(vm_name)
         self._vm_service.remove_vm(vm_name)
@@ -209,6 +238,14 @@ class PowerStateHandler(AbstractChangeHandler):
         self._vrouter_port_service = vrouter_port_service
 
     def _handle_change(self, obj, value):
-        logger.info('Detected power state change for VM: %s to %s', obj.name, value)
+        if not self._validate_vm(obj):
+            return
         self._vm_service.update_power_state(obj, value)
         self._vrouter_port_service.sync_port_states()
+
+    def _validate_vm(self, vmware_vm):
+        vm_properties = self._vm_service.get_vm_vmware_properties(vmware_vm)
+        if 'config.instanceUuid' not in vm_properties:
+            logger.error('Virtual Machine %s has not vCenter uuid. Unable to update', vm_properties['name'])
+            return False
+        return True
