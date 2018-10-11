@@ -57,6 +57,28 @@ class AbstractChangeHandler(object):
     def _handle_change(self, obj, value):
         pass
 
+    def _has_vm_vcenter_uuid(self, vmware_vm):
+        vm_properties = self._vm_service.get_vm_vmware_properties(vmware_vm)
+        if 'config.instanceUuid' not in vm_properties:
+            logger.error('Virtual Machine %s has not vCenter uuid. Unable to update.', vm_properties['name'])
+            return False
+        return True
+
+    def _is_vm_in_database(self, name=None, uuid=None):
+        if name is not None:
+            vm_model = self._vm_service.get_vm_model_by_name(name)
+            if vm_model is None:
+                logger.error('Virtual Machine %s does not exist in CVM database. Unable to update', name)
+                return False
+            return True
+        if uuid is not None:
+            vm_model = self._vm_service.get_vm_model_by_uuid(uuid)
+            if vm_model is None:
+                logger.error('Virtual Machine %s does not exist in CVM database. Unable to update', uuid)
+                return False
+            return True
+        return False
+
 
 class AbstractEventHandler(AbstractChangeHandler):
     __metaclass__ = ABCMeta
@@ -73,6 +95,10 @@ class AbstractEventHandler(AbstractChangeHandler):
     @abstractmethod
     def _handle_event(self, event):
         pass
+
+    def _validate_event(self, event):
+        vmware_vm = event.vm.vm
+        return self._has_vm_vcenter_uuid(vmware_vm)
 
 
 class VmUpdatedHandler(AbstractEventHandler):
@@ -91,8 +117,10 @@ class VmUpdatedHandler(AbstractEventHandler):
         self._vrouter_port_service = vrouter_port_service
 
     def _handle_event(self, event):
-        vmware_vm = event.vm.vm
         try:
+            if not self._validate_event(event):
+                return
+            vmware_vm = event.vm.vm
             self._vm_service.update(vmware_vm)
             self._vn_service.update_vns()
             self._vmi_service.update_vmis()
@@ -111,8 +139,11 @@ class VmRegisteredHandler(AbstractEventHandler):
         self._vrouter_port_service = vrouter_port_service
 
     def _handle_event(self, event):
-        vmware_vm = event.vm.vm
         try:
+            logger.info('VmRegisteredEvent: %s', event)
+            if not self._validate_event(event):
+                return
+            vmware_vm = event.vm.vm
             self._vm_service.update(vmware_vm)
             self._vn_service.update_vns()
             self._vmi_service.register_vmis()
@@ -130,11 +161,18 @@ class VmRenamedHandler(AbstractEventHandler):
         self._vrouter_port_service = vrouter_port_service
 
     def _handle_event(self, event):
+        logger.info('VmRenamedEvent: %s', event)
+        if not self._validate_event(event):
+            return
         old_name = event.oldName
         new_name = event.newName
         self._vm_service.rename_vm(old_name, new_name)
         self._vmi_service.rename_vmis(new_name)
         self._vrouter_port_service.sync_ports()
+
+    def _validate_event(self, event):
+        old_name = event.oldName
+        return self._is_vm_in_database(name=old_name)
 
 
 class VmReconfiguredHandler(AbstractEventHandler):
@@ -147,6 +185,9 @@ class VmReconfiguredHandler(AbstractEventHandler):
         self._vrouter_port_service = vrouter_port_service
 
     def _handle_event(self, event):
+        logger.info('VmReconfiguredEvent: %s', event)
+        if not self._validate_event(event):
+            return
         vmware_vm = event.vm.vm
         for device_spec in event.configSpec.deviceChange:
             device = device_spec.device
@@ -159,6 +200,10 @@ class VmReconfiguredHandler(AbstractEventHandler):
             else:
                 logger.info('Detected VmReconfiguredEvent with unsupported %s device type', type(device))
 
+    def _validate_event(self, event):
+        vmware_vm = event.vm.vm
+        return self._has_vm_vcenter_uuid(vmware_vm) and self._is_vm_in_database(name=vmware_vm.name)
+
 
 class VmRemovedHandler(AbstractEventHandler):
     EVENTS = (vim.event.VmRemovedEvent,)
@@ -169,10 +214,16 @@ class VmRemovedHandler(AbstractEventHandler):
         self._vrouter_port_service = vrouter_port_service
 
     def _handle_event(self, event):
+        if not self._validate_event(event):
+            return
         vm_name = event.vm.name
         self._vmi_service.remove_vmis_for_vm_model(vm_name)
         self._vm_service.remove_vm(vm_name)
         self._vrouter_port_service.sync_ports()
+
+    def _validate_event(self, event):
+        vm_name = event.vm.name
+        return self._is_vm_in_database(name=vm_name)
 
 
 class GuestNetHandler(AbstractChangeHandler):
@@ -209,6 +260,10 @@ class PowerStateHandler(AbstractChangeHandler):
         self._vrouter_port_service = vrouter_port_service
 
     def _handle_change(self, obj, value):
-        logger.info('Detected power state change for VM: %s to %s', obj.name, value)
+        if not self._validate_vm(obj):
+            return
         self._vm_service.update_power_state(obj, value)
         self._vrouter_port_service.sync_port_states()
+
+    def _validate_vm(self, vmware_vm):
+        return self._is_vm_in_database(name=vmware_vm.name)
