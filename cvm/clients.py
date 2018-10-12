@@ -580,14 +580,17 @@ class VRouterAPIClient(object):
             logger.error('There was a problem with vRouter API Client: %s', e)
 
     def read_port(self, vmi_uuid):
-        request_url = '{host}:{port}/port/{uuid}'.format(host=self.vrouter_host,
-                                                         port=self.vrouter_port,
-                                                         uuid=vmi_uuid)
-        response = requests.get(request_url)
-        if response.status_code != requests.codes.ok:
-            logger.info('Unable to read vRouter port with uuid: %s', vmi_uuid)
-            return None
+        try:
+            request_url = '{host}:{port}/port/{uuid}'.format(host=self.vrouter_host,
+                                                             port=self.vrouter_port,
+                                                                     uuid=vmi_uuid)
+            response = requests.get(request_url)
+            if response.status_code != requests.codes.ok:
+                logger.info('Unable to read vRouter port with uuid: %s', vmi_uuid)
+                return None
 
-        port_properties = json.loads(response.content)
-        logger.info('Read vRouter port with uuid: %s, port properties: %s', vmi_uuid, port_properties)
-        return port_properties
+            port_properties = json.loads(response.content)
+            logger.info('Read vRouter port with uuid: %s, port properties: %s', vmi_uuid, port_properties)
+            return port_properties
+        except Exception, e:
+            logger.error('There was a problem with vRouter API Client: %s', e)
