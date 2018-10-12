@@ -552,42 +552,71 @@ class VRouterAPIClient(object):
                 # vrouter-port-control accepts only project's uuid without dashes
                 vm_project_id=vmi_model.vn_model.vnc_vn.parent_uuid.replace('-', ''),
             )
-            self.vrouter_api.add_port(**parameters)
-            logger.info('Added port to vRouter with parameters: %s', parameters)
+            success = self.vrouter_api.add_port(**parameters)
+            logger.info('Add port success: %s', str(success))
+            if success:
+                logger.info('Added port to vRouter with parameters: %s', parameters)
+            else:
+                logger.error('Unable to add port %s to vRouter', vmi_model.uuid)
+            return success
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
+            return False
 
     def delete_port(self, vmi_uuid):
         """ Delete port from VRouter Agent. """
+        request_url = '{host}:{port}/port/{uuid}'.format(host=self.vrouter_host,
+                                                         port=self.vrouter_port,
+                                                         uuid=vmi_uuid)
         try:
-            self.vrouter_api.delete_port(vmi_uuid)
+            response = requests.delete(request_url)
+            if response.status_code != requests.codes.ok:
+                logger.error('Unable to delete vRouter port with uuid: %s', vmi_uuid)
+                return False
             logger.info('Removed port from vRouter with uuid: %s', vmi_uuid)
+            return True
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
+            return False
 
     def enable_port(self, vmi_uuid):
         try:
-            self.vrouter_api.enable_port(vmi_uuid)
-            logger.info('Enabled vRouter port with uuid: %s', vmi_uuid)
+            success = self.vrouter_api.enable_port(vmi_uuid)
+            logger.info('enable port success: %s', str(success))
+            if success:
+                logger.info('Enabled vRouter port with uuid: %s', vmi_uuid)
+            else:
+                logger.error('Unable to enable port %s vRouter', vmi_uuid)
+            return success
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
+            return False
 
     def disable_port(self, vmi_uuid):
         try:
-            self.vrouter_api.disable_port(vmi_uuid)
-            logger.info('Disabled vRouter port with uuid: %s', vmi_uuid)
+            success = self.vrouter_api.disable_port(vmi_uuid)
+            logger.info('disable port success: %s', str(success))
+            if success:
+                logger.info('Disabled vRouter port with uuid: %s', vmi_uuid)
+            else:
+                logger.error('Unable to disable port %s to vRouter', vmi_uuid)
+            return success
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
+            return False
 
     def read_port(self, vmi_uuid):
         request_url = '{host}:{port}/port/{uuid}'.format(host=self.vrouter_host,
                                                          port=self.vrouter_port,
                                                          uuid=vmi_uuid)
-        response = requests.get(request_url)
-        if response.status_code != requests.codes.ok:
-            logger.info('Unable to read vRouter port with uuid: %s', vmi_uuid)
+        try:
+            response = requests.get(request_url)
+            if response.status_code != requests.codes.ok:
+                logger.error('Unable to read vRouter port with uuid: %s', vmi_uuid)
+                return None
+            port_properties = json.loads(response.content)
+            logger.info('Read vRouter port with uuid: %s, port properties: %s', vmi_uuid, port_properties)
+            return port_properties
+        except Exception, e:
+            logger.error('There was a problem with vRouter API Client: %s', e)
             return None
-
-        port_properties = json.loads(response.content)
-        logger.info('Read vRouter port with uuid: %s, port properties: %s', vmi_uuid, port_properties)
-        return port_properties
