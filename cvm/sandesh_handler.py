@@ -7,6 +7,8 @@ from cvm.sandesh.vcenter_manager.ttypes import (VirtualMachineData,
                                                 VirtualNetworkData,
                                                 VirtualNetworkRequest,
                                                 VirtualNetworkResponse)
+import logging
+logger = logging.getLogger(__name__)
 
 
 class SandeshHandler(object):
@@ -84,10 +86,12 @@ class SandeshConverter(object):
         )
 
     def convert_vmi(self, vmi_model):
+        logging.info("VMI: %s", vmi_model)
         if vmi_model.vnc_instance_ip is not None:
             ip_address = vmi_model.vnc_instance_ip.instance_ip_address
         else:
             ip_address = 'unset'
+        logging.info("Introspect ip address: %s", ip_address)
         return VirtualMachineInterfaceData(
             uuid=vmi_model.uuid,
             display_name=vmi_model.display_name,
