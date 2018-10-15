@@ -19,7 +19,7 @@ struct VirtualNetworkData {
 struct VirtualMachineData {
     1: string uuid;
     2: string name;
-    3: string vrouter_uuid;
+    3: string hostname;
     4: list<VirtualMachineInterfaceData> interfaces;
 }
 
