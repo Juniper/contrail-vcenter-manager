@@ -7,6 +7,7 @@ from uuid import uuid4
 import requests
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from pyVim.connect import Disconnect, SmartConnectNoSSL
+from pyVim.task import WaitForTask
 from vnc_api import vnc_api
 from vnc_api.exceptions import NoIdError, RefsExistError
 
@@ -280,20 +281,18 @@ def make_pg_config_vlan_override(portgroup):
 
 
 def wait_for_task(task, success_message, fault_message):
-    while task.info.state == 'running':
-        continue
-    if task.info.state == 'success':
+    state = WaitForTask(task)
+    if state == 'success':
         logger.info(success_message)
-    elif task.info.state == 'error':
-        logger.error(fault_message, task.info.error.msg)
     else:
-        logger.error('vCenter task in unknown state: %s', task.info.state)
+        logger.error(fault_message, task.info.error.msg)
 
 
 def get_vm_uuid_for_vmi(vnc_vmi):
     refs = vnc_vmi.get_virtual_machine_refs() or []
     if refs:
         return refs[0]['uuid']
+    return None
 
 
 class VNCAPIClient(object):
@@ -326,7 +325,7 @@ class VNCAPIClient(object):
         except NoIdError:
             logger.error('Virtual Machine %s not found in VNC. Unable to delete', uuid)
 
-    def update_or_create_vm(self, vnc_vm):
+    def update_vm(self, vnc_vm):
         try:
             logger.info('Attempting to update Virtual Machine %s in VNC', vnc_vm.name)
             self._update_vm(vnc_vm)
@@ -362,18 +361,26 @@ class VNCAPIClient(object):
         return self.vnc_lib.virtual_machine_interface_read(id=vnc_vmi.uuid)
 
     def _update_vmi_vn(self, old_vmi, new_vmi):
-        if old_vmi.get_instance_ip_back_refs():
-            logger.info('Deleting old Instance IP for Interface %s', new_vmi.name)
-            instance_ip_fq_name = old_vmi.get_instance_ip_back_refs()[0]['to']
-            self.vnc_lib.instance_ip_delete(instance_ip_fq_name)
+        new_vn_fq_name = self._get_vn_fq_name_for_vmi(new_vmi)
+        old_vn_fq_name = self._get_vn_fq_name_for_vmi(old_vmi)
+        if new_vn_fq_name == old_vn_fq_name:
+            logger.info('No network change detected.')
+            return
 
-        if new_vmi.get_virtual_network_refs():
-            vn_fq_name = new_vmi.get_virtual_network_refs()[0]['to']
-            logger.info('Updating Virtual Network of Interface %s to %s', new_vmi.name, vn_fq_name[2])
-            vnc_vn = self.read_vn(vn_fq_name)
-            old_vmi.set_virtual_network(vnc_vn)
+        logger.info('Network change detected. Updating Interface %s info in VNC.', new_vmi.name)
 
-    def _rename_vmi(self, old_vmi, new_vmi):
+        self._delete_instance_ip_of(old_vmi)
+        logger.info('Updating Virtual Network of Interface %s to %s', new_vmi.name, new_vn_fq_name[2])
+        vnc_vn = self.read_vn(new_vn_fq_name)
+        old_vmi.set_virtual_network(vnc_vn)
+
+    def _delete_instance_ip_of(self, vnc_vmi):
+        logger.info('Deleting old Instance IP for Interface %s', vnc_vmi.name)
+        instance_ip_fq_name = self._get_ip_fq_name_for_vmi(vnc_vmi)
+        self.vnc_lib.instance_ip_delete(instance_ip_fq_name)
+
+    @staticmethod
+    def _rename_vmi(old_vmi, new_vmi):
         old_vmi.set_display_name(new_vmi.display_name)
 
     def create_vmi(self, vnc_vmi):
@@ -395,27 +402,9 @@ class VNCAPIClient(object):
         self.vnc_lib.virtual_machine_interface_delete(id=uuid)
         logger.info('Virtual Machine Interface %s removed from VNC', uuid)
 
-    @classmethod
-    def _update_vrouter_uuid(cls, vnc_obj, vrouter_uuid):
-        new_annotations = vnc_api.KeyValuePairs()
-        annotations = vnc_obj.get_annotations() or vnc_api.KeyValuePairs()
-        for pair in annotations.key_value_pair:
-            if pair.key != 'vrouter-uuid':
-                new_annotations.add_key_value_pair(vnc_api.KeyValuePair(pair.key, pair.value))
-        new_annotations.add_key_value_pair(
-            vnc_api.KeyValuePair('vrouter-uuid', vrouter_uuid)
-        )
-        vnc_obj.annotations = new_annotations
-
     def get_vmis_by_project(self, project):
         vmis = self.vnc_lib.virtual_machine_interfaces_list(parent_id=project.uuid).get('virtual-machine-interfaces')
         return [self.vnc_lib.virtual_machine_interface_read(vmi['fq_name']) for vmi in vmis]
-
-    def get_vmis_for_vm(self, vm_model):
-        vmis = self.vnc_lib.virtual_machine_interfaces_list(
-            back_ref_id=vm_model.uuid
-        ).get('virtual-machine-interfaces')
-        return [self.read_vmi(vmi['uuid']) for vmi in vmis]
 
     def read_vmi(self, uuid):
         try:
@@ -428,8 +417,17 @@ class VNCAPIClient(object):
         vns = self.vnc_lib.virtual_networks_list(parent_id=project.uuid).get('virtual-networks')
         return [self.vnc_lib.virtual_network_read(vn['fq_name']) for vn in vns]
 
-    def get_vn_uuid_for_vmi(self, vnc_vmi):
-        return vnc_vmi.get_virtual_network_refs()[0]['uuid']
+    @staticmethod
+    def _get_vn_fq_name_for_vmi(vnc_vmi):
+        if vnc_vmi.get_virtual_network_refs():
+            return vnc_vmi.get_virtual_network_refs()[0]['to']
+        return None
+
+    @staticmethod
+    def _get_ip_fq_name_for_vmi(vnc_vmi):
+        if vnc_vmi.get_instance_ip_back_refs():
+            return vnc_vmi.get_instance_ip_back_refs()[0]['to']
+        return None
 
     def read_vn(self, fq_name):
         try:
@@ -490,14 +488,15 @@ class VNCAPIClient(object):
         logger.info('Network IPAM created: %s', ipam.name)
         return ipam
 
-    def create_and_read_instance_ip(self, instance_ip):
+    def create_and_read_instance_ip(self, vmi_model):
         try:
-            return self.read_instance_ip(instance_ip.uuid)
+            return self.read_instance_ip(vmi_model)
         except NoIdError:
             try:
+                instance_ip = vmi_model.vnc_instance_ip
                 self.vnc_lib.instance_ip_create(instance_ip)
-                logger.info("Created Instance IP: %s", instance_ip.name)
-                return self.read_instance_ip(instance_ip.uuid)
+                logger.info("Created Instance IP: %s with IP: %s", instance_ip.name, instance_ip.instance_ip_address)
+                return self.read_instance_ip(vmi_model)
             except Exception, e:
                 logger.error("Unable to create Instance IP: %s due to: %s", instance_ip.name, e)
 
@@ -507,8 +506,14 @@ class VNCAPIClient(object):
         except NoIdError:
             logger.error('Instance IP not found: %s', uuid)
 
-    def read_instance_ip(self, uuid):
-        return self.vnc_lib.instance_ip_read(id=uuid)
+    def read_instance_ip(self, vmi_model):
+        vmi_vnc = self.read_vmi(vmi_model.uuid)
+        if not vmi_vnc.get_instance_ip_back_refs():
+            return self.vnc_lib.instance_ip_read(id=vmi_model.vnc_instance_ip.uuid)
+        else:
+            ip_refs = vmi_vnc.get_instance_ip_back_refs()
+            ip_uuid = ip_refs[0]['uuid']
+            return self.vnc_lib.instance_ip_read(id=ip_uuid)
 
 
 def construct_ipam(project):
@@ -618,7 +623,7 @@ class VRouterAPIClient(object):
         try:
             request_url = '{host}:{port}/port/{uuid}'.format(host=self.vrouter_host,
                                                              port=self.vrouter_port,
-                                                                     uuid=vmi_uuid)
+                                                             uuid=vmi_uuid)
             response = requests.get(request_url)
             if response.status_code == requests.codes.ok:
                 port_properties = json.loads(response.content)
@@ -627,3 +632,4 @@ class VRouterAPIClient(object):
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
         logger.info('Unable to read vRouter port with uuid: %s', vmi_uuid)
+        return None
