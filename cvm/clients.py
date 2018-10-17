@@ -495,7 +495,7 @@ class VNCAPIClient(object):
             return self.read_instance_ip(instance_ip.uuid)
         except NoIdError:
             self.vnc_lib.instance_ip_create(instance_ip)
-            logger.info("Created Instance IP: %s", instance_ip.name)
+            logger.info("Created Instance IP: %s with IP: %s", instance_ip.name, instance_ip.instance_ip_address)
         return self.read_instance_ip(instance_ip.uuid)
 
     def delete_instance_ip(self, uuid):

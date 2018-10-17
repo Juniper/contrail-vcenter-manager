@@ -111,7 +111,9 @@ class VirtualMachineInterfaceService(Service):
     def _add_instance_ip_to(self, vmi_model):
         vmi_model.construct_instance_ip()
         if vmi_model.vnc_instance_ip:
+            logger.info('Try to read and create instance_ip for: VMI %s', vmi_model)
             instance_ip = self._vnc_api_client.create_and_read_instance_ip(vmi_model.vnc_instance_ip)
+            logger.info('Read  instance ip: %s with IP: %s', str(instance_ip), instance_ip.instance_ip_address)
             vmi_model.vnc_instance_ip = instance_ip
             vmi_model.update_ip_address(instance_ip.instance_ip_address)
 
@@ -138,13 +140,16 @@ class VirtualMachineInterfaceService(Service):
             pass
 
     def _update_ip_address(self, vmi_model, ip_address):
+        logger.info('VMI %s before IP update from guest.net with IP: %s', vmi_model, ip_address)
         if not isinstance(ipaddress.ip_address(ip_address.decode('utf-8')), ipaddress.IPv4Address):
             return
         if vmi_model.is_ip_address_changed(ip_address):
+            logger.info('Attempt to update %s to IP: %s', vmi_model.display_name, ip_address)
             vmi_model.update_ip_address(ip_address)
             self._add_instance_ip_to(vmi_model)
             logger.info('IP address of %s updated to %s',
                         vmi_model.display_name, vmi_model.vnc_instance_ip.instance_ip_address)
+        logger.info('VMI %s after IP update from guest.net with IP: %s', vmi_model, ip_address)
 
     def _delete(self, vmi_model):
         self._delete_from_vnc(vmi_model)
