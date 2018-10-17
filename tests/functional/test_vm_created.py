@@ -1,12 +1,9 @@
-from mock import patch
-
 from tests.utils import (assert_vm_model_state, assert_vmi_model_state,
                          assert_vnc_vm_state, assert_vnc_vmi_state,
                          reserve_vlan_ids)
 
 
-@patch('cvm.services.time.sleep', return_value=None)
-def test_vm_created(_, controller, database, vcenter_api_client, vnc_api_client, vrouter_api_client, vlan_id_pool,
+def test_vm_created(controller, database, vcenter_api_client, vnc_api_client, vrouter_api_client, vlan_id_pool,
                     vm_created_update, vnc_vn_1, vn_model_1):
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
@@ -21,8 +18,8 @@ def test_vm_created(_, controller, database, vcenter_api_client, vnc_api_client,
 
     # Check if VM Model has been saved properly:
     # - in VNC:
-    vnc_api_client.update_or_create_vm.assert_called_once()
-    vnc_vm = vnc_api_client.update_or_create_vm.call_args[0][0]
+    vnc_api_client.update_vm.assert_called_once()
+    vnc_vm = vnc_api_client.update_vm.call_args[0][0]
     assert_vnc_vm_state(vnc_vm, uuid='vmware-vm-uuid-1',
                         name='vmware-vm-uuid-1', owner='project-uuid')
 

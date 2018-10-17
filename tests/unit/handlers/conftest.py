@@ -4,7 +4,9 @@ from mock import Mock
 
 @pytest.fixture()
 def vm_service():
-    return Mock()
+    service = Mock()
+    service.wait_for_task_for_event.return_value = 'success'
+    return service
 
 
 @pytest.fixture()
