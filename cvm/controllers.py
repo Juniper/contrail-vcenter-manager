@@ -231,6 +231,7 @@ class GuestNetHandler(AbstractChangeHandler):
 
     def _handle_change(self, obj, value):
         for nic_info in value:
+            logger.info('Detected guest.net change: %s', nic_info)
             self._vmi_service.update_nic(nic_info)
         self._vrouter_port_service.sync_ports()
 
