@@ -25,9 +25,9 @@ def reserve_vlan_ids(vlan_id_pool, vlan_ids):
         vlan_id_pool.reserve(vlan_id)
 
 
-def assign_ip_to_instance_ip(instance_ip):
-    instance_ip.set_instance_ip_address('192.168.100.5')
-    return instance_ip
+def assign_ip_to_instance_ip(vmi_model):
+    vmi_model.vnc_instance_ip.set_instance_ip_address('192.168.100.5')
+    return vmi_model.vnc_instance_ip
 
 
 def wrap_into_update_set(event=None, change=None, obj=None):

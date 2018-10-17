@@ -79,12 +79,28 @@ def vnc_vm():
 
 
 @pytest.fixture()
-def vnc_vmi():
-    vmi = Mock(uuid='vmi-uuid')
-    vmi.get_virtual_network_refs.return_value = [{'to': ['domain', 'project', 'vnc-vn']}]
+def vnc_vmi_1():
+    vmi = Mock(uuid='vmi-uuid-1')
+    vmi.get_virtual_network_refs.return_value = [{'to': ['domain', 'project', 'vnc-vn-1']}]
     return vmi
 
 
 @pytest.fixture()
-def vnc_vn():
-    return Mock()
+def vnc_vmi_2():
+    vmi = Mock(uuid='vmi-uuid-2')
+    vmi.get_virtual_network_refs.return_value = [{'to': ['domain', 'project', 'vnc-vn-2']}]
+    return vmi
+
+
+@pytest.fixture()
+def vnc_vn_1():
+    vnc_vn = Mock()
+    vnc_vn.get_fq_name.return_value = ['domain', 'project', 'vnc-vn-1']
+    return vnc_vn
+
+
+@pytest.fixture()
+def vnc_vn_2():
+    vnc_vn = Mock()
+    vnc_vn.get_fq_name.return_value = ['domain', 'project', 'vnc-vn-2']
+    return vnc_vn
