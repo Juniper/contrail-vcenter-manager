@@ -57,7 +57,8 @@ class AbstractChangeHandler(object):
     def _handle_change(self, obj, value):
         pass
 
-    def _has_vm_vcenter_uuid(self, vmware_vm):
+    @staticmethod
+    def _has_vm_vcenter_uuid(vmware_vm):
         try:
             return vmware_vm.config.instanceUuid is not None
         except AttributeError:
@@ -86,7 +87,10 @@ class AbstractEventHandler(AbstractChangeHandler):
     def _handle_change(self, obj, value):
         if isinstance(value, self.EVENTS):
             logger.info('Detected event: %s', type(value))
-            self._handle_event(value)
+            if self._vm_service.wait_for_task_for_event(value) == 'success':
+                self._handle_event(value)
+            else:
+                logger.error('Task for event %s returned error. Unable to handle event.', type(value))
         if isinstance(value, list):
             for change in sorted(value, key=lambda e: e.key):
                 self._handle_change(obj, change)

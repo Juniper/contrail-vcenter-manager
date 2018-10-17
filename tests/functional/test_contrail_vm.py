@@ -9,7 +9,7 @@ def test_contrail_vm(controller, database, esxi_api_client, vnc_api_client, vrou
     assert not database.get_all_vm_models()
 
     # There were no calls to vnc_api
-    vnc_api_client.update_or_create_vm.assert_not_called()
+    vnc_api_client.update_vm.assert_not_called()
     vnc_api_client.update_vmi.assert_not_called()
 
     # There were no calls to vrouter_api

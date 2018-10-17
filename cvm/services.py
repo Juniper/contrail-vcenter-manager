@@ -1,6 +1,5 @@
 import ipaddress
 import logging
-import time
 
 from vnc_api.gen.resource_xsd import PermType2
 
@@ -23,6 +22,9 @@ class Service(object):
         self._ipam = self._vnc_api_client.read_or_create_ipam()
         if self._esxi_api_client:
             self._vrouter_uuid = esxi_api_client.read_vrouter_uuid()
+
+    def wait_for_task_for_event(self, event):
+        return self._esxi_api_client.wait_for_task_for_event(event)
 
 
 class VirtualMachineInterfaceService(Service):
@@ -97,8 +99,6 @@ class VirtualMachineInterfaceService(Service):
 
     def _assign_new_vlan_id(self, vmi_model):
         vmi_model.vcenter_port.vlan_id = self._vlan_id_pool.get_available()
-        # Purpose of this sleep is avoid to race in vmware code
-        time.sleep(3)
         self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
 
     def _add_default_vnc_info_to(self, vmi_model):
@@ -111,9 +111,11 @@ class VirtualMachineInterfaceService(Service):
     def _add_instance_ip_to(self, vmi_model):
         vmi_model.construct_instance_ip()
         if vmi_model.vnc_instance_ip:
-            instance_ip = self._vnc_api_client.create_and_read_instance_ip(vmi_model.vnc_instance_ip)
+            logger.info('Try to read and create instance_ip for: VMI %s', vmi_model)
+            instance_ip = self._vnc_api_client.create_and_read_instance_ip(vmi_model)
             if not instance_ip:
                 return
+            logger.info('Read instance ip: %s with IP: %s', str(instance_ip), instance_ip.instance_ip_address)
             vmi_model.vnc_instance_ip = instance_ip
             vmi_model.update_ip_address(instance_ip.instance_ip_address)
 
@@ -133,6 +135,11 @@ class VirtualMachineInterfaceService(Service):
 
     def update_nic(self, nic_info):
         vmi_model = self._database.get_vmi_model_by_uuid(VirtualMachineInterfaceModel.get_uuid(nic_info.macAddress))
+        if not vmi_model:
+            return
+        if not vmi_model.vn_model.vnc_vn.external_ipam:
+            return
+
         try:
             for ip_address in nic_info.ipAddress:
                 self._update_ip_address(vmi_model, ip_address)
@@ -143,10 +150,12 @@ class VirtualMachineInterfaceService(Service):
         if not isinstance(ipaddress.ip_address(ip_address.decode('utf-8')), ipaddress.IPv4Address):
             return
         if vmi_model.is_ip_address_changed(ip_address):
+            logger.info('Attempting to update %s IP address to: %s', vmi_model, ip_address)
             vmi_model.update_ip_address(ip_address)
             self._add_instance_ip_to(vmi_model)
             logger.info('IP address of %s updated to %s',
                         vmi_model.display_name, vmi_model.vnc_instance_ip.instance_ip_address)
+            logger.info('VMI %s after IP update from guest.net', vmi_model)
 
     def _delete(self, vmi_model):
         self._delete_from_vnc(vmi_model)
@@ -257,7 +266,7 @@ class VirtualMachineService(Service):
 
     def _update_in_vnc(self, vnc_vm):
         self._add_owner_to(vnc_vm)
-        self._vnc_api_client.update_or_create_vm(vnc_vm)
+        self._vnc_api_client.update_vm(vnc_vm)
 
     def _add_owner_to(self, vnc_vm):
         perms2 = PermType2()

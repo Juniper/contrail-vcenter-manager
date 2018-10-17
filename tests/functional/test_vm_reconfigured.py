@@ -1,11 +1,8 @@
-from mock import patch
-
 from tests.utils import (assert_vm_model_state, assert_vmi_model_state,
-                         assert_vnc_vmi_state, reserve_vlan_ids)
+                         reserve_vlan_ids)
 
 
-@patch('cvm.services.time.sleep', return_value=None)
-def test_vm_reconfigured(_, controller, database, vcenter_api_client, vnc_api_client, vrouter_api_client,
+def test_vm_reconfigured(controller, database, vcenter_api_client, vnc_api_client, vrouter_api_client,
                          vm_created_update, vm_reconfigured_update, vmware_vm_1, vn_model_1, vnc_vn_2, vn_model_2,
                          vlan_id_pool):
     # Virtual Networks are already created for us and after synchronization,
@@ -32,7 +29,7 @@ def test_vm_reconfigured(_, controller, database, vcenter_api_client, vnc_api_cl
     assert_vm_model_state(vm_model, has_ports={'mac-address': 'dvportgroup-2'})
 
     # Check that VM was not updated in VNC except VM create event
-    vnc_api_client.update_or_create_vm.assert_called_once()
+    vnc_api_client.update_vm.assert_called_once()
 
     # Check if VMI Model has been saved properly:
 
@@ -49,7 +46,7 @@ def test_vm_reconfigured(_, controller, database, vcenter_api_client, vnc_api_cl
     # Check if VMI Model's Instance IP has been updated in VNC:
     assert vnc_api_client.create_and_read_instance_ip.call_count == 2
     new_instance_ip = vmi_model.vnc_instance_ip
-    assert vnc_api_client.create_and_read_instance_ip.call_args[0][0] == new_instance_ip
+    assert vnc_api_client.create_and_read_instance_ip.call_args[0][0] == vmi_model
     assert vnc_vn_2.uuid in [ref['uuid'] for ref in new_instance_ip.get_virtual_network_refs()]
 
     # Check if VMI's vRouter Port has been updated:

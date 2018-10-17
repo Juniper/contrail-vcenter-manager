@@ -6,10 +6,11 @@ from cvm.clients import VCenterAPIClient
 def test_set_vlan_id(vcenter_api_client, dvs, vcenter_port):
     vcenter_port.vlan_id = 10
 
-    with patch('cvm.clients.SmartConnectNoSSL'):
-        with patch.object(VCenterAPIClient, '_get_dvswitch', return_value=dvs):
-            with vcenter_api_client:
-                vcenter_api_client.set_vlan_id(vcenter_port)
+    with patch('cvm.clients.wait_for_task', return_value=None):
+        with patch('cvm.clients.SmartConnectNoSSL'):
+            with patch.object(VCenterAPIClient, '_get_dvswitch', return_value=dvs):
+                with vcenter_api_client:
+                    vcenter_api_client.set_vlan_id(vcenter_port)
 
     dvs.ReconfigureDVPort_Task.assert_called_once()
     spec = dvs.ReconfigureDVPort_Task.call_args[1].get('port', [None])[0]
@@ -20,9 +21,10 @@ def test_set_vlan_id(vcenter_api_client, dvs, vcenter_port):
 
 
 def test_enable_vlan_override(vcenter_api_client, portgroup):
-    with patch('cvm.clients.SmartConnectNoSSL'):
-        with vcenter_api_client:
-            vcenter_api_client.enable_vlan_override(portgroup=portgroup)
+    with patch('cvm.clients.wait_for_task', return_value=None):
+        with patch('cvm.clients.SmartConnectNoSSL'):
+            with vcenter_api_client:
+                vcenter_api_client.enable_vlan_override(portgroup=portgroup)
 
     portgroup.ReconfigureDVPortgroup_Task.assert_called_once()
     config = portgroup.ReconfigureDVPortgroup_Task.call_args[0][0]
@@ -53,10 +55,11 @@ def test_get_vlan_id(vcenter_api_client, dvs, vcenter_port, dv_port):
 
 
 def test_restore_vlan_id(vcenter_api_client, dvs, vcenter_port):
-    with patch('cvm.clients.SmartConnectNoSSL'):
-        with patch.object(VCenterAPIClient, '_get_dvswitch', return_value=dvs):
-            with vcenter_api_client:
-                vcenter_api_client.restore_vlan_id(vcenter_port)
+    with patch('cvm.clients.wait_for_task', return_value=None):
+        with patch('cvm.clients.SmartConnectNoSSL'):
+            with patch.object(VCenterAPIClient, '_get_dvswitch', return_value=dvs):
+                with vcenter_api_client:
+                    vcenter_api_client.restore_vlan_id(vcenter_port)
 
     dvs.ReconfigureDVPort_Task.assert_called_once()
     spec = dvs.ReconfigureDVPort_Task.call_args[1].get('port', [None])[0]
@@ -102,17 +105,17 @@ def test_can_rename_vm(vcenter_api_client, vm_model, vmware_vm_1, host_2):
                 assert not vcenter_api_client.can_rename_vm(vm_model, 'VM-renamed')
 
 
-def test_can_remove_vmi(vcenter_api_client, vnc_vmi, vmware_vm_1):
-    vnc_vmi.get_virtual_machine_refs.return_value = [{'uuid': vmware_vm_1.config.instanceUuid}]
+def test_can_remove_vmi(vcenter_api_client, vnc_vmi_1, vmware_vm_1):
+    vnc_vmi_1.get_virtual_machine_refs.return_value = [{'uuid': vmware_vm_1.config.instanceUuid}]
     with patch('cvm.clients.SmartConnectNoSSL'):
         with vcenter_api_client:
             with patch.object(VCenterAPIClient, '_get_vm_by_uuid', return_value=vmware_vm_1):
-                assert not vcenter_api_client.can_remove_vmi(vnc_vmi)
+                assert not vcenter_api_client.can_remove_vmi(vnc_vmi_1)
 
     with patch('cvm.clients.SmartConnectNoSSL'):
         with vcenter_api_client:
             with patch.object(VCenterAPIClient, '_get_vm_by_uuid', return_value=None):
-                assert vcenter_api_client.can_remove_vmi(vnc_vmi)
+                assert vcenter_api_client.can_remove_vmi(vnc_vmi_1)
 
 
 def test_can_rename_vmi(vcenter_api_client, vmi_model, vmware_vm_1, host_2):
