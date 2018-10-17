@@ -116,6 +116,7 @@ def portgroup():
 @pytest.fixture()
 def vmware_vm_1(host_1):
     vmware_vm = Mock(spec=vim.VirtualMachine)
+    vmware_vm.configure_mock(name='VM1')
     vmware_vm.summary.runtime.host = host_1
     vmware_vm.config.instanceUuid = 'vmware-vm-uuid-1'
     backing = Mock(spec=vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo)
@@ -127,6 +128,7 @@ def vmware_vm_1(host_1):
 @pytest.fixture()
 def vmware_vm_1_updated():
     vmware_vm = Mock(spec=vim.VirtualMachine)
+    vmware_vm.configure_mock(name='VM1')
     vmware_vm.summary.runtime.host = host_1
     vmware_vm.config.instanceUuid = 'vmware-vm-uuid-1'
     backing = Mock(spec=vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo)

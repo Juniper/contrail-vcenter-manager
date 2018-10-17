@@ -1,7 +1,7 @@
 from mock import patch
 
 from tests.utils import (assert_vm_model_state, assert_vmi_model_state,
-                         assert_vnc_vmi_state, reserve_vlan_ids)
+                         reserve_vlan_ids)
 
 
 @patch('cvm.services.time.sleep', return_value=None)
@@ -32,7 +32,7 @@ def test_vm_reconfigured(_, controller, database, vcenter_api_client, vnc_api_cl
     assert_vm_model_state(vm_model, has_ports={'mac-address': 'dvportgroup-2'})
 
     # Check that VM was not updated in VNC except VM create event
-    vnc_api_client.update_or_create_vm.assert_called_once()
+    vnc_api_client.update_vm.assert_called_once()
 
     # Check if VMI Model has been saved properly:
 

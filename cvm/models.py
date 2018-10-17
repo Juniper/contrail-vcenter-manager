@@ -188,7 +188,7 @@ class VirtualMachineInterfaceModel(object):
         if not self._should_construct_instance_ip():
             return
 
-        logger.info('Constructing Instance IP for %s', self.display_name)
+        logger.info('Constructing Instance IP for %s with IP address %s', self.display_name, self._ip_address)
 
         instance_ip_name = 'ip-' + self.vn_model.name + '-' + self.vm_model.name
         instance_ip_uuid = self.construct_instance_ip_uuid(instance_ip_name)
@@ -198,14 +198,20 @@ class VirtualMachineInterfaceModel(object):
             display_name=instance_ip_name,
             id_perms=ID_PERMS,
         )
-
-        instance_ip.set_instance_ip_address(self._ip_address)
         instance_ip.set_uuid(instance_ip_uuid)
         instance_ip.set_virtual_network(self.vn_model.vnc_vn)
         instance_ip.set_virtual_machine_interface(self.vnc_vmi)
+
+        if self.vn_model.vnc_vn.get_external_ipam():
+            logger.info('VN %s uses external IPAM - setting IP address to: %s',
+                        self.vn_model.name, self._ip_address)
+            instance_ip.set_instance_ip_address(self._ip_address)
+
         self.vnc_instance_ip = instance_ip
 
     def _should_construct_instance_ip(self):
+        logger.info('Should contruct instance ip')
+        logger.info('%s %s %s', str(self.vn_model.subnet_info_is_set), str(self.ip_address), str(self.vn_model.has_external_ipam))
         return (self.vn_model.subnet_info_is_set
                 and (self.ip_address or not self.vn_model.has_external_ipam))
 
