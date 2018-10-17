@@ -148,6 +148,7 @@ def test_rename_vmis(vmi_service, database, vnc_api_client, vcenter_api_client, 
 
 
 def test_update_nic(vmi_service, database, vmi_model, nic_info):
+    vmi_model.vn_model.vnc_vn.external_ipam = True
     database.save(vmi_model)
 
     vmi_service.update_nic(nic_info)

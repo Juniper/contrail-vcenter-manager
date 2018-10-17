@@ -102,17 +102,17 @@ def test_can_rename_vm(vcenter_api_client, vm_model, vmware_vm_1, host_2):
                 assert not vcenter_api_client.can_rename_vm(vm_model, 'VM-renamed')
 
 
-def test_can_remove_vmi(vcenter_api_client, vnc_vmi, vmware_vm_1):
-    vnc_vmi.get_virtual_machine_refs.return_value = [{'uuid': vmware_vm_1.config.instanceUuid}]
+def test_can_remove_vmi(vcenter_api_client, vnc_vmi_1, vmware_vm_1):
+    vnc_vmi_1.get_virtual_machine_refs.return_value = [{'uuid': vmware_vm_1.config.instanceUuid}]
     with patch('cvm.clients.SmartConnectNoSSL'):
         with vcenter_api_client:
             with patch.object(VCenterAPIClient, '_get_vm_by_uuid', return_value=vmware_vm_1):
-                assert not vcenter_api_client.can_remove_vmi(vnc_vmi)
+                assert not vcenter_api_client.can_remove_vmi(vnc_vmi_1)
 
     with patch('cvm.clients.SmartConnectNoSSL'):
         with vcenter_api_client:
             with patch.object(VCenterAPIClient, '_get_vm_by_uuid', return_value=None):
-                assert vcenter_api_client.can_remove_vmi(vnc_vmi)
+                assert vcenter_api_client.can_remove_vmi(vnc_vmi_1)
 
 
 def test_can_rename_vmi(vcenter_api_client, vmi_model, vmware_vm_1, host_2):
