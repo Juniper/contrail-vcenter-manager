@@ -17,7 +17,7 @@ def test_update_new_vm(vm_service, database, vnc_api_client, vmware_vm_1):
         tools_running=True,
         is_powered_on=True,
     )
-    vnc_api_client.update_or_create_vm.assert_called_once()
+    vnc_api_client.update_vm.assert_called_once()
 
 
 def test_create_property_filter(vm_service, database, esxi_api_client, vmware_vm_1):
@@ -50,7 +50,7 @@ def test_update_existing_vm(vm_service, database, vnc_api_client, vmware_vm_1, v
     new_vm_model = database.get_vm_model_by_uuid('vmware-vm-uuid-1')
     assert new_vm_model is old_vm_model
     old_vm_model.update.assert_called_once_with(vmware_vm_1, vm_properties_1)
-    vnc_api_client.update_or_create_vm.assert_not_called()
+    vnc_api_client.update_vm.assert_not_called()
 
 
 def test_sync_vms(vm_service, database, esxi_api_client, vnc_api_client, vmware_vm_1):
@@ -65,7 +65,7 @@ def test_sync_vms(vm_service, database, esxi_api_client, vnc_api_client, vmware_
         uuid='vmware-vm-uuid-1',
         name='VM1',
     )
-    vnc_api_client.update_or_create_vm.assert_called_once()
+    vnc_api_client.update_vm.assert_called_once()
 
 
 def test_sync_no_vms(vm_service, database, esxi_api_client, vnc_api_client):
@@ -140,7 +140,7 @@ def test_rename_vm(vm_service, database, vcenter_api_client, vnc_api_client, vm_
     vm_service.rename_vm('VM1', 'VM1-renamed')
 
     assert vm_model.name == 'VM1-renamed'
-    vnc_api_client.update_or_create_vm.assert_called_once()
+    vnc_api_client.update_vm.assert_called_once()
 
 
 def test_rename_other_host(vm_service, database, vcenter_api_client, vnc_api_client, vm_model):
@@ -150,7 +150,7 @@ def test_rename_other_host(vm_service, database, vcenter_api_client, vnc_api_cli
     vm_service.rename_vm('VM1', 'VM1-renamed')
 
     assert vm_model.name == 'VM1-renamed'
-    vnc_api_client.update_or_create_vm.assert_not_called()
+    vnc_api_client.update_vm.assert_not_called()
 
 
 def test_update_power_state(vm_service, database, vm_model, vmi_model, vmware_vm_1):
@@ -176,5 +176,5 @@ def test_update_same_power_state(vm_service, database, vm_model, vmi_model, vmwa
 def test_set_vm_owner(vm_service, vnc_api_client, vmware_vm_1):
     vm_service.update(vmware_vm_1)
 
-    vnc_vm = vnc_api_client.update_or_create_vm.call_args[0][0]
+    vnc_vm = vnc_api_client.update_vm.call_args[0][0]
     assert vnc_vm.get_perms2().get_owner() == 'project-uuid'
