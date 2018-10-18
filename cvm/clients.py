@@ -494,9 +494,12 @@ class VNCAPIClient(object):
         try:
             return self.read_instance_ip(instance_ip.uuid)
         except NoIdError:
-            self.vnc_lib.instance_ip_create(instance_ip)
-            logger.info("Created Instance IP: %s", instance_ip.name)
-        return self.read_instance_ip(instance_ip.uuid)
+            try:
+                self.vnc_lib.instance_ip_create(instance_ip)
+                logger.info("Created Instance IP: %s", instance_ip.name)
+                return self.read_instance_ip(instance_ip.uuid)
+            except Exception, e:
+                logger.error("Unable to create Instance IP: %s due to: %s", instance_ip.name, e)
 
     def delete_instance_ip(self, uuid):
         try:

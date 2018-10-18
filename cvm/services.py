@@ -112,6 +112,8 @@ class VirtualMachineInterfaceService(Service):
         vmi_model.construct_instance_ip()
         if vmi_model.vnc_instance_ip:
             instance_ip = self._vnc_api_client.create_and_read_instance_ip(vmi_model.vnc_instance_ip)
+            if not instance_ip:
+                return
             vmi_model.vnc_instance_ip = instance_ip
             vmi_model.update_ip_address(instance_ip.instance_ip_address)
 
