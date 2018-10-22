@@ -5,9 +5,9 @@ import random
 from uuid import uuid4
 
 import requests
-from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from pyVim.connect import Disconnect, SmartConnectNoSSL
 from pyVim.task import WaitForTask
+from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 from vnc_api.exceptions import NoIdError, RefsExistError
 
@@ -25,6 +25,7 @@ class VSphereAPIClient(object):
     def __init__(self):
         self._si = None
         self._datacenter = None
+        self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
 
     def _get_object(self, vimtype, name):
         content = self._si.content
@@ -42,6 +43,12 @@ class VSphereAPIClient(object):
         except (IndexError, vmodl.fault.ManagedObjectNotFound):
             return None
 
+    def make_wait_options(self, max_wait_seconds=None, max_object_updates=None):
+        if max_object_updates is not None:
+            self._wait_options.maxObjectUpdates = max_object_updates
+        if max_wait_seconds is not None:
+            self._wait_options.maxWaitSeconds = max_wait_seconds
+
 
 class ESXiAPIClient(VSphereAPIClient):
     _version = ''
@@ -58,7 +65,6 @@ class ESXiAPIClient(VSphereAPIClient):
         self._datacenter = self._si.content.rootFolder.childEntity[0]
         atexit.register(Disconnect, self._si)
         self._property_collector = self._si.content.propertyCollector
-        self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
 
     def get_all_vms(self):
         return self._datacenter.vmFolder.childEntity
@@ -77,12 +83,6 @@ class ESXiAPIClient(VSphereAPIClient):
     def add_filter(self, obj, filters):
         filter_spec = make_filter_spec(obj, filters)
         return self._property_collector.CreateFilter(filter_spec, True)
-
-    def make_wait_options(self, max_wait_seconds=None, max_object_updates=None):
-        if max_object_updates is not None:
-            self._wait_options.maxObjectUpdates = max_object_updates
-        if max_wait_seconds is not None:
-            self._wait_options.maxWaitSeconds = max_wait_seconds
 
     def wait_for_updates(self):
         update_set = self._property_collector.WaitForUpdatesEx(self._version, self._wait_options)
@@ -142,6 +142,7 @@ class VCenterAPIClient(VSphereAPIClient):
         )
         self._datacenter = self._get_datacenter(self._vcenter_cfg.get('datacenter'))
         self._dvs = self._get_dvswitch(self._vcenter_cfg.get('dvswitch'))
+        self._property_collector = self._si.content.propertyCollector
 
     def __exit__(self, *args):
         Disconnect(self._si)
@@ -164,10 +165,23 @@ class VCenterAPIClient(VSphereAPIClient):
             return
         logger.info('Setting vCenter VLAN ID of port %s to %d', vcenter_port.port_key, vcenter_port.vlan_id)
         dv_port_spec = make_dv_port_spec(dv_port, vcenter_port.vlan_id)
-        task = self._dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
+        self._set_vlan_id_retry(vcenter_port, dv_port_spec)
+
+    def _set_vlan_id_retry(self, vcenter_port, dv_port_spec):
         success_message = 'Successfully set VLAN ID: %d for port: %s' % (vcenter_port.vlan_id, vcenter_port.port_key)
         fault_message = 'Failed to set VLAN ID: %d for port: %s' % (vcenter_port.vlan_id, vcenter_port.port_key)
-        wait_for_task(task, success_message, fault_message)
+        for i in range(3):
+            if i != 0:
+                logger.error('Task failed to complete, retrying...')
+            task = self._dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
+            try:
+                state = wait_for_task(task, success_message, fault_message, self._property_collector)
+                if state == 'success':
+                    return
+            except Exception as e:
+                logger.error(e.message)
+            task.CancelTask()
+        logger.error('Unable to finish the task.')
 
     def get_vlan_id(self, vcenter_port):
         logger.info('Reading VLAN ID of port %s', vcenter_port.port_key)
@@ -280,12 +294,13 @@ def make_pg_config_vlan_override(portgroup):
     return pg_config_spec
 
 
-def wait_for_task(task, success_message, fault_message):
-    state = WaitForTask(task)
+def wait_for_task(task, success_message, fault_message, pc=None):
+    state = WaitForTask(task=task, pc=pc)
     if state == 'success':
         logger.info(success_message)
     else:
         logger.error(fault_message, task.info.error.msg)
+    return state
 
 
 def get_vm_uuid_for_vmi(vnc_vmi):
@@ -489,16 +504,16 @@ class VNCAPIClient(object):
         return ipam
 
     def create_and_read_instance_ip(self, vmi_model):
+        instance_ip = self._read_instance_ip(vmi_model)
+        if instance_ip:
+            return instance_ip
         try:
-            return self.read_instance_ip(vmi_model)
-        except NoIdError:
-            try:
-                instance_ip = vmi_model.vnc_instance_ip
-                self.vnc_lib.instance_ip_create(instance_ip)
-                logger.info("Created Instance IP: %s with IP: %s", instance_ip.name, instance_ip.instance_ip_address)
-                return self.read_instance_ip(vmi_model)
-            except Exception, e:
-                logger.error("Unable to create Instance IP: %s due to: %s", instance_ip.name, e)
+            instance_ip = vmi_model.vnc_instance_ip
+            self.vnc_lib.instance_ip_create(instance_ip)
+            logger.info("Created Instance IP: %s with IP: %s", instance_ip.name, instance_ip.instance_ip_address)
+            return self._read_instance_ip(vmi_model)
+        except Exception, e:
+            logger.error("Unable to create Instance IP: %s due to: %s", instance_ip.name, e)
 
     def delete_instance_ip(self, uuid):
         try:
@@ -506,14 +521,16 @@ class VNCAPIClient(object):
         except NoIdError:
             logger.error('Instance IP not found: %s', uuid)
 
-    def read_instance_ip(self, vmi_model):
+    def _read_instance_ip(self, vmi_model):
         vmi_vnc = self.read_vmi(vmi_model.uuid)
-        if not vmi_vnc.get_instance_ip_back_refs():
-            return self.vnc_lib.instance_ip_read(id=vmi_model.vnc_instance_ip.uuid)
-        else:
-            ip_refs = vmi_vnc.get_instance_ip_back_refs()
-            ip_uuid = ip_refs[0]['uuid']
+        ip_back_refs = vmi_vnc.get_instance_ip_back_refs()
+        if not ip_back_refs:
+            return None
+        ip_uuid = ip_back_refs[0]['uuid']
+        try:
             return self.vnc_lib.instance_ip_read(id=ip_uuid)
+        except NoIdError:
+            return None
 
 
 def construct_ipam(project):

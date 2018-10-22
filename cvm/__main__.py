@@ -60,6 +60,7 @@ def build_monitor(config, lock, database):
     esxi_api_client.wait_for_updates()
 
     vcenter_api_client = VCenterAPIClient(vcenter_cfg)
+    vcenter_api_client.make_wait_options(30)
 
     vnc_api_client = VNCAPIClient(vnc_cfg)
 
