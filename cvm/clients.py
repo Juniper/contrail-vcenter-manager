@@ -2,6 +2,7 @@ import atexit
 import json
 import logging
 import random
+import time
 from uuid import uuid4
 
 import requests
@@ -17,6 +18,7 @@ from cvm.constants import (VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_PROJECT)
 from cvm.models import find_vrouter_uuid
 
+MAX_ATTEMPTS = 10
 logger = logging.getLogger(__name__)
 
 
@@ -38,7 +40,7 @@ class VSphereAPIClient(object):
         container = content.viewManager.CreateContainerView(content.rootFolder, [vim.VirtualMachine], True)
         try:
             return [vm for vm in container.view if vm.config.instanceUuid == uuid][0]
-        except IndexError:
+        except (IndexError, vmodl.fault.ManagedObjectNotFound):
             return None
 
 
@@ -101,6 +103,21 @@ class ESXiAPIClient(VSphereAPIClient):
     def read_vrouter_uuid(self):
         host = self._datacenter.hostFolder.childEntity[0].host[0]
         return find_vrouter_uuid(host)
+
+    def _is_vm_on_is_host(self, vm_uuid):
+        if self._get_vm_by_uuid(vm_uuid) is None:
+            return False
+        return True
+
+    def wait_for_vm_removed(self, vm_uuid):
+        attempts = 0
+        while self._is_vm_on_is_host(vm_uuid):
+            attempts += 1
+            if attempts > MAX_ATTEMPTS:
+                logger.error('Timeout in wait for VM %s being removed', vm_uuid)
+            logger.info('Take a sleep for waiting VM %s being removed', vm_uuid)
+            time.sleep(5)
+        logger.info('Removed VM %s from ESXi host', vm_uuid)
 
 
 def make_prop_set(obj, filters):

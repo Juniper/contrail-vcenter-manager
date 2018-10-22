@@ -279,6 +279,10 @@ class VirtualMachineService(Service):
                     logger.info('Deleting %s from VNC', vnc_vm.name)
                     self._vnc_api_client.delete_vm(vnc_vm.uuid)
 
+    def wait_for_vm_removed_from_host(self, vm_name):
+        vm_model = self._database.get_vm_model_by_name(vm_name)
+        self._esxi_api_client.wait_for_vm_removed(vm_model.uuid)
+
     def remove_vm(self, name):
         vm_model = self._database.get_vm_model_by_name(name)
         logger.info('Deleting %s', vm_model)

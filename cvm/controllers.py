@@ -213,6 +213,7 @@ class VmRemovedHandler(AbstractEventHandler):
         if not self._validate_event(event):
             return
         vm_name = event.vm.name
+        self._vm_service.wait_for_vm_removed_from_host(vm_name)
         self._vmi_service.remove_vmis_for_vm_model(vm_name)
         self._vm_service.remove_vm(vm_name)
         self._vrouter_port_service.sync_ports()
