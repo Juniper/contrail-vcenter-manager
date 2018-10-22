@@ -25,6 +25,7 @@ class VSphereAPIClient(object):
     def __init__(self):
         self._si = None
         self._datacenter = None
+        self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
 
     def _get_object(self, vimtype, name):
         content = self._si.content
@@ -42,6 +43,12 @@ class VSphereAPIClient(object):
         except IndexError:
             return None
 
+    def make_wait_options(self, max_wait_seconds=None, max_object_updates=None):
+        if max_object_updates is not None:
+            self._wait_options.maxObjectUpdates = max_object_updates
+        if max_wait_seconds is not None:
+            self._wait_options.maxWaitSeconds = max_wait_seconds
+
 
 class ESXiAPIClient(VSphereAPIClient):
     _version = ''
@@ -58,7 +65,6 @@ class ESXiAPIClient(VSphereAPIClient):
         self._datacenter = self._si.content.rootFolder.childEntity[0]
         atexit.register(Disconnect, self._si)
         self._property_collector = self._si.content.propertyCollector
-        self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
 
     def get_all_vms(self):
         return self._datacenter.vmFolder.childEntity
@@ -77,12 +83,6 @@ class ESXiAPIClient(VSphereAPIClient):
     def add_filter(self, obj, filters):
         filter_spec = make_filter_spec(obj, filters)
         return self._property_collector.CreateFilter(filter_spec, True)
-
-    def make_wait_options(self, max_wait_seconds=None, max_object_updates=None):
-        if max_object_updates is not None:
-            self._wait_options.maxObjectUpdates = max_object_updates
-        if max_wait_seconds is not None:
-            self._wait_options.maxWaitSeconds = max_wait_seconds
 
     def wait_for_updates(self):
         update_set = self._property_collector.WaitForUpdatesEx(self._version, self._wait_options)
@@ -142,6 +142,7 @@ class VCenterAPIClient(VSphereAPIClient):
         )
         self._datacenter = self._get_datacenter(self._vcenter_cfg.get('datacenter'))
         self._dvs = self._get_dvswitch(self._vcenter_cfg.get('dvswitch'))
+        self._property_collector = self._si.content.propertyCollector
 
     def __exit__(self, *args):
         Disconnect(self._si)
@@ -167,7 +168,7 @@ class VCenterAPIClient(VSphereAPIClient):
         task = self._dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
         success_message = 'Successfully set VLAN ID: %d for port: %s' % (vcenter_port.vlan_id, vcenter_port.port_key)
         fault_message = 'Failed to set VLAN ID: %d for port: %s' % (vcenter_port.vlan_id, vcenter_port.port_key)
-        wait_for_task(task, success_message, fault_message)
+        wait_for_task(task, success_message, fault_message, self._property_collector)
 
     def get_vlan_id(self, vcenter_port):
         logger.info('Reading VLAN ID of port %s', vcenter_port.port_key)
@@ -280,12 +281,20 @@ def make_pg_config_vlan_override(portgroup):
     return pg_config_spec
 
 
-def wait_for_task(task, success_message, fault_message):
-    state = WaitForTask(task)
-    if state == 'success':
-        logger.info(success_message)
-    else:
-        logger.error(fault_message, task.info.error.msg)
+def wait_for_task(task, success_message, fault_message, pc=None):
+    for _ in range(3):
+        try:
+            state = WaitForTask(task=task, pc=pc)
+            if state == 'success':
+                logger.info(success_message)
+                return
+            else:
+                logger.error(fault_message, task.info.error.msg)
+                return
+        except Exception as e:
+            logger.error(e.message)
+            logger.error('Task raised an exception, retrying...')
+    logger.error('Unable to finish the task.')
 
 
 def get_vm_uuid_for_vmi(vnc_vmi):
