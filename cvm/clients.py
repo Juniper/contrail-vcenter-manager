@@ -17,6 +17,7 @@ from cvm.constants import (VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_PROJECT)
 from cvm.models import find_vrouter_uuid
 
+MAX_ATTEMPTS = 10
 logger = logging.getLogger(__name__)
 
 
@@ -38,7 +39,7 @@ class VSphereAPIClient(object):
         container = content.viewManager.CreateContainerView(content.rootFolder, [vim.VirtualMachine], True)
         try:
             return [vm for vm in container.view if vm.config.instanceUuid == uuid][0]
-        except IndexError:
+        except (IndexError, vmodl.fault.ManagedObjectNotFound):
             return None
 
 
