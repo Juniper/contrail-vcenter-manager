@@ -6,7 +6,7 @@ from cvm.clients import VCenterAPIClient
 def test_set_vlan_id(vcenter_api_client, dvs, vcenter_port):
     vcenter_port.vlan_id = 10
 
-    with patch('cvm.clients.wait_for_task'):
+    with patch('cvm.clients.wait_for_task', return_value='success'):
         with patch('cvm.clients.SmartConnectNoSSL'):
             with patch.object(VCenterAPIClient, '_get_dvswitch', return_value=dvs):
                 with vcenter_api_client:
