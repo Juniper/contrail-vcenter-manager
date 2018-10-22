@@ -1,4 +1,5 @@
 import logging
+import time
 from abc import ABCMeta, abstractmethod
 
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
@@ -213,6 +214,8 @@ class VmRemovedHandler(AbstractEventHandler):
         if not self._validate_event(event):
             return
         vm_name = event.vm.name
+        # Sleep needed for vCenter to remove VM
+        time.sleep(5)
         self._vmi_service.remove_vmis_for_vm_model(vm_name)
         self._vm_service.remove_vm(vm_name)
         self._vrouter_port_service.sync_ports()
