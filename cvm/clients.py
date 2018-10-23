@@ -489,16 +489,16 @@ class VNCAPIClient(object):
         return ipam
 
     def create_and_read_instance_ip(self, vmi_model):
+        instance_ip = self._read_instance_ip(vmi_model)
+        if instance_ip:
+            return instance_ip
         try:
-            return self.read_instance_ip(vmi_model)
-        except NoIdError:
-            try:
-                instance_ip = vmi_model.vnc_instance_ip
-                self.vnc_lib.instance_ip_create(instance_ip)
-                logger.info("Created Instance IP: %s with IP: %s", instance_ip.name, instance_ip.instance_ip_address)
-                return self.read_instance_ip(vmi_model)
-            except Exception, e:
-                logger.error("Unable to create Instance IP: %s due to: %s", instance_ip.name, e)
+            instance_ip = vmi_model.vnc_instance_ip
+            self.vnc_lib.instance_ip_create(instance_ip)
+            logger.info("Created Instance IP: %s with IP: %s", instance_ip.name, instance_ip.instance_ip_address)
+            return self._read_instance_ip(vmi_model)
+        except Exception, e:
+            logger.error("Unable to create Instance IP: %s due to: %s", instance_ip.name, e)
 
     def delete_instance_ip(self, uuid):
         try:
@@ -506,14 +506,16 @@ class VNCAPIClient(object):
         except NoIdError:
             logger.error('Instance IP not found: %s', uuid)
 
-    def read_instance_ip(self, vmi_model):
+    def _read_instance_ip(self, vmi_model):
         vmi_vnc = self.read_vmi(vmi_model.uuid)
-        if not vmi_vnc.get_instance_ip_back_refs():
-            return self.vnc_lib.instance_ip_read(id=vmi_model.vnc_instance_ip.uuid)
-        else:
-            ip_refs = vmi_vnc.get_instance_ip_back_refs()
-            ip_uuid = ip_refs[0]['uuid']
+        ip_back_refs = vmi_vnc.get_instance_ip_back_refs()
+        if not ip_back_refs:
+            return None
+        ip_uuid = ip_back_refs[0]['uuid']
+        try:
             return self.vnc_lib.instance_ip_read(id=ip_uuid)
+        except NoIdError:
+            return None
 
 
 def construct_ipam(project):
