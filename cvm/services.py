@@ -98,7 +98,7 @@ class VirtualMachineInterfaceService(Service):
     def _assign_new_vlan_id(self, vmi_model):
         vmi_model.vcenter_port.vlan_id = self._vlan_id_pool.get_available()
         # Purpose of this sleep is avoid to race in vmware code
-        time.sleep(3)
+        time.sleep(1)
         self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
 
     def _add_default_vnc_info_to(self, vmi_model):
