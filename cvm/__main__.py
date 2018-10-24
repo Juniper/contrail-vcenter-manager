@@ -30,7 +30,7 @@ from cvm.monitors import VMwareMonitor
 from cvm.sandesh_handler import SandeshHandler
 from cvm.services import (VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService,
-                          VRouterPortService)
+                          VRouterPortService, TaskService)
 
 gevent.monkey.patch_all()
 
@@ -87,12 +87,15 @@ def build_monitor(config, lock, database):
         vrouter_api_client=VRouterAPIClient(),
         database=database
     )
+
+    task_service = TaskService(esxi_api_client=esxi_api_client)
+
     vm_updated_handler = VmUpdatedHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
     vm_renamed_handler = VmRenamedHandler(vm_service, vmi_service, vrouter_port_service)
     vm_reconfigured_handler = VmReconfiguredHandler(vm_service, vn_service,
                                                     vmi_service, vrouter_port_service)
     vm_removed_handler = VmRemovedHandler(vm_service, vmi_service, vrouter_port_service)
-    vm_registered_handler = VmRegisteredHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
+    vm_registered_handler = VmRegisteredHandler(vm_service, vn_service, vmi_service, vrouter_port_service, task_service)
     guest_net_handler = GuestNetHandler(vmi_service, vrouter_port_service)
     vmware_tools_status_handler = VmwareToolsStatusHandler(vm_service)
     power_state_handler = PowerStateHandler(vm_service, vrouter_port_service)

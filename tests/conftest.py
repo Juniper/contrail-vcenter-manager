@@ -15,7 +15,7 @@ from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel, VlanIdPool)
 from cvm.services import (VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService,
-                          VRouterPortService)
+                          VRouterPortService, TaskService)
 from tests.utils import assign_ip_to_instance_ip, wrap_into_update_set
 
 
@@ -207,10 +207,15 @@ def vm_created_update(vmware_vm_1):
 
 
 @pytest.fixture()
-def vm_registered_update(vmware_vm_1):
+def vm_registered_event(vmware_vm_1):
     event = Mock(spec=vim.event.VmRegisteredEvent())
     event.vm.vm = vmware_vm_1
-    return wrap_into_update_set(event=event)
+    return event
+
+
+@pytest.fixture()
+def vm_registered_update(vm_registered_event):
+    return wrap_into_update_set(event=vm_registered_event)
 
 
 @pytest.fixture()
@@ -240,6 +245,17 @@ def vm_reconfigured_update(vmware_vm_1):
     device_spec = Mock(spec=vim.vm.device.VirtualDeviceSpec(), device=device)
     event.configSpec.deviceChange = [device_spec]
     return wrap_into_update_set(event=event)
+
+
+@pytest.fixture()
+def vm_register_task_info(vmware_vm_1):
+    task_info = Mock(spec=vim.TaskInfo())
+    task_info.result = vmware_vm_1
+    task_info.state = 'running'
+    task_info.configure_mock(name='vim.Folder.registerVm')
+    task = Mock(info=task_info)
+    task_info.task = task
+    return task_info
 
 
 @pytest.fixture()
@@ -288,10 +304,12 @@ def vcenter_api_client():
 
 
 @pytest.fixture()
-def esxi_api_client(vm_properties_1):
+def esxi_api_client(vm_properties_1, vm_register_task_info):
     esxi_client = Mock()
     esxi_client.read_vrouter_uuid.return_value = 'vrouter-uuid-1'
     esxi_client.read_vm_properties.return_value = vm_properties_1
+    esxi_client.find_task.return_value = vm_register_task_info
+    esxi_client.is_task_finished.return_value = True
     return esxi_client
 
 
@@ -380,6 +398,11 @@ def vrouter_port_service(vrouter_api_client, database):
 
 
 @pytest.fixture()
+def task_service(esxi_api_client):
+    return TaskService(esxi_api_client)
+
+
+@pytest.fixture()
 def database():
     return Database()
 
@@ -390,13 +413,13 @@ def vrouter_api_client():
 
 
 @pytest.fixture()
-def controller(vm_service, vn_service, vmi_service, vrouter_port_service, lock):
+def controller(vm_service, vn_service, vmi_service, vrouter_port_service, task_service, lock):
     handlers = [
         VmUpdatedHandler(vm_service, vn_service, vmi_service, vrouter_port_service),
         VmRenamedHandler(vm_service, vmi_service, vrouter_port_service),
         VmReconfiguredHandler(vm_service, vn_service, vmi_service, vrouter_port_service),
         VmRemovedHandler(vm_service, vmi_service, vrouter_port_service),
-        VmRegisteredHandler(vm_service, vn_service, vmi_service, vrouter_port_service),
+        VmRegisteredHandler(vm_service, vn_service, vmi_service, vrouter_port_service, task_service),
         GuestNetHandler(vmi_service, vrouter_port_service),
         PowerStateHandler(vm_service, vrouter_port_service),
         VmwareToolsStatusHandler(vm_service)

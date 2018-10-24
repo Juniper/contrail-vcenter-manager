@@ -59,6 +59,7 @@ class ESXiAPIClient(VSphereAPIClient):
         atexit.register(Disconnect, self._si)
         self._property_collector = self._si.content.propertyCollector
         self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
+        self._task_collector = self._si.content.taskManager.CreateCollectorForTasks()
 
     def get_all_vms(self):
         return self._datacenter.vmFolder.childEntity
@@ -102,6 +103,20 @@ class ESXiAPIClient(VSphereAPIClient):
     def read_vrouter_uuid(self):
         host = self._datacenter.hostFolder.childEntity[0].host[0]
         return find_vrouter_uuid(host)
+
+    def find_task(self, vmware_vm, type_of_task):
+        running_tasks = [task_info for task_info in self._task_collector.latestPage
+                         if task_info.state == 'running']
+        vm_tasks = (task_info for task_info in running_tasks
+                    if task_info.result == vmware_vm and task_info.name == type_of_task)
+        try:
+            return next(vm_tasks).task
+        except StopIteration:
+            return None
+
+    @staticmethod
+    def is_task_finished(task):
+        return WaitForTask(task) == 'success'
 
 
 def make_prop_set(obj, filters):
