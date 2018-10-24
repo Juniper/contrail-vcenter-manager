@@ -132,17 +132,19 @@ class VmUpdatedHandler(AbstractEventHandler):
 class VmRegisteredHandler(AbstractEventHandler):
     EVENTS = (vim.event.VmRegisteredEvent,)
 
-    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service):
+    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service, task_service):
         self._vm_service = vm_service
         self._vn_service = vn_service
         self._vmi_service = vmi_service
         self._vrouter_port_service = vrouter_port_service
+        self._task_service = task_service
 
     def _handle_event(self, event):
         try:
             if not self._validate_event(event):
                 return
             vmware_vm = event.vm.vm
+            self._task_service.wait_for_task(event, 'vim.Folder.registerVm')
             self._vm_service.update(vmware_vm)
             self._vn_service.update_vns()
             self._vmi_service.register_vmis()
