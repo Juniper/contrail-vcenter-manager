@@ -98,7 +98,7 @@ class VirtualMachineInterfaceService(Service):
     def _assign_new_vlan_id(self, vmi_model):
         vmi_model.vcenter_port.vlan_id = self._vlan_id_pool.get_available()
         # Purpose of this sleep is avoid to race in vmware code
-        time.sleep(3)
+        # time.sleep(3)
         self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
 
     def _add_default_vnc_info_to(self, vmi_model):
@@ -433,3 +433,16 @@ class VRouterPortService(object):
             self._vrouter_api_client.enable_port(vmi_model.uuid)
         else:
             self._vrouter_api_client.disable_port(vmi_model.uuid)
+
+
+class TaskService(object):
+    def __init__(self, esxi_api_client):
+        self._esxi_api_client = esxi_api_client
+
+    def wait_for_task(self, event, type_of_task):
+        vmware_vm = event.vm.vm
+        task = self._esxi_api_client.find_task(vmware_vm, type_of_task)
+        if task:
+            logger.info('Waiting for task %s to complete...', task.info.name)
+            return self._esxi_api_client.is_task_finished(task)
+        return None
