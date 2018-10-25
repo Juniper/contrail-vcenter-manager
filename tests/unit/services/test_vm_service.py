@@ -163,6 +163,17 @@ def test_update_power_state(vm_service, database, vm_model, vmi_model, vmware_vm
     assert vmi_model in database.ports_to_update
 
 
+def test_update_vlan_on_power_on(vm_service, database, vm_model, vmi_model, vmware_vm_1):
+    vm_model.vmi_models = [vmi_model]
+    vm_model.update_power_state('poweredOff')
+    database.save(vm_model)
+
+    vm_service.update_power_state(vmware_vm_1, 'poweredOn')
+
+    assert vm_model.is_powered_on is True
+    assert vmi_model in database.vlans_to_update
+
+
 def test_update_same_power_state(vm_service, database, vm_model, vmi_model, vmware_vm_1):
     vm_model.vmi_models = [vmi_model]
     database.save(vm_model)
@@ -171,6 +182,7 @@ def test_update_same_power_state(vm_service, database, vm_model, vmi_model, vmwa
 
     assert vm_model.is_powered_on is True
     assert vmi_model not in database.ports_to_update
+    assert vmi_model not in database.vlans_to_update
 
 
 def test_set_vm_owner(vm_service, vnc_api_client, vmware_vm_1):
