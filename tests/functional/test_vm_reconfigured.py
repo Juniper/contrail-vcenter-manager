@@ -4,7 +4,7 @@ from tests.utils import (assert_vm_model_state, assert_vmi_model_state,
                          reserve_vlan_ids)
 
 
-@patch('cvm.services.time.sleep', return_value=None)
+@patch('cvm.services.wait_for_port')
 def test_vm_reconfigured(_, controller, database, vcenter_api_client, vnc_api_client, vrouter_api_client,
                          vm_created_update, vm_reconfigured_update, vmware_vm_1, vn_model_1, vnc_vn_2, vn_model_2,
                          vlan_id_pool):
