@@ -25,6 +25,21 @@ class Service(object):
             self._vrouter_uuid = esxi_api_client.read_vrouter_uuid()
 
 
+def wait_for_port(vmi_model):
+    logger.info('Waiting for port %s to be ready...', vmi_model.vcenter_port.port_key)
+    ready = False
+    while not ready:
+        try:
+            device = next(device for device
+                          in vmi_model.vm_model.vmware_vm.config.hardware.device
+                          if device.key == vmi_model.vcenter_port.device.key)
+            ready = device.connectable.connected
+        except StopIteration:
+            pass
+        logger.info('DVPort still not ready...')
+    logger.info('DVPort %s is ready.', vmi_model.vcenter_port.port_key)
+
+
 class VirtualMachineInterfaceService(Service):
     def __init__(self, vcenter_api_client, vnc_api_client, database,
                  esxi_api_client=None, vlan_id_pool=None):
@@ -98,7 +113,10 @@ class VirtualMachineInterfaceService(Service):
     def _assign_new_vlan_id(self, vmi_model):
         vmi_model.vcenter_port.vlan_id = self._vlan_id_pool.get_available()
         # Purpose of this sleep is avoid to race in vmware code
-        time.sleep(3)
+        if vmi_model.vm_model.is_powered_on:
+            wait_for_port(vmi_model)
+        else:
+            time.sleep(5)
         self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
 
     def _add_default_vnc_info_to(self, vmi_model):
