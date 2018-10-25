@@ -20,7 +20,7 @@ def test_sync_vlan_ids(vlan_id_service, vcenter_api_client, vlan_id_pool):
     assert new_vlan_id == 2
 
 
-@patch('cvm.services.time.sleep', return_value=None)
+@patch('cvm.services.wait_for_port')
 def test_assign_new_vlan_id(_, vlan_id_service, database, vcenter_api_client,
                             vlan_id_pool, vmi_model):
     database.vlans_to_update.append(vmi_model)
@@ -39,11 +39,12 @@ def test_retain_old_vlan_id(vlan_id_service, database, vcenter_api_client, vmi_m
 
     vlan_id_service.update_vlan_ids()
 
+    vcenter_api_client.set_vlan_id.assert_not_called()
     assert vmi_model.vcenter_port.vlan_id == 20
     assert not database.vlans_to_update
 
 
-@patch('cvm.services.time.sleep')
+@patch('cvm.services.wait_for_port')
 def test_current_not_available(_, vlan_id_service, database, vcenter_api_client,
                                vlan_id_pool, vmi_model, vmi_model_2):
     database.vlans_to_update.append(vmi_model)

@@ -23,5 +23,10 @@ def vrouter_port_service():
 
 
 @pytest.fixture()
+def vlan_id_service():
+    return Mock()
+
+
+@pytest.fixture()
 def vrouter_api_client():
     return Mock()

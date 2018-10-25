@@ -105,7 +105,7 @@ def build_monitor(config, lock, database):
                                                 vrouter_port_service, vlan_id_service)
     guest_net_handler = GuestNetHandler(vmi_service, vrouter_port_service)
     vmware_tools_status_handler = VmwareToolsStatusHandler(vm_service)
-    power_state_handler = PowerStateHandler(vm_service, vrouter_port_service)
+    power_state_handler = PowerStateHandler(vm_service, vrouter_port_service, vlan_id_service)
     handlers = [
         vm_updated_handler,
         vm_renamed_handler,

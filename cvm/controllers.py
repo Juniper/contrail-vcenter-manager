@@ -271,15 +271,17 @@ class VmwareToolsStatusHandler(AbstractChangeHandler):
 class PowerStateHandler(AbstractChangeHandler):
     PROPERTY_NAME = 'runtime.powerState'
 
-    def __init__(self, vm_service, vrouter_port_service):
+    def __init__(self, vm_service, vrouter_port_service, vlan_id_service):
         self._vm_service = vm_service
         self._vrouter_port_service = vrouter_port_service
+        self._vlan_id_service = vlan_id_service
 
     def _handle_change(self, obj, value):
         if not self._validate_vm(obj):
             return
         self._vm_service.update_power_state(obj, value)
         self._vrouter_port_service.sync_port_states()
+        self._vlan_id_service.update_vcenter_vlans()
 
     def _validate_vm(self, vmware_vm):
         return self._is_vm_in_database(name=vmware_vm.name)
