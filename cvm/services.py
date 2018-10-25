@@ -5,7 +5,8 @@ import time
 from vnc_api.gen.resource_xsd import PermType2
 
 from cvm.constants import (CONTRAIL_VM_NAME, VM_UPDATE_FILTERS,
-                           VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT)
+                           VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT,
+                           WAIT_FOR_PORT_RETRY_TIME, WAIT_FOR_PORT_RETRY_LIMIT)
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
 
@@ -23,6 +24,24 @@ class Service(object):
         self._ipam = self._vnc_api_client.read_or_create_ipam()
         if self._esxi_api_client:
             self._vrouter_uuid = esxi_api_client.read_vrouter_uuid()
+
+
+def wait_for_port(vmi_model):
+    logger.info('Waiting for port %s to be ready...', vmi_model.vcenter_port.port_key)
+    for _ in xrange(WAIT_FOR_PORT_RETRY_LIMIT):
+        try:
+            device = next(device for device
+                          in vmi_model.vm_model.vmware_vm.config.hardware.device
+                          if device.key == vmi_model.vcenter_port.device.key)
+            if device.connectable.connected:
+                logger.info('DVPort %s is ready.', vmi_model.vcenter_port.port_key)
+                return True
+        except StopIteration:
+            logger.error('No device detected')
+            return False
+        time.sleep(WAIT_FOR_PORT_RETRY_TIME)
+    logger.info('Waiting for port timed out')
+    return False
 
 
 class VirtualMachineInterfaceService(Service):
@@ -306,6 +325,7 @@ class VirtualMachineService(Service):
             logger.info('VM %s was powered %s', vm_model.name, power_state[7:].lower())
             for vmi_model in vm_model.vmi_models:
                 self._database.ports_to_update.append(vmi_model)
+                self._database.vlans_to_update.append(vmi_model)
             self._database.save(vm_model)
 
 
@@ -446,9 +466,7 @@ class VlanIdService(object):
 
     def _assign_new_vlan_id(self, vmi_model):
         vmi_model.vcenter_port.vlan_id = self._vlan_id_pool.get_available()
-        # Purpose of this sleep is avoid to race in vmware code
-        time.sleep(1)
-        self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
+        self._update_vcenter_vlan(vmi_model)
 
     def _restore_vlan_id(self, vmi_model):
         self._restore_vcenter_vlan_id(vmi_model)
@@ -457,3 +475,17 @@ class VlanIdService(object):
     def _restore_vcenter_vlan_id(self, vmi_model):
         with self._vcenter_api_client:
             self._vcenter_api_client.restore_vlan_id(vmi_model.vcenter_port)
+
+    def update_vcenter_vlans(self):
+        for vmi_model in list(self._database.vlans_to_update):
+            logger.info('Updating VLAN ID of %s in vCenter', vmi_model.display_name)
+            self._update_vcenter_vlan(vmi_model)
+            self._database.vlans_to_update.remove(vmi_model)
+
+    def _update_vcenter_vlan(self, vmi_model):
+        if vmi_model.vm_model.is_powered_on:
+            with self._vcenter_api_client:
+                if wait_for_port(vmi_model):
+                    self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
+        else:
+            logger.info('VM %s not powered on, cannot set VLAN ID in vCenter', vmi_model.vm_model.name)
