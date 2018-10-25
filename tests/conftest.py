@@ -174,6 +174,16 @@ def vm_properties_1():
 
 
 @pytest.fixture()
+def vm_properties_1_off():
+    return {
+        'config.instanceUuid': 'vmware-vm-uuid-1',
+        'name': 'VM1',
+        'runtime.powerState': 'poweredOff',
+        'guest.toolsRunningStatus': 'guestToolsRunning',
+    }
+
+
+@pytest.fixture()
 def vm_properties_2():
     return {
         'config.instanceUuid': 'vmware-vm-uuid-2',
@@ -443,7 +453,7 @@ def controller(vm_service, vn_service, vmi_service, vrouter_port_service, vlan_i
         VmRemovedHandler(vm_service, vmi_service, vrouter_port_service, vlan_id_service),
         VmRegisteredHandler(vm_service, vn_service, vmi_service, vrouter_port_service, vlan_id_service),
         GuestNetHandler(vmi_service, vrouter_port_service),
-        PowerStateHandler(vm_service, vrouter_port_service),
+        PowerStateHandler(vm_service, vrouter_port_service, vlan_id_service),
         VmwareToolsStatusHandler(vm_service)
     ]
     update_handler = UpdateHandler(handlers)
