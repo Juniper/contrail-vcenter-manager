@@ -3,14 +3,14 @@ from mock import patch
 from tests.utils import assert_vmi_model_state, reserve_vlan_ids
 
 
-def test_vm_created_vlan_id(controller, database, vcenter_api_client,
+@patch('cvm.services.wait_for_port', return_value=True)
+def test_vm_created_vlan_id(_, controller, database, vcenter_api_client,
                             vm_created_update, vn_model_1, vlan_id_pool):
     """
     What happens when the created interface is already using an overriden VLAN ID?
     We should keep it (if it's available on the host), not removing old/adding new VLAN ID,
     since it breaks the connectivity for a moment.
     """
-
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
     database.save(vn_model_1)
@@ -41,7 +41,7 @@ def test_vm_created_vlan_id(controller, database, vcenter_api_client,
     )
 
 
-@patch('cvm.services.time.sleep')
+@patch('cvm.services.wait_for_port')
 def test_vm_created_vlan_id_collision(_, controller, database, vcenter_api_client,
                                       vm_created_update, vn_model_1, vmi_model_2, vlan_id_pool):
     # Virtual Networks are already created for us and after synchronization,
@@ -59,7 +59,7 @@ def test_vm_created_vlan_id_collision(_, controller, database, vcenter_api_clien
     # A new update containing VmCreatedEvent arrives and is being handled by the controller
     controller.handle_update(vm_created_update)
 
-    # Check if VLAN ID has not been changed
+    # Check if VLAN ID has been set
     vcenter_api_client.set_vlan_id.assert_called_once()
 
     # Check inner VMI model state

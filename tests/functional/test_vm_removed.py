@@ -3,7 +3,7 @@ from mock import patch
 from tests.utils import reserve_vlan_ids
 
 
-@patch('cvm.services.time.sleep', return_value=None)
+@patch('cvm.controllers.time.sleep')
 def test_full_remove_vm(_, controller, database, vcenter_api_client, vnc_api_client, vrouter_api_client,
                         vm_created_update, vm_removed_update, vn_model_1, vlan_id_pool):
     # Virtual Networks are already created for us and after synchronization,
@@ -59,7 +59,7 @@ def test_full_remove_vm(_, controller, database, vcenter_api_client, vnc_api_cli
     assert vlan_id_pool.is_available(4)
 
 
-@patch('cvm.services.time.sleep', return_value=None)
+@patch('cvm.controllers.time.sleep')
 def test_vm_removed_local_remove(_, controller, database, vcenter_api_client, vnc_api_client, vrouter_api_client,
                                  vm_created_update, vm_removed_update, vn_model_1, vlan_id_pool):
     """
