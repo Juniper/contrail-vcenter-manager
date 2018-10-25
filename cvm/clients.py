@@ -25,6 +25,7 @@ class VSphereAPIClient(object):
     def __init__(self):
         self._si = None
         self._datacenter = None
+        self._property_collector = None
 
     def _get_object(self, vimtype, name):
         content = self._si.content
@@ -41,6 +42,10 @@ class VSphereAPIClient(object):
             return [vm for vm in container.view if vm.config.instanceUuid == uuid][0]
         except (IndexError, vmodl.fault.ManagedObjectNotFound):
             return None
+
+    def add_filter(self, obj, filters):
+        filter_spec = make_filter_spec(obj, filters)
+        return self._property_collector.CreateFilter(filter_spec, True)
 
 
 class ESXiAPIClient(VSphereAPIClient):
@@ -73,10 +78,6 @@ class ESXiAPIClient(VSphereAPIClient):
         entity_spec.recursion = vim.event.EventFilterSpec.RecursionOption.children
         event_filter_spec.entity = entity_spec
         return event_manager.CreateCollectorForEvents(filter=event_filter_spec)
-
-    def add_filter(self, obj, filters):
-        filter_spec = make_filter_spec(obj, filters)
-        return self._property_collector.CreateFilter(filter_spec, True)
 
     def make_wait_options(self, max_wait_seconds=None, max_object_updates=None):
         if max_object_updates is not None:
@@ -142,6 +143,7 @@ class VCenterAPIClient(VSphereAPIClient):
         )
         self._datacenter = self._get_datacenter(self._vcenter_cfg.get('datacenter'))
         self._dvs = self._get_dvswitch(self._vcenter_cfg.get('dvswitch'))
+        self._property_collector = self._si.content.propertyCollector
 
     def __exit__(self, *args):
         Disconnect(self._si)
@@ -162,12 +164,25 @@ class VCenterAPIClient(VSphereAPIClient):
         dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
         if not dv_port:
             return
+        logger.info('Waiting for port %s to be ready...', vcenter_port.port_key)
+        self._wait_for_port(dv_port)
         logger.info('Setting vCenter VLAN ID of port %s to %d', vcenter_port.port_key, vcenter_port.vlan_id)
         dv_port_spec = make_dv_port_spec(dv_port, vcenter_port.vlan_id)
         task = self._dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
         success_message = 'Successfully set VLAN ID: %d for port: %s' % (vcenter_port.vlan_id, vcenter_port.port_key)
         fault_message = 'Failed to set VLAN ID: %d for port: %s' % (vcenter_port.vlan_id, vcenter_port.port_key)
         wait_for_task(task, success_message, fault_message)
+
+    def _wait_for_port(self, dv_port):
+        proxy_host_filter = self.add_filter(dv_port, ['proxyHost'])
+        proxy_host = dv_port.proxyHost
+        version = ''
+        while proxy_host is None:
+            update_set = self._property_collector.WaitForUpdatesEx(version=version)
+            version = update_set.version
+            proxy_host = dv_port.proxyHost
+        logger.info('DVPort %s is ready, proxy host: %s', dv_port.key, proxy_host)
+        proxy_host_filter.DestroyPropertyFilter()
 
     def get_vlan_id(self, vcenter_port):
         logger.info('Reading VLAN ID of port %s', vcenter_port.port_key)
