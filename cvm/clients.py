@@ -74,10 +74,6 @@ class ESXiAPIClient(VSphereAPIClient):
         event_filter_spec.entity = entity_spec
         return event_manager.CreateCollectorForEvents(filter=event_filter_spec)
 
-    def add_filter(self, obj, filters):
-        filter_spec = make_filter_spec(obj, filters)
-        return self._property_collector.CreateFilter(filter_spec, True)
-
     def make_wait_options(self, max_wait_seconds=None, max_object_updates=None):
         if max_object_updates is not None:
             self._wait_options.maxObjectUpdates = max_object_updates
@@ -126,6 +122,12 @@ def make_filter_spec(obj, filters):
     return filter_spec
 
 
+def wait_for_port(dv_port):
+    while dv_port.proxyHost is None:
+        logger.info('DVPort still not ready...')
+    logger.info('DVPort %s is ready, proxy host: %s', dv_port.key, dv_port.proxy_host)
+
+
 class VCenterAPIClient(VSphereAPIClient):
     def __init__(self, vcenter_cfg):
         super(VCenterAPIClient, self).__init__()
@@ -162,6 +164,8 @@ class VCenterAPIClient(VSphereAPIClient):
         dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
         if not dv_port:
             return
+        logger.info('Waiting for port %s to be ready...', vcenter_port.port_key)
+        wait_for_port(dv_port)
         logger.info('Setting vCenter VLAN ID of port %s to %d', vcenter_port.port_key, vcenter_port.vlan_id)
         dv_port_spec = make_dv_port_spec(dv_port, vcenter_port.vlan_id)
         task = self._dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
