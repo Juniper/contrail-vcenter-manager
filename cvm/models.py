@@ -255,6 +255,7 @@ class VlanIdPool(object):
 
 class VCenterPort(object):
     def __init__(self, device):
+        self.device = device
         self.mac_address = device.macAddress
         self.port_key = device.backing.port.portKey
         self.portgroup_key = device.backing.port.portgroupKey
