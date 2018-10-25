@@ -23,6 +23,7 @@ def find_vrouter_uuid(host):
 
 class VirtualMachineModel(object):
     def __init__(self, vmware_vm, vm_properties):
+        self.vmware_vm = vmware_vm
         self.vm_properties = vm_properties
         self.devices = vmware_vm.config.hardware.device
         self.host_name = vmware_vm.summary.runtime.host.name
@@ -31,6 +32,7 @@ class VirtualMachineModel(object):
         self.vmi_models = self._construct_interfaces()
 
     def update(self, vmware_vm, vm_properties):
+        self.vmware_vm = vmware_vm
         self.vm_properties = vm_properties
         self.devices = vmware_vm.config.hardware.device
         self.host_name = vmware_vm.summary.runtime.host.name
@@ -255,6 +257,7 @@ class VlanIdPool(object):
 
 class VCenterPort(object):
     def __init__(self, device):
+        self.device = device
         self.mac_address = device.macAddress
         self.port_key = device.backing.port.portKey
         self.portgroup_key = device.backing.port.portgroupKey
