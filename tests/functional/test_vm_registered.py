@@ -4,12 +4,14 @@ from tests.utils import assert_vmi_model_state, reserve_vlan_ids
 
 
 @patch('cvm.services.time.sleep', return_value=None)
-def test_vmotion_vlan_unavailable(_, controller, database, vcenter_api_client, vm_registered_update, vn_model_1,
-                                  vlan_id_pool):
+def test_vmotion_vlan_unavailable(_, controller, database, vcenter_api_client, vm_registered_update,
+                                  vn_model_1, vmi_model_2, vlan_id_pool):
     """ When the VLAN ID is unavailable on a host, we should change it to a new value"""
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
     database.save(vn_model_1)
+    vmi_model_2.vcenter_port.vlan_id = 5
+    database.save(vmi_model_2)
 
     # Some vlan ids should be already reserved
     reserve_vlan_ids(vlan_id_pool, [0, 1, 5])

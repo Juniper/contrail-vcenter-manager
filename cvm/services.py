@@ -38,17 +38,10 @@ class VirtualMachineInterfaceService(Service):
         with self._vcenter_api_client:
             self._delete_unused_vmis()
 
-    def sync_vlan_ids(self):
-        vrouter_uuid = self._esxi_api_client.read_vrouter_uuid()
-        with self._vcenter_api_client:
-            reserved_vlan_ids = self._vcenter_api_client.get_reserved_vlan_ids(vrouter_uuid)
-            for vlan_id in reserved_vlan_ids:
-                self._vlan_id_pool.reserve(vlan_id)
-
-    def update_vmis(self, vm_registered=False):
+    def update_vmis(self):
         for vmi_model in list(self._database.vmis_to_update):
             logger.info('Updating %s', vmi_model)
-            self._update_vmi(vmi_model, vm_registered=vm_registered)
+            self._update_vmi(vmi_model)
             self._database.vmis_to_update.remove(vmi_model)
             logger.info('Updated %s', vmi_model)
 
@@ -68,38 +61,17 @@ class VirtualMachineInterfaceService(Service):
         if vmi_model.vn_model != new_vn_model:
             vmi_model.vn_model = new_vn_model
 
-    def _update_vmi(self, vmi_model, vm_registered=False):
+    def _update_vmi(self, vmi_model):
         self._add_default_vnc_info_to(vmi_model)
         self._update_vmis_vn(vmi_model)
-        self._assign_vlan_id(vmi_model, vm_registered=vm_registered)
+        self._assign_vlan_id(vmi_model)
         self._update_in_vnc(vmi_model)
         self._add_instance_ip_to(vmi_model)
         self._update_vrouter_port(vmi_model)
         self._database.save(vmi_model)
 
-    def _assign_vlan_id(self, vmi_model, vm_registered=False):
-        with self._vcenter_api_client:
-            current_vlan_id = self._vcenter_api_client.get_vlan_id(vmi_model.vcenter_port)
-            if vm_registered:
-                if current_vlan_id and self._vlan_id_pool.is_available(current_vlan_id):
-                    self._preserve_old_vlan_id(current_vlan_id, vmi_model)
-                else:
-                    self._assign_new_vlan_id(vmi_model)
-                return
-            if current_vlan_id:
-                self._preserve_old_vlan_id(current_vlan_id, vmi_model)
-            else:
-                self._assign_new_vlan_id(vmi_model)
-
-    def _preserve_old_vlan_id(self, current_vlan_id, vmi_model):
-        vmi_model.vcenter_port.vlan_id = current_vlan_id
-        self._vlan_id_pool.reserve(current_vlan_id)
-
-    def _assign_new_vlan_id(self, vmi_model):
-        vmi_model.vcenter_port.vlan_id = self._vlan_id_pool.get_available()
-        # Purpose of this sleep is avoid to race in vmware code
-        time.sleep(1)
-        self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
+    def _assign_vlan_id(self, vmi_model):
+        self._database.vlans_to_update.append(vmi_model)
 
     def _add_default_vnc_info_to(self, vmi_model):
         vmi_model.parent = self._project
@@ -167,12 +139,7 @@ class VirtualMachineInterfaceService(Service):
         self._vnc_api_client.delete_vmi(vmi_model.uuid)
 
     def _restore_vlan_id(self, vmi_model):
-        self._restore_vcenter_vlan_id(vmi_model)
-        self._vlan_id_pool.free(vmi_model.vcenter_port.vlan_id)
-
-    def _restore_vcenter_vlan_id(self, vmi_model):
-        with self._vcenter_api_client:
-            self._vcenter_api_client.restore_vlan_id(vmi_model.vcenter_port)
+        self._database.vlans_to_restore.append(vmi_model)
 
     def _delete_vrouter_port(self, uuid):
         self._database.ports_to_delete.append(uuid)
@@ -200,7 +167,7 @@ class VirtualMachineInterfaceService(Service):
     def _full_remove(self, vmi_model):
         self._local_remove(vmi_model)
         self._delete_from_vnc(vmi_model)
-        self._restore_vcenter_vlan_id(vmi_model)
+        self._restore_vlan_id(vmi_model)
 
     def rename_vmis(self, new_name):
         vm_model = self._database.get_vm_model_by_name(new_name)
@@ -214,7 +181,7 @@ class VirtualMachineInterfaceService(Service):
     def register_vmis(self):
         for vmi_model in list(self._database.vmis_to_update):
             logger.info('Updating %s', vmi_model)
-            self._update_vmi(vmi_model, vm_registered=True)
+            self._update_vmi(vmi_model)
             self._database.vmis_to_update.remove(vmi_model)
             logger.info('Updated %s', vmi_model)
 
@@ -433,3 +400,58 @@ class VRouterPortService(object):
             self._vrouter_api_client.enable_port(vmi_model.uuid)
         else:
             self._vrouter_api_client.disable_port(vmi_model.uuid)
+
+
+class VlanIdService(object):
+    def __init__(self, vcenter_api_client, esxi_api_client, vlan_id_pool, database):
+        self._vcenter_api_client = vcenter_api_client
+        self._esxi_api_client = esxi_api_client
+        self._vlan_id_pool = vlan_id_pool
+        self._database = database
+
+    def sync_vlan_ids(self):
+        vrouter_uuid = self._esxi_api_client.read_vrouter_uuid()
+        with self._vcenter_api_client:
+            reserved_vlan_ids = self._vcenter_api_client.get_reserved_vlan_ids(vrouter_uuid)
+            for vlan_id in reserved_vlan_ids:
+                self._vlan_id_pool.reserve(vlan_id)
+
+    def update_vlan_ids(self):
+        for vmi_model in list(self._database.vlans_to_update):
+            logger.info('Updating %s', vmi_model)
+            self._update_vlan_id(vmi_model)
+            self._database.vlans_to_update.remove(vmi_model)
+            logger.info('Updated %s', vmi_model)
+
+        for vmi_model in list(self._database.vlans_to_restore):
+            self._restore_vlan_id(vmi_model)
+            self._database.vlans_to_restore.remove(vmi_model)
+
+    def _update_vlan_id(self, vmi_model):
+        with self._vcenter_api_client:
+            current_vlan_id = self._vcenter_api_client.get_vlan_id(vmi_model.vcenter_port)
+            if current_vlan_id:
+                self._preserve_old_vlan_id(current_vlan_id, vmi_model)
+            else:
+                self._assign_new_vlan_id(vmi_model)
+
+    def _preserve_old_vlan_id(self, current_vlan_id, vmi_model):
+        if self._database.is_vlan_available(vmi_model, current_vlan_id):
+            vmi_model.vcenter_port.vlan_id = current_vlan_id
+            self._vlan_id_pool.reserve(current_vlan_id)
+        else:
+            self._assign_new_vlan_id(vmi_model)
+
+    def _assign_new_vlan_id(self, vmi_model):
+        vmi_model.vcenter_port.vlan_id = self._vlan_id_pool.get_available()
+        # Purpose of this sleep is avoid to race in vmware code
+        time.sleep(1)
+        self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
+
+    def _restore_vlan_id(self, vmi_model):
+        self._restore_vcenter_vlan_id(vmi_model)
+        self._vlan_id_pool.free(vmi_model.vcenter_port.vlan_id)
+
+    def _restore_vcenter_vlan_id(self, vmi_model):
+        with self._vcenter_api_client:
+            self._vcenter_api_client.restore_vlan_id(vmi_model.vcenter_port)

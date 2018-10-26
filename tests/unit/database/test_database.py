@@ -62,3 +62,28 @@ def test_delete_vmi_model(database, vmi_model):
     database.delete_vmi_model(uuid)
 
     assert database.get_vmi_model_by_uuid(uuid) is None
+
+
+def test_is_vlan_available_true(database, vmi_model, vmi_model_2):
+    database.save(vmi_model)
+
+    result = database.is_vlan_available(vmi_model_2, 2)
+
+    assert result
+
+
+def test_is_vlan_available_false(database, vmi_model, vmi_model_2):
+    vmi_model.vcenter_port.vlan_id = 2
+    database.save(vmi_model)
+
+    result = database.is_vlan_available(vmi_model_2, 2)
+
+    assert not result
+
+
+def test_is_vlan_available_same_vmi(database, vmi_model):
+    database.save(vmi_model)
+
+    result = database.is_vlan_available(vmi_model, 1)
+
+    assert result
