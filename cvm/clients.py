@@ -396,7 +396,10 @@ class VNCAPIClient(object):
             logger.error('Virtual Machine Interface %s not found in VNC. Unable to delete', uuid)
             return
 
+        self._detach_floating_ips(vmi)
+
         for instance_ip_ref in vmi.get_instance_ip_back_refs() or []:
+            self._detach_service_instances_from_instance_ip(instance_ip_ref['uuid'])
             self.delete_instance_ip(instance_ip_ref.get('uuid'))
 
         self.vnc_lib.virtual_machine_interface_delete(id=uuid)
@@ -516,6 +519,25 @@ class VNCAPIClient(object):
             return self.vnc_lib.instance_ip_read(id=ip_uuid)
         except NoIdError:
             return None
+
+    def _detach_floating_ips(self, vmi):
+        fip_refs = vmi.get_floating_ip_back_refs()
+        if fip_refs is None:
+            return
+        for fip_ref in fip_refs:
+            fip = self.vnc_lib.floating_ip_read(id=fip_ref['uuid'])
+            fip.del_virtual_machine_interface(vmi)
+            self.vnc_lib.floating_ip_update(fip)
+
+    def _detach_service_instances_from_instance_ip(self, instance_ip_uuid):
+        instance_ip = self.vnc_lib.instance_ip_read(id=instance_ip_uuid)
+        service_refs = instance_ip.get_service_instance_back_refs()
+        if service_refs is None:
+            return
+        for service_ref in service_refs:
+            service_instance = self.vnc_lib.service_instance_read(id=service_ref['uuid'])
+            service_instance.del_instance_ip(instance_ip)
+            self.vnc_lib.service_instance_update(service_instance)
 
 
 def construct_ipam(project):
