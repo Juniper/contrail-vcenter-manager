@@ -14,6 +14,8 @@ class Database(object):
         self.vmi_models = {}
         self.vmis_to_update = []
         self.vmis_to_delete = []
+        self.vlans_to_update = []
+        self.vlans_to_restore = []
         self.ports_to_update = []
         self.ports_to_delete = []
 
@@ -89,3 +91,9 @@ class Database(object):
             self.vmi_models.pop(uuid)
         except KeyError:
             logger.info('Could not find VMI model with uuid %s. Nothing to delete.', uuid)
+
+    def is_vlan_available(self, new_vmi_model, vlan_id):
+        vmi_models = [vmi_model for vmi_model in self.get_all_vmi_models()
+                      if vmi_model.vcenter_port.vlan_id == vlan_id
+                      and vmi_model.uuid != new_vmi_model.uuid]
+        return not bool(vmi_models)

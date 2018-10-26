@@ -8,11 +8,13 @@ logger = logging.getLogger(__name__)
 
 
 class VmwareController(object):
-    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service, update_handler, lock):
+    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service,
+                 vlan_id_service, update_handler, lock):
         self._vm_service = vm_service
         self._vn_service = vn_service
         self._vmi_service = vmi_service
         self._vrouter_port_service = vrouter_port_service
+        self._vlan_id_service = vlan_id_service
         self._update_handler = update_handler
         self._lock = lock
 
@@ -24,6 +26,7 @@ class VmwareController(object):
             self._vn_service.sync_vns()
             self._vmi_service.sync_vmis()
             self._vm_service.delete_unused_vms_in_vnc()
+            self._vlan_id_service.sync_vlan_ids()
             self._vrouter_port_service.sync_ports()
         logger.info('Synchronization complete')
 
@@ -110,11 +113,12 @@ class VmUpdatedHandler(AbstractEventHandler):
         vim.event.VmMacAssignedEvent,
     )
 
-    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service):
+    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service, vlan_id_service):
         self._vm_service = vm_service
         self._vn_service = vn_service
         self._vmi_service = vmi_service
         self._vrouter_port_service = vrouter_port_service
+        self._vlan_id_service = vlan_id_service
 
     def _handle_event(self, event):
         try:
@@ -124,6 +128,7 @@ class VmUpdatedHandler(AbstractEventHandler):
             self._vm_service.update(vmware_vm)
             self._vn_service.update_vns()
             self._vmi_service.update_vmis()
+            self._vlan_id_service.update_vlan_ids()
             self._vrouter_port_service.sync_ports()
         except vmodl.fault.ManagedObjectNotFound:
             logger.info('Skipping event for a non-existent VM.')
@@ -132,11 +137,12 @@ class VmUpdatedHandler(AbstractEventHandler):
 class VmRegisteredHandler(AbstractEventHandler):
     EVENTS = (vim.event.VmRegisteredEvent,)
 
-    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service):
+    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service, vlan_id_service):
         self._vm_service = vm_service
         self._vn_service = vn_service
         self._vmi_service = vmi_service
         self._vrouter_port_service = vrouter_port_service
+        self._vlan_id_service = vlan_id_service
 
     def _handle_event(self, event):
         try:
@@ -146,6 +152,7 @@ class VmRegisteredHandler(AbstractEventHandler):
             self._vm_service.update(vmware_vm)
             self._vn_service.update_vns()
             self._vmi_service.register_vmis()
+            self._vlan_id_service.update_vlan_ids()
             self._vrouter_port_service.sync_ports()
         except vmodl.fault.ManagedObjectNotFound:
             logger.info('Skipping event for a non-existent VM.')
@@ -176,11 +183,12 @@ class VmRenamedHandler(AbstractEventHandler):
 class VmReconfiguredHandler(AbstractEventHandler):
     EVENTS = (vim.event.VmReconfiguredEvent,)
 
-    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service):
+    def __init__(self, vm_service, vn_service, vmi_service, vrouter_port_service, vlan_id_service):
         self._vm_service = vm_service
         self._vn_service = vn_service
         self._vmi_service = vmi_service
         self._vrouter_port_service = vrouter_port_service
+        self._vlan_id_service = vlan_id_service
 
     def _handle_event(self, event):
         if not self._validate_event(event):
@@ -193,6 +201,7 @@ class VmReconfiguredHandler(AbstractEventHandler):
                 self._vm_service.update_vm_models_interfaces(vmware_vm)
                 self._vn_service.update_vns()
                 self._vmi_service.update_vmis()
+                self._vlan_id_service.update_vlan_ids()
                 self._vrouter_port_service.sync_ports()
             else:
                 logger.info('Detected VmReconfiguredEvent with unsupported %s device type', type(device))
@@ -205,10 +214,11 @@ class VmReconfiguredHandler(AbstractEventHandler):
 class VmRemovedHandler(AbstractEventHandler):
     EVENTS = (vim.event.VmRemovedEvent,)
 
-    def __init__(self, vm_service, vmi_service, vrouter_port_service):
+    def __init__(self, vm_service, vmi_service, vrouter_port_service, vlan_id_service):
         self._vm_service = vm_service
         self._vmi_service = vmi_service
         self._vrouter_port_service = vrouter_port_service
+        self._vlan_id_service = vlan_id_service
 
     def _handle_event(self, event):
         if not self._validate_event(event):
@@ -218,6 +228,7 @@ class VmRemovedHandler(AbstractEventHandler):
         time.sleep(5)
         vm_name = event.vm.name
         self._vmi_service.remove_vmis_for_vm_model(vm_name)
+        self._vlan_id_service.update_vlan_ids()
         self._vm_service.remove_vm(vm_name)
         self._vrouter_port_service.sync_ports()
 

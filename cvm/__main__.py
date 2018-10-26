@@ -30,7 +30,7 @@ from cvm.monitors import VMwareMonitor
 from cvm.sandesh_handler import SandeshHandler
 from cvm.services import (VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService,
-                          VRouterPortService)
+                          VRouterPortService, VlanIdService)
 
 gevent.monkey.patch_all()
 
@@ -63,6 +63,8 @@ def build_monitor(config, lock, database):
 
     vnc_api_client = VNCAPIClient(vnc_cfg)
 
+    vlan_id_pool = VlanIdPool(const.VLAN_ID_RANGE_START, const.VLAN_ID_RANGE_END)
+
     vm_service = VirtualMachineService(
         esxi_api_client=esxi_api_client,
         vcenter_api_client=vcenter_api_client,
@@ -87,12 +89,20 @@ def build_monitor(config, lock, database):
         vrouter_api_client=VRouterAPIClient(),
         database=database
     )
-    vm_updated_handler = VmUpdatedHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
+    vlan_id_service = VlanIdService(
+        vcenter_api_client=vcenter_api_client,
+        esxi_api_client=esxi_api_client,
+        vlan_id_pool=vlan_id_pool,
+        database=database
+    )
+    vm_updated_handler = VmUpdatedHandler(vm_service, vn_service, vmi_service,
+                                          vrouter_port_service, vlan_id_service)
     vm_renamed_handler = VmRenamedHandler(vm_service, vmi_service, vrouter_port_service)
     vm_reconfigured_handler = VmReconfiguredHandler(vm_service, vn_service,
-                                                    vmi_service, vrouter_port_service)
-    vm_removed_handler = VmRemovedHandler(vm_service, vmi_service, vrouter_port_service)
-    vm_registered_handler = VmRegisteredHandler(vm_service, vn_service, vmi_service, vrouter_port_service)
+                                                    vmi_service, vrouter_port_service, vlan_id_service)
+    vm_removed_handler = VmRemovedHandler(vm_service, vmi_service, vrouter_port_service, vlan_id_service)
+    vm_registered_handler = VmRegisteredHandler(vm_service, vn_service, vmi_service,
+                                                vrouter_port_service, vlan_id_service)
     guest_net_handler = GuestNetHandler(vmi_service, vrouter_port_service)
     vmware_tools_status_handler = VmwareToolsStatusHandler(vm_service)
     power_state_handler = PowerStateHandler(vm_service, vrouter_port_service)
@@ -108,7 +118,8 @@ def build_monitor(config, lock, database):
     ]
     update_handler = UpdateHandler(handlers)
     vmware_controller = VmwareController(vm_service, vn_service,
-                                         vmi_service, vrouter_port_service, update_handler, lock)
+                                         vmi_service, vrouter_port_service,
+                                         vlan_id_service, update_handler, lock)
     return VMwareMonitor(esxi_api_client, vmware_controller)
 
 
