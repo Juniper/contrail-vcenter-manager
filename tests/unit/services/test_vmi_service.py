@@ -11,6 +11,7 @@ def test_create_vmis_proper_dpg(vmi_service, database, vnc_api_client, vm_model,
     assert vmi_model.vm_model == vm_model
     assert vmi_model.vn_model == vn_model_1
     assert vmi_model in database.ports_to_update
+    assert vmi_model in database.vlans_to_update
     assert 'vnc-vn-uuid-1' in [ref['uuid'] for ref in vmi_model.vnc_vmi.get_virtual_network_refs()]
     vnc_api_client.update_vmi.assert_called_once()
 
@@ -101,8 +102,8 @@ def test_remove_vmis_for_vm_model(vmi_service, database, vcenter_api_client, vnc
 
     assert vmi_model not in database.get_all_vmi_models()
     assert vmi_model.uuid in database.ports_to_delete
+    assert vmi_model in database.vlans_to_restore
     vnc_api_client.delete_vmi.assert_called_once_with(vmi_model.uuid)
-    vcenter_api_client.restore_vlan_id.assert_called_once_with(vmi_model.vcenter_port)
     assert vlan_id_pool.is_available(vmi_model.vcenter_port.vlan_id)
 
 

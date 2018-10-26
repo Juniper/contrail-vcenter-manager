@@ -15,7 +15,7 @@ from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel, VlanIdPool)
 from cvm.services import (VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService,
-                          VRouterPortService)
+                          VRouterPortService, VlanIdService)
 from tests.utils import assign_ip_to_instance_ip, wrap_into_update_set
 
 
@@ -126,7 +126,7 @@ def vmware_vm_1(host_1):
 
 
 @pytest.fixture()
-def vmware_vm_1_updated():
+def vmware_vm_1_updated(host_1):
     vmware_vm = Mock(spec=vim.VirtualMachine)
     vmware_vm.configure_mock(name='VM1')
     vmware_vm.summary.runtime.host = host_1
@@ -134,6 +134,18 @@ def vmware_vm_1_updated():
     backing = Mock(spec=vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo)
     backing.port = Mock(portgroupKey='dvportgroup-2', portKey='10')
     vmware_vm.config.hardware.device = [Mock(backing=backing, macAddress='mac-address')]
+    return vmware_vm
+
+
+@pytest.fixture()
+def vmware_vm_2(host_1):
+    vmware_vm = Mock(spec=vim.VirtualMachine)
+    vmware_vm.configure_mock(name='VM2')
+    vmware_vm.summary.runtime.host = host_1
+    vmware_vm.config.instanceUuid = 'vmware-vm-uuid-2'
+    backing = Mock(spec=vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo)
+    backing.port = Mock(portgroupKey='dvportgroup-2', portKey='20')
+    vmware_vm.config.hardware.device = [Mock(backing=backing, macAddress='mac-address-2')]
     return vmware_vm
 
 
@@ -156,6 +168,16 @@ def vm_properties_1():
     return {
         'config.instanceUuid': 'vmware-vm-uuid-1',
         'name': 'VM1',
+        'runtime.powerState': 'poweredOn',
+        'guest.toolsRunningStatus': 'guestToolsRunning',
+    }
+
+
+@pytest.fixture()
+def vm_properties_2():
+    return {
+        'config.instanceUuid': 'vmware-vm-uuid-2',
+        'name': 'VM2',
         'runtime.powerState': 'poweredOn',
         'guest.toolsRunningStatus': 'guestToolsRunning',
     }
@@ -189,10 +211,28 @@ def vm_model(vmware_vm_1, vm_properties_1):
 
 
 @pytest.fixture()
+def vm_model_2(vmware_vm_2, vm_properties_2):
+    model = VirtualMachineModel(vmware_vm_2, vm_properties_2)
+    model.property_filter = Mock()
+    return model
+
+
+@pytest.fixture()
 def vmi_model(vm_model, vn_model_1, project, security_group):
     vmi = VirtualMachineInterfaceModel(
         vm_model, vn_model_1,
-        Mock(mac_address='mac-address', portgroup_key='dvportgroup-1')
+        Mock(mac_address='mac-address', portgroup_key='dvportgroup-1', vlan_id=1)
+    )
+    vmi.parent = project
+    vmi.security_group = security_group
+    return vmi
+
+
+@pytest.fixture()
+def vmi_model_2(vm_model_2, vn_model_2, project, security_group):
+    vmi = VirtualMachineInterfaceModel(
+        vm_model_2, vn_model_2,
+        Mock(mac_address='mac-address-2', portgroup_key='dvportgroup-1', vlan_id=2)
     )
     vmi.parent = project
     vmi.security_group = security_group
@@ -380,6 +420,11 @@ def vrouter_port_service(vrouter_api_client, database):
 
 
 @pytest.fixture()
+def vlan_id_service(vcenter_api_client, esxi_api_client, vlan_id_pool, database):
+    return VlanIdService(vcenter_api_client, esxi_api_client, vlan_id_pool, database)
+
+
+@pytest.fixture()
 def database():
     return Database()
 
@@ -390,16 +435,17 @@ def vrouter_api_client():
 
 
 @pytest.fixture()
-def controller(vm_service, vn_service, vmi_service, vrouter_port_service, lock):
+def controller(vm_service, vn_service, vmi_service, vrouter_port_service, vlan_id_service, lock):
     handlers = [
-        VmUpdatedHandler(vm_service, vn_service, vmi_service, vrouter_port_service),
+        VmUpdatedHandler(vm_service, vn_service, vmi_service, vrouter_port_service, vlan_id_service),
         VmRenamedHandler(vm_service, vmi_service, vrouter_port_service),
-        VmReconfiguredHandler(vm_service, vn_service, vmi_service, vrouter_port_service),
-        VmRemovedHandler(vm_service, vmi_service, vrouter_port_service),
-        VmRegisteredHandler(vm_service, vn_service, vmi_service, vrouter_port_service),
+        VmReconfiguredHandler(vm_service, vn_service, vmi_service, vrouter_port_service, vlan_id_service),
+        VmRemovedHandler(vm_service, vmi_service, vrouter_port_service, vlan_id_service),
+        VmRegisteredHandler(vm_service, vn_service, vmi_service, vrouter_port_service, vlan_id_service),
         GuestNetHandler(vmi_service, vrouter_port_service),
         PowerStateHandler(vm_service, vrouter_port_service),
         VmwareToolsStatusHandler(vm_service)
     ]
     update_handler = UpdateHandler(handlers)
-    return VmwareController(vm_service, vn_service, vmi_service, vrouter_port_service, update_handler, lock)
+    return VmwareController(vm_service, vn_service, vmi_service,
+                            vrouter_port_service, vlan_id_service, update_handler, lock)
