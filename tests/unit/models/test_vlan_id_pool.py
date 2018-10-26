@@ -46,3 +46,12 @@ def test_free_and_get(vlan_id_pool):
     next_id = vlan_id_pool.get_available()
 
     assert next_id == 1
+
+
+def test_double_free(vlan_id_pool):
+    vlan_id_pool.free(5000)
+    vlan_id_pool.free(5000)
+
+    vlan_id_pool.reserve(5000)
+
+    assert vlan_id_pool.is_available(5000) is False
