@@ -54,17 +54,35 @@ class AbstractChangeHandler(object):
         value = getattr(property_change, 'val', None)
         if value:
             if name.startswith(self.PROPERTY_NAME):
-                self._handle_change(obj, value)
+                try:
+                    self._handle_change(obj, value)
+                except vmodl.fault.ManagedObjectNotFound:
+                    self._log_managed_object_not_found(value)
+
+    @abstractmethod
+    def _log_managed_object_not_found(self, value):
+        pass
 
     @abstractmethod
     def _handle_change(self, obj, value):
         pass
 
-    def _has_vm_vcenter_uuid(self, vmware_vm):
+    @classmethod
+    def _has_vm_vcenter_uuid(cls, vmware_vm):
         try:
-            return vmware_vm.config.instanceUuid is not None
-        except AttributeError:
-            return False
+            has_uuid = vmware_vm.config.instanceUuid is not None
+        except Exception:
+            has_uuid = False
+        if not has_uuid:
+            logger.error('VM: %s has not vCenter uuid.', vmware_vm.name)
+        return has_uuid
+
+    @classmethod
+    def _is_vm_template(cls, vmware_vm):
+        is_template = vmware_vm.config.template
+        if is_template:
+            logger.info('VM: %s is a template.', vmware_vm.name)
+        return is_template
 
     def _is_vm_in_database(self, name=None, uuid=None):
         if name is not None:
@@ -88,8 +106,11 @@ class AbstractEventHandler(AbstractChangeHandler):
 
     def _handle_change(self, obj, value):
         if isinstance(value, self.EVENTS):
-            logger.info('Detected event: %s', type(value))
-            self._handle_event(value)
+            logger.info('Detected event: %s for VM: %s', type(value), value.vm.name)
+            try:
+                self._handle_event(value)
+            except vmodl.fault.ManagedObjectNotFound:
+                self._log_managed_object_not_found(value)
         if isinstance(value, list):
             for change in sorted(value, key=lambda e: e.key):
                 self._handle_change(obj, change)
@@ -98,9 +119,13 @@ class AbstractEventHandler(AbstractChangeHandler):
     def _handle_event(self, event):
         pass
 
+    def _log_managed_object_not_found(self, event):
+        logger.error('Not found/deleted vmware managed object for VM: % during %s handling',
+                     event.vm.name, type(event))
+
     def _validate_event(self, event):
         vmware_vm = event.vm.vm
-        return self._has_vm_vcenter_uuid(vmware_vm)
+        return self._has_vm_vcenter_uuid(vmware_vm) and not self._is_vm_template(vmware_vm)
 
 
 class VmUpdatedHandler(AbstractEventHandler):
@@ -120,17 +145,14 @@ class VmUpdatedHandler(AbstractEventHandler):
         self._vlan_id_service = vlan_id_service
 
     def _handle_event(self, event):
-        try:
-            if not self._validate_event(event):
-                return
-            vmware_vm = event.vm.vm
-            self._vm_service.update(vmware_vm)
-            self._vn_service.update_vns()
-            self._vmi_service.update_vmis()
-            self._vlan_id_service.update_vlan_ids()
-            self._vrouter_port_service.sync_ports()
-        except vmodl.fault.ManagedObjectNotFound:
-            logger.info('Skipping event for a non-existent VM.')
+        if not self._validate_event(event):
+            return
+        vmware_vm = event.vm.vm
+        self._vm_service.update(vmware_vm)
+        self._vn_service.update_vns()
+        self._vmi_service.update_vmis()
+        self._vlan_id_service.update_vlan_ids()
+        self._vrouter_port_service.sync_ports()
 
 
 class VmRegisteredHandler(AbstractEventHandler):
@@ -144,17 +166,14 @@ class VmRegisteredHandler(AbstractEventHandler):
         self._vlan_id_service = vlan_id_service
 
     def _handle_event(self, event):
-        try:
-            if not self._validate_event(event):
-                return
-            vmware_vm = event.vm.vm
-            self._vm_service.update(vmware_vm)
-            self._vn_service.update_vns()
-            self._vmi_service.register_vmis()
-            self._vlan_id_service.update_vlan_ids()
-            self._vrouter_port_service.sync_ports()
-        except vmodl.fault.ManagedObjectNotFound:
-            logger.info('Skipping event for a non-existent VM.')
+        if not self._validate_event(event):
+            return
+        vmware_vm = event.vm.vm
+        self._vm_service.update(vmware_vm)
+        self._vn_service.update_vns()
+        self._vmi_service.register_vmis()
+        self._vlan_id_service.update_vlan_ids()
+        self._vrouter_port_service.sync_ports()
 
 
 class VmRenamedHandler(AbstractEventHandler):
@@ -207,7 +226,11 @@ class VmReconfiguredHandler(AbstractEventHandler):
 
     def _validate_event(self, event):
         vmware_vm = event.vm.vm
-        return self._has_vm_vcenter_uuid(vmware_vm) and self._is_vm_in_database(name=vmware_vm.name)
+        return all((
+            not self._is_vm_template(vmware_vm),
+            self._has_vm_vcenter_uuid(vmware_vm),
+            self._is_vm_in_database(name=vmware_vm.name)
+        ))
 
 
 class VmRemovedHandler(AbstractEventHandler):
@@ -248,6 +271,9 @@ class GuestNetHandler(AbstractChangeHandler):
             self._vmi_service.update_nic(nic_info)
         self._vrouter_port_service.sync_ports()
 
+    def _log_managed_object_not_found(self, value):
+        logger.error('Not found/deleted vmware managed object for during GuestNetHandling handling')
+
 
 class VmwareToolsStatusHandler(AbstractChangeHandler):
     PROPERTY_NAME = 'guest.toolsRunningStatus'
@@ -256,15 +282,15 @@ class VmwareToolsStatusHandler(AbstractChangeHandler):
         self._vm_service = vm_service
 
     def _handle_change(self, obj, value):
-        try:
-            if not self._validate_vm(obj):
-                return
-            self._vm_service.update_vmware_tools_status(obj, value)
-        except vmodl.fault.ManagedObjectNotFound:
-            pass
+        if not self._validate_vm(obj):
+            return
+        self._vm_service.update_vmware_tools_status(obj, value)
 
     def _validate_vm(self, vmware_vm):
         return self._has_vm_vcenter_uuid(vmware_vm)
+
+    def _log_managed_object_not_found(self, value):
+        logger.error('Not found/deleted vmware managed object for during VmwareTools update handling')
 
 
 class PowerStateHandler(AbstractChangeHandler):
@@ -284,3 +310,6 @@ class PowerStateHandler(AbstractChangeHandler):
 
     def _validate_vm(self, vmware_vm):
         return self._is_vm_in_database(name=vmware_vm.name)
+
+    def _log_managed_object_not_found(self, value):
+        logger.error('Not found/deleted vmware managed object for during PowerState update handling')
