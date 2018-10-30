@@ -39,7 +39,7 @@ class VSphereAPIClient(object):
         container = content.viewManager.CreateContainerView(content.rootFolder, [vim.VirtualMachine], True)
         try:
             return [vm for vm in container.view if vm.config.instanceUuid == uuid][0]
-        except (IndexError, vmodl.fault.ManagedObjectNotFound):
+        except Exception:
             return None
 
 
