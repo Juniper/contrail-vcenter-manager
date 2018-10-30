@@ -2,8 +2,8 @@ import ipaddress
 import logging
 import time
 
+from pyVmomi import vmodl  # pylint: disable=no-name-in-module
 from vnc_api.gen.resource_xsd import PermType2
-
 from cvm.constants import (CONTRAIL_VM_NAME, VM_UPDATE_FILTERS,
                            VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT,
                            WAIT_FOR_PORT_RETRY_TIME, WAIT_FOR_PORT_RETRY_LIMIT)
@@ -262,7 +262,10 @@ class VirtualMachineService(Service):
     def get_vms_from_vmware(self):
         vmware_vms = self._esxi_api_client.get_all_vms()
         for vmware_vm in vmware_vms:
-            self.update(vmware_vm)
+            try:
+                self.update(vmware_vm)
+            except vmodl.fault.ManagedObjectNotFound:
+                logger.error('One VM was moved out of ESXi during CVM sync')
 
     def delete_unused_vms_in_vnc(self):
         vnc_vms = self._vnc_api_client.get_all_vms()
