@@ -45,6 +45,7 @@ class VSphereAPIClient(object):
 
 class ESXiAPIClient(VSphereAPIClient):
     _version = ''
+    DESTROY_TASK = 'ManagedEntity.destroy'
 
     def __init__(self, esxi_cfg):
         super(ESXiAPIClient, self).__init__()
@@ -59,6 +60,7 @@ class ESXiAPIClient(VSphereAPIClient):
         atexit.register(Disconnect, self._si)
         self._property_collector = self._si.content.propertyCollector
         self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
+        self._recent_tasks = self._si.content.taskManager.recentTask
 
     def get_all_vms(self):
         return self._datacenter.vmFolder.childEntity
@@ -102,6 +104,13 @@ class ESXiAPIClient(VSphereAPIClient):
     def read_vrouter_uuid(self):
         host = self._datacenter.hostFolder.childEntity[0].host[0]
         return find_vrouter_uuid(host)
+
+    def was_full_remove(self, vm_name):
+        for task in reversed(self._si.content.taskManager.recentTask):
+            if task.info.descriptionId == self.DESTROY_TASK:
+                if task.info.entityName == vm_name:
+                    return True
+        return False
 
 
 def make_prop_set(obj, filters):
