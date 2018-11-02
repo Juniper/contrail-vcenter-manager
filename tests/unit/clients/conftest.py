@@ -67,7 +67,10 @@ def vnc_lib():
 @pytest.fixture()
 def vnc_api_client(vnc_lib):
     with patch.object(vnc_api, 'VncApi', return_value=vnc_lib):
-        return VNCAPIClient({'api_server_host': '', 'auth_host': ''})
+        vnc_api_client = VNCAPIClient({'api_server_host': '', 'auth_host': ''})
+        vnc_api_client._detach_floating_ips = Mock()
+        vnc_api_client._detach_service_instances_from_instance_ip = Mock()
+        return vnc_api_client
 
 
 @pytest.fixture()

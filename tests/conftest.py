@@ -456,6 +456,8 @@ def controller(vm_service, vn_service, vmi_service, vrouter_port_service, vlan_i
         PowerStateHandler(vm_service, vrouter_port_service, vlan_id_service),
         VmwareToolsStatusHandler(vm_service)
     ]
+    for handler in handlers:
+        handler._validate_event = Mock(return_value=True)
     update_handler = UpdateHandler(handlers)
     return VmwareController(vm_service, vn_service, vmi_service,
                             vrouter_port_service, vlan_id_service, update_handler, lock)
