@@ -1,7 +1,9 @@
 import atexit
+import datetime
 import json
 import logging
 import random
+import os
 from uuid import uuid4
 
 import requests
@@ -11,7 +13,6 @@ from pyVim.task import WaitForTask
 from vnc_api import vnc_api
 from vnc_api.exceptions import NoIdError, RefsExistError
 
-from contrail_vrouter_api.vrouter_api import ContrailVRouterApi
 from cvm.constants import (VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
                            VNC_VCENTER_IPAM, VNC_VCENTER_IPAM_FQN,
@@ -591,9 +592,41 @@ class VRouterAPIClient(object):
     """ A client for Contrail VRouter Agent REST API. """
 
     def __init__(self):
-        self.vrouter_api = ContrailVRouterApi()
         self.vrouter_host = 'http://localhost'
         self.vrouter_port = '9091'
+        self._port_files_dir = '/var/lib/contrail/ports/'
+        self._dir_exists = False
+        self._create_ports_directory()
+        self._session = requests.Session()
+
+    def _create_ports_directory(self):
+        if os.path.isdir(self._port_files_dir):
+            self._dir_exists = True
+            return
+        try:
+            os.makedirs(self._port_files_dir)
+            self._dir_exists = True
+        except OSError:
+            logger.error('Unable to create %s directory', self._port_files_dir)
+            self._dir_exists = False
+
+    def _write_port_to_file(self, port_uuid, port_data):
+        if not self._dir_exists:
+            logger.error('Unable to create port file because %s does not exists', self._port_files_dir)
+        filename = "%s%s" % (self._port_files_dir, port_uuid)
+        with open(filename, 'w') as outfile:
+            json.dump(port_data, outfile, True)
+
+    def _read_port_from_file(self, port_uuid):
+        filename = "%s%s" % (self._port_files_dir, port_uuid)
+        with open(filename, 'r') as port_file:
+            json_data = port_file.read()
+            return json.loads(json_data)
+
+    def _delete_port_file(self, port_uuid):
+        filename = "%s%s" % (self._port_files_dir, port_uuid)
+        if os.path.isfile(filename):
+            os.remove(filename)
 
     def add_port(self, vmi_model):
         """ Add port to VRouter Agent. """
@@ -602,58 +635,98 @@ class VRouterAPIClient(object):
             if vmi_model.vnc_instance_ip:
                 ip_address = vmi_model.vnc_instance_ip.instance_ip_address
 
-            parameters = dict(
-                vm_uuid_str=vmi_model.vm_model.uuid,
-                vif_uuid_str=vmi_model.uuid,
-                interface_name=vmi_model.uuid,
-                mac_address=vmi_model.vcenter_port.mac_address,
-                ip_address=ip_address,
-                vn_id=vmi_model.vn_model.uuid,
-                display_name=vmi_model.vm_model.name,
-                vlan=vmi_model.vcenter_port.vlan_id,
-                rx_vlan=vmi_model.vcenter_port.vlan_id,
-                port_type=2,
-                # vrouter-port-control accepts only project's uuid without dashes
-                vm_project_id=vmi_model.vn_model.vnc_vn.parent_uuid.replace('-', ''),
-            )
-            self.vrouter_api.add_port(**parameters)
-            logger.info('Added port to vRouter with parameters: %s', parameters)
+            parameters = {
+                "id": vmi_model.uuid,
+                "instance-id": vmi_model.vm_model.uuid,
+                "display-name": vmi_model.vm_model.name,
+                "ip-address": ip_address,
+                "ip6-address": "::",
+                "vn-id": vmi_model.vn_model.uuid,
+                "vm-project-id": vmi_model.vn_model.vnc_vn.parent_uuid,
+                "mac-address": vmi_model.vcenter_port.mac_address,
+                "system-name": vmi_model.uuid,
+                "type": 2,
+                "rx-vlan-id": vmi_model.vcenter_port.vlan_id,
+                "tx-vlan-id": vmi_model.vcenter_port.vlan_id,
+                "vhostuser-mode": 0,
+                "link-state": 0,
+                "author": "contrail-vcenter-manager",
+                "time": str(datetime.datetime.now()),
+
+            }
+            parameters = json.dumps(parameters)
+            request_url = '{host}:{port}/port'.format(host=self.vrouter_host, port=self.vrouter_port)
+            response = self._session.post(request_url, data=parameters, headers={'content-type': 'application/json'})
+            if response.status_code == requests.codes.ok:
+                logger.info('Added port to vRouter with parameters: %s', parameters)
+            else:
+                logger.error('Add port vRouter call return fail % code with data %s', response.status_code, parameters)
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
+            logger.info('Dumping port %s to file', vmi_model.uuid)
+            self._write_port_to_file(vmi_model.uuid, parameters)
 
     def delete_port(self, vmi_uuid):
         """ Delete port from VRouter Agent. """
+        request_url = '{host}:{port}/port/{uuid}'.format(host=self.vrouter_host,
+                                                         port=self.vrouter_port,
+                                                         uuid=vmi_uuid)
         try:
-            self.vrouter_api.delete_port(vmi_uuid)
-            logger.info('Removed port from vRouter with uuid: %s', vmi_uuid)
+            response = self._session.delete(request_url)
+            if response.status_code == requests.codes.ok:
+                logger.info('Removed port from vRouter with uuid: %s', vmi_uuid)
+            else:
+                logger.error('Delete port vRouter call return fail % code', response.status_code)
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
+            logger.info('Deleting port %s file', vmi_uuid)
+            self._delete_port_file(vmi_uuid)
 
     def enable_port(self, vmi_uuid):
         try:
-            self.vrouter_api.enable_port(vmi_uuid)
-            logger.info('Enabled vRouter port with uuid: %s', vmi_uuid)
+            request_url = '{host}:{port}/enable-port/{uuid}'.format(host=self.vrouter_host,
+                                                             port=self.vrouter_port,
+                                                             uuid=vmi_uuid)
+            response = self._session.put(request_url)
+            if response.status_code == requests.codes.ok:
+                logger.info('Enabled port from vRouter with uuid: %s', vmi_uuid)
+            else:
+                logger.error('Enable port vRouter call return fail % code', response.status_code)
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
+            logger.info('Updating port % file', vmi_uuid)
+            port_data = self._read_port_from_file(vmi_uuid)
+            port_data['link-state'] = 1
+            self._write_port_to_file(vmi_uuid, port_data)
 
     def disable_port(self, vmi_uuid):
         try:
-            self.vrouter_api.disable_port(vmi_uuid)
-            logger.info('Disabled vRouter port with uuid: %s', vmi_uuid)
+            request_url = '{host}:{port}/disable-port/{uuid}'.format(host=self.vrouter_host,
+                                                                    port=self.vrouter_port,
+                                                                    uuid=vmi_uuid)
+            response = self._session.put(request_url)
+            if response.status_code == requests.codes.ok:
+                logger.info('Disabled port from vRouter with uuid: %s', vmi_uuid)
+            else:
+                logger.error('Disable port vRouter call return fail % code', response.status_code)
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
+            logger.info('Updating port % file', vmi_uuid)
+            port_data = self._read_port_from_file(vmi_uuid)
+            port_data['link-state'] = 0
+            self._write_port_to_file(vmi_uuid, port_data)
 
     def read_port(self, vmi_uuid):
+        request_url = '{host}:{port}/port/{uuid}'.format(host=self.vrouter_host,
+                                                         port=self.vrouter_port,
+                                                         uuid=vmi_uuid)
         try:
-            request_url = '{host}:{port}/port/{uuid}'.format(host=self.vrouter_host,
-                                                             port=self.vrouter_port,
-                                                             uuid=vmi_uuid)
-            response = requests.get(request_url)
+            response = self._session.get(request_url)
             if response.status_code == requests.codes.ok:
                 port_properties = json.loads(response.content)
                 logger.info('Read vRouter port with uuid: %s, port properties: %s', vmi_uuid, port_properties)
                 return port_properties
+            else:
+                logger.info('Read port vRouter call return fail % code', response.status_code)
         except Exception, e:
             logger.error('There was a problem with vRouter API Client: %s', e)
-        logger.info('Unable to read vRouter port with uuid: %s', vmi_uuid)
-        return None
