@@ -55,7 +55,10 @@ class AbstractChangeHandler(object):
         if value:
             if name.startswith(self.PROPERTY_NAME):
                 try:
+                    start = time.time()
+                    logger.info('Handling change - timestamp: %s', start)
                     self._handle_change(obj, value)
+                    logger.info('Change handled in %s s', time.time() - start)
                 except vmodl.fault.ManagedObjectNotFound:
                     self._log_managed_object_not_found(value)
 
@@ -166,14 +169,26 @@ class VmRegisteredHandler(AbstractEventHandler):
         self._vlan_id_service = vlan_id_service
 
     def _handle_event(self, event):
+        start = time.time()
         if not self._validate_event(event):
             return
+        logger.info('event validated in: %s', time.time() - start)
         vmware_vm = event.vm.vm
+        start = time.time()
         self._vm_service.update(vmware_vm)
+        logger.info('vms updated in: %s', time.time() - start)
+        start = time.time()
         self._vn_service.update_vns()
+        logger.info('vns updated in: %s', time.time() - start)
+        start = time.time()
         self._vmi_service.register_vmis()
+        logger.info('vmis_updated in %s', time.time() - start)
+        start = time.time()
         self._vlan_id_service.update_vlan_ids()
+        logger.info('vlan_ids updated in: %s', time.time() - start)
+        start = time.time()
         self._vrouter_port_service.sync_ports()
+        logger.info('vrouter ports udpated in: %s', time.time() - start)
 
 
 class VmRenamedHandler(AbstractEventHandler):
@@ -305,8 +320,14 @@ class PowerStateHandler(AbstractChangeHandler):
         if not self._validate_vm(obj):
             return
         self._vm_service.update_power_state(obj, value)
+        logger.info('syncing port states')
+        start = time.time()
         self._vrouter_port_service.sync_port_states()
+        logger.info('synced port states in %s', time.time() - start)
+        logger.info('updating vlan ids in vcenter')
+        start = time.time()
         self._vlan_id_service.update_vcenter_vlans()
+        logger.info('vlans updated in %s', time.time() - start)
 
     def _validate_vm(self, vmware_vm):
         return self._is_vm_in_database(name=vmware_vm.name)

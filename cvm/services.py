@@ -84,8 +84,12 @@ class VirtualMachineInterfaceService(Service):
         self._add_default_vnc_info_to(vmi_model)
         self._update_vmis_vn(vmi_model)
         self._assign_vlan_id(vmi_model)
+        start = time.time()
         self._update_in_vnc(vmi_model)
+        logger.info('vmi updated in vnc in: %s', time.time() - start)
+        start = time.time()
         self._add_instance_ip_to(vmi_model)
+        logger.info('instance ip updated in vnc in: %s', time.time() - start)
         self._update_vrouter_port(vmi_model)
         self._database.save(vmi_model)
 
@@ -405,7 +409,9 @@ class VRouterPortService(object):
                 self._update_port(vmi_model)
 
     def _port_needs_an_update(self, vmi_model):
+        start = time.time()
         vrouter_port = self._vrouter_api_client.read_port(vmi_model.uuid)
+        logger.info('vrouter port read in: %s', time.time() - start)
         if not vrouter_port:
             return True
         return (vrouter_port.get('instance-id') != vmi_model.vm_model.uuid or
@@ -415,14 +421,20 @@ class VRouterPortService(object):
                 vrouter_port.get('ip-address') != vmi_model.vnc_instance_ip.instance_ip_address)
 
     def _update_port(self, vmi_model):
+        start = time.time()
         self._vrouter_api_client.delete_port(vmi_model.uuid)
+        logger.info('port deleted in %s s', time.time() - start)
+        start = time.time()
         self._vrouter_api_client.add_port(vmi_model)
+        logger.info('port added in %s s', time.time() - start)
 
     def _set_port_state(self, vmi_model):
+        start = time.time()
         if vmi_model.vm_model.is_powered_on:
             self._vrouter_api_client.enable_port(vmi_model.uuid)
         else:
             self._vrouter_api_client.disable_port(vmi_model.uuid)
+        logger.info('vrouter port enabled/disabled in %s', time.time() - start)
 
 
 class VlanIdService(object):
@@ -453,15 +465,21 @@ class VlanIdService(object):
             self._database.vlans_to_restore.remove(vmi_model)
 
     def _update_vlan_id(self, vmi_model):
+        start = time.time()
         with self._vcenter_api_client:
             current_vlan_id = self._vcenter_api_client.get_vlan_id(vmi_model.vcenter_port)
+            logger.info('vlan id read in %s', time.time() - start)
             if current_vlan_id:
                 self._preserve_old_vlan_id(current_vlan_id, vmi_model)
             else:
                 self._assign_new_vlan_id(vmi_model)
 
     def _preserve_old_vlan_id(self, current_vlan_id, vmi_model):
-        if self._database.is_vlan_available(vmi_model, current_vlan_id):
+        start = time.time()
+        logger.info('checking if vlan id is available in db')
+        available = self._database.is_vlan_available(vmi_model, current_vlan_id)
+        logger.info('checked in: %s', time.time() - start)
+        if available:
             vmi_model.vcenter_port.vlan_id = current_vlan_id
             self._vlan_id_pool.reserve(current_vlan_id)
         else:
