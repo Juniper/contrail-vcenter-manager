@@ -94,15 +94,14 @@ def test_sync_no_vms(vm_service, database, esxi_api_client, vnc_api_client):
     vnc_api_client.update_vm.assert_not_called()
 
 
-def test_delete_unused_vms(vm_service, esxi_api_client, vnc_api_client, vcenter_api_client, vnc_vm):
-    esxi_api_client.get_all_vms.return_value = []
-    vnc_api_client.get_all_vms.return_value = [vnc_vm]
-    vcenter_api_client.can_remove_vm.side_effect = [True, False]
+def test_delete_unused_vms(vm_service, vnc_api_client, vcenter_api_client):
+    vcenter_api_client.get_all_vms.return_value = []
+    vnc_api_client.get_all_vm_uuids.side_effect = [['vnc-vm-uuid'], []]
 
     vm_service.delete_unused_vms_in_vnc()
     vm_service.delete_unused_vms_in_vnc()
 
-    vnc_api_client.delete_vm.assert_called_once_with('vnc-vm-uuid')
+    vnc_api_client.delete_vm.assert_called_once_with(uuid='vnc-vm-uuid')
 
 
 def test_remove_vm(vm_service, database, vcenter_api_client, vnc_api_client, vm_model):
