@@ -11,15 +11,6 @@ def prepare_database(database, vm_model, vn_model_1):
     return database
 
 
-def test_sync_vlan_ids(vlan_id_service, vcenter_api_client, vlan_id_pool):
-    vcenter_api_client.get_reserved_vlan_ids.return_value = [0, 1]
-
-    vlan_id_service.sync_vlan_ids()
-    new_vlan_id = vlan_id_pool.get_available()
-
-    assert new_vlan_id == 2
-
-
 @patch('cvm.services.wait_for_port')
 def test_assign_new_vlan_id(_, vlan_id_service, database, vcenter_api_client,
                             vlan_id_pool, vmi_model):

@@ -268,14 +268,26 @@ class VirtualMachineService(Service):
                 logger.error('One VM was moved out of ESXi during CVM sync')
 
     def delete_unused_vms_in_vnc(self):
-        vnc_vms = self._vnc_api_client.get_all_vms()
-        for vnc_vm in vnc_vms:
-            if self._database.get_vm_model_by_uuid(vnc_vm.uuid):
-                continue
-            with self._vcenter_api_client:
-                if self._vcenter_api_client.can_remove_vm(uuid=vnc_vm.uuid):
-                    logger.info('Deleting %s from VNC', vnc_vm.name)
-                    self._vnc_api_client.delete_vm(vnc_vm.uuid)
+        with self._vcenter_api_client:
+            vnc_vms = self._vnc_api_client.get_all_vms()
+            vnc_vmis = self._vnc_api_client.get_vmis_by_project(self._project)
+            vcenter_vms = self._vcenter_api_client.get_all_vms()
+            vcenter_vm_uuids = [vm.config.instanceUuid for vm in vcenter_vms]
+            vcenter_vm_models = set([VirtualMachineModel(vm, None) for vm in vcenter_vms])
+            vcenter_vmi_uuids = set()
+            for vm_model in vcenter_vm_models:
+                vcenter_vmi_uuids.update([vmi_model.uuid for vmi_model in vm_model.vmi_models])
+            vms_to_remove = [vnc_vm for vnc_vm in vnc_vms if vnc_vm.uuid not in vcenter_vm_uuids]
+            vmis_to_remove = [vnc_vmi for vnc_vmi in vnc_vmis if vnc_vmi.uuid not in vcenter_vmi_uuids]
+
+            for vnc_vmi in vmis_to_remove:
+                logger.info('Deleting stale %s from VNC', vnc_vmi.display_name)
+                self._vnc_api_client.delete_vmi(uuid=vnc_vmi.uuid)
+                self._database.ports_to_delete.append(vnc_vmi.uuid)
+
+            for vnc_vm in vms_to_remove:
+                logger.info('Deleting stale %s from VNC', vnc_vm.name)
+                self._vnc_api_client.delete_vm(uuid=vnc_vm.uuid)
 
     def remove_vm(self, name):
         vm_model = self._database.get_vm_model_by_name(name)
@@ -431,15 +443,6 @@ class VlanIdService(object):
         self._esxi_api_client = esxi_api_client
         self._vlan_id_pool = vlan_id_pool
         self._database = database
-
-    def sync_vlan_ids(self):
-        vrouter_uuid = self._esxi_api_client.read_vrouter_uuid()
-        with self._vcenter_api_client:
-            reserved_vlan_ids = self._vcenter_api_client.get_reserved_vlan_ids(vrouter_uuid)
-            for vlan_id in reserved_vlan_ids:
-                self._vlan_id_pool.reserve(vlan_id)
-
-        self.update_vlan_ids()
 
     def update_vlan_ids(self):
         for vmi_model in list(self._database.vlans_to_update):
