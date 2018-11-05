@@ -16,6 +16,7 @@ def test_full_remove_vm(controller, database, vcenter_api_client, vnc_api_client
 
     # A new update containing VmCreatedEvent arrives and is being handled by the controller
     controller.handle_update(vm_created_update)
+    vrouter_api_client.read_port.return_value = {'uuid': 'port-uuid'}
 
     # After VmCreatedEvent has been handled
     # proper VM model should exists
@@ -78,6 +79,8 @@ def test_vm_removed_local_remove(controller, database, vcenter_api_client, vnc_a
 
     # A new update containing VmCreatedEvent arrives and is being handled by the controller
     controller.handle_update(vm_created_update)
+    vrouter_api_client.read_port.return_value = {'uuid': 'port-uuid'}
+
 
     # After VmCreatedEvent has been handled
     # proper VM model should exists

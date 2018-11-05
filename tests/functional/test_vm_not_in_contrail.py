@@ -53,6 +53,7 @@ def test_network_change(controller, vcenter_api_client, vnc_api_client, vrouter_
 
     # A new update containing VmCreatedEvent arrives and is being handled by the controller
     controller.handle_update(vm_created_update)
+    vrouter_api_client.read_port.return_value = {'uuid': 'port-uuid'}
 
     # The second portgroup is not present in VNC
     vnc_api_client.read_vn.return_value = None
