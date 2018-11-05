@@ -339,6 +339,7 @@ def vnc_api_client(project, security_group):
     vnc_client.read_or_create_security_group.return_value = security_group
     vnc_client.create_and_read_instance_ip.side_effect = assign_ip_to_instance_ip
     vnc_client.read_vmi.return_value = None
+    vnc_client.get_vmi_uuids_by_vm_uuid.return_value = []
     return vnc_client
 
 

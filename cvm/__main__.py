@@ -83,7 +83,7 @@ def build_monitor(config, lock, database):
         vnc_api_client=vnc_api_client,
         database=database,
         esxi_api_client=esxi_api_client,
-        vlan_id_pool=VlanIdPool(const.VLAN_ID_RANGE_START, const.VLAN_ID_RANGE_END)
+        vlan_id_pool=vlan_id_pool
     )
     vrouter_port_service = VRouterPortService(
         vrouter_api_client=VRouterAPIClient(),

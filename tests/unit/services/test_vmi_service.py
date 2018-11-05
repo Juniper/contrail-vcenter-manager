@@ -56,7 +56,7 @@ def test_sync_vmis(vmi_service, database, vnc_api_client, vm_model, vn_model_1):
     database.vmis_to_update.append(vmi_model)
     vnc_api_client.get_vmis_by_project.return_value = []
 
-    vmi_service.sync_vmis()
+    vmi_service.update_vmis()
 
     assert database.get_all_vmi_models() == [vmi_model]
     vnc_api_client.update_vmi.assert_called_once()
@@ -68,7 +68,7 @@ def test_syncs_one_vmi_once(vmi_service, database, vnc_api_client, vm_model, vn_
     database.vmis_to_update.append(vm_model.vmi_models[0])
     vnc_api_client.get_vmis_by_project.return_value = []
 
-    vmi_service.sync_vmis()
+    vmi_service.update_vmis()
 
     vnc_api_client.update_vmi.assert_called_once()
 
@@ -76,20 +76,9 @@ def test_syncs_one_vmi_once(vmi_service, database, vnc_api_client, vm_model, vn_
 def test_sync_no_vmis(vmi_service, database, vnc_api_client):
     vnc_api_client.get_vmis_by_project.return_value = []
 
-    vmi_service.sync_vmis()
+    vmi_service.update_vmis()
 
     assert database.get_all_vmi_models() == []
-
-
-def test_sync_deletes_unused_vmis(vmi_service, database, vnc_api_client, vcenter_api_client, vnc_vmi):
-    vnc_api_client.get_vmis_by_project.return_value = [vnc_vmi]
-    vcenter_api_client.can_remove_vmi.side_effect = [True, False]
-
-    vmi_service.sync_vmis()
-    vmi_service.sync_vmis()
-
-    vnc_api_client.delete_vmi.assert_called_once()
-    assert vnc_vmi.uuid in database.ports_to_delete
 
 
 def test_remove_vmis_for_vm_model(vmi_service, database, vcenter_api_client, vnc_api_client, vmi_model, vm_model,

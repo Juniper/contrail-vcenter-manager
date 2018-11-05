@@ -1,13 +1,14 @@
 import atexit
+import itertools
 import json
 import logging
 import random
 from uuid import uuid4
 
 import requests
-from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from pyVim.connect import Disconnect, SmartConnectNoSSL
 from pyVim.task import WaitForTask
+from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 from vnc_api.exceptions import NoIdError, RefsExistError
 
@@ -191,26 +192,9 @@ class VCenterAPIClient(VSphereAPIClient):
         fault_message = 'Failed to restore VLAN ID for port: %s' % (vcenter_port.port_key,)
         wait_for_task(task, success_message, fault_message)
 
-    def get_reserved_vlan_ids(self, vrouter_uuid):
-        """In this method treats vrouter_uuid as esxi host id"""
-        criteria = vim.dvs.PortCriteria()
-        criteria.connected = True
-        logger.info('Retrieving reserved VLAN IDs')
-        reserved_vland_ids = []
-        for port in self._dvs.FetchDVPorts(criteria=criteria):
-            if not isinstance(port.config.setting.vlan, vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec):
-                continue
-            if find_vrouter_uuid(port.proxyHost) != vrouter_uuid:
-                continue
-            reserved_vland_ids.append(port.config.setting.vlan.vlanId)
-        reserved_vland_ids.extend(self._get_private_vlan_ids())
-        return reserved_vland_ids
-
-    def _get_private_vlan_ids(self):
-        for pvlan_entry in self._dvs.config.pvlanConfig:
-            yield pvlan_entry.primaryVlanId
-            if pvlan_entry.secondaryVlanId is not None:
-                yield pvlan_entry.secondaryVlanId
+    def get_all_vms(self):
+        flat_vm_list = list(itertools.chain.from_iterable(ds.vm for ds in self._datacenter.datastore))
+        return [vm for vm in flat_vm_list if isinstance(vm, vim.VirtualMachine)]
 
     def _get_datacenter(self, name):
         return self._get_object([vim.Datacenter], name)
@@ -370,6 +354,14 @@ class VNCAPIClient(object):
     def get_all_vms(self):
         vms = self.vnc_lib.virtual_machines_list().get('virtual-machines')
         return [self.read_vm(vm['uuid']) for vm in vms]
+
+    def get_all_vm_uuids(self):
+        vms = self.vnc_lib.virtual_machines_list().get('virtual-machines')
+        return [vm['uuid'] for vm in vms]
+
+    def get_vmi_uuids_by_vm_uuid(self, vm_uuid):
+        vm = self.read_vm(vm_uuid)
+        return [vmi_ref['uuid'] for vmi_ref in vm.get_virtual_machine_interface_back_refs()]
 
     def read_vm(self, uuid):
         return self.vnc_lib.virtual_machine_read(id=uuid)

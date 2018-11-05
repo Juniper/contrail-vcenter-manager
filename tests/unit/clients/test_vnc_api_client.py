@@ -71,3 +71,11 @@ def test_get_all_vms(vnc_api_client, vnc_lib, vnc_vm):
 
     vnc_lib.virtual_machine_read.assert_called_once_with(id=u'vm-uuid')
     assert all_vms == [vnc_vm]
+
+
+def test_get_vmi_uuids_by_vm_uuid(vnc_api_client, vnc_lib, vnc_vm):
+    vnc_lib.virtual_machine_read.return_value = vnc_vm
+
+    vmi_uuids = vnc_api_client.get_vmi_uuids_by_vm_uuid(vnc_vm.uuid)
+
+    assert vmi_uuids == ['vmi-uuid']
