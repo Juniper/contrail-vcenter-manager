@@ -25,7 +25,7 @@ class VmwareController(object):
             self._vn_service.sync_vns()
             self._vmi_service.sync_vmis()
             self._vm_service.delete_unused_vms_in_vnc()
-            self._vlan_id_service.sync_vlan_ids()
+            self._vlan_id_service.update_vlan_ids()
             self._vrouter_port_service.sync_ports()
         logger.info('Synchronization complete')
 

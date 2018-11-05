@@ -5,9 +5,9 @@ import random
 from uuid import uuid4
 
 import requests
-from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from pyVim.connect import Disconnect, SmartConnectNoSSL
 from pyVim.task import WaitForTask
+from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 from vnc_api.exceptions import NoIdError, RefsExistError
 
@@ -188,26 +188,8 @@ class VCenterAPIClient(VSphereAPIClient):
         fault_message = 'Failed to restore VLAN ID for port: %s' % (vcenter_port.port_key,)
         wait_for_task(task, success_message, fault_message)
 
-    def get_reserved_vlan_ids(self, vrouter_uuid):
-        """In this method treats vrouter_uuid as esxi host id"""
-        criteria = vim.dvs.PortCriteria()
-        criteria.connected = True
-        logger.info('Retrieving reserved VLAN IDs')
-        reserved_vland_ids = []
-        for port in self._dvs.FetchDVPorts(criteria=criteria):
-            if not isinstance(port.config.setting.vlan, vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec):
-                continue
-            if find_vrouter_uuid(port.proxyHost) != vrouter_uuid:
-                continue
-            reserved_vland_ids.append(port.config.setting.vlan.vlanId)
-        reserved_vland_ids.extend(self._get_private_vlan_ids())
-        return reserved_vland_ids
-
-    def _get_private_vlan_ids(self):
-        for pvlan_entry in self._dvs.config.pvlanConfig:
-            yield pvlan_entry.primaryVlanId
-            if pvlan_entry.secondaryVlanId is not None:
-                yield pvlan_entry.secondaryVlanId
+    def get_all_vms(self):
+        return [vm for vm_list in [ds.vm for ds in self._datacenter.datastore] for vm in vm_list]
 
     def _get_datacenter(self, name):
         return self._get_object([vim.Datacenter], name)

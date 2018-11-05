@@ -69,17 +69,6 @@ def test_restore_vlan_id(vcenter_api_client, dvs, vcenter_port):
     assert spec.setting.vlan.inherited is True
 
 
-def test_get_reserved_vlan_ids(vcenter_api_client, dvs_1):
-    with patch('cvm.clients.SmartConnectNoSSL'):
-        with patch.object(VCenterAPIClient, '_get_dvswitch', return_value=dvs_1):
-            with vcenter_api_client:
-                vlans_1 = vcenter_api_client.get_reserved_vlan_ids('vrouter_uuid_1')
-                vlans_2 = vcenter_api_client.get_reserved_vlan_ids('vrouter_uuid_2')
-
-    assert vlans_1 == [10, 7, 1, 2]
-    assert vlans_2 == [5, 1, 2]
-
-
 def test_can_remove_vm(vcenter_api_client, vm_model, vmware_vm_1):
     with patch('cvm.clients.SmartConnectNoSSL'):
         with vcenter_api_client:
