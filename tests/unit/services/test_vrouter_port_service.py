@@ -26,10 +26,21 @@ def test_no_update(vrouter_port_service, database, vrouter_api_client, vmi_model
 
 def test_delete_port(vrouter_port_service, database, vrouter_api_client):
     database.ports_to_delete.append('port-uuid')
+    vrouter_api_client.read_port.return_value = {'uuid': 'port-uuid'}
 
     vrouter_port_service.sync_ports()
 
     vrouter_api_client.delete_port.assert_called_once_with('port-uuid')
+
+
+def test_no_port_to_delete(vrouter_port_service, database, vrouter_api_client):
+    database.ports_to_delete.append('port-uuid')
+    vrouter_api_client.read_port.return_value = None
+
+    vrouter_port_service.sync_ports()
+
+    vrouter_api_client.read_port.assert_called_once_with('port-uuid')
+    vrouter_api_client.delete_port.assert_not_called()
 
 
 @patch('cvm.services.VRouterPortService._port_needs_an_update', Mock(return_value=False))
