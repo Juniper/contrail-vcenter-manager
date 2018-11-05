@@ -269,10 +269,10 @@ class VirtualMachineService(Service):
 
     def delete_unused_vms_in_vnc(self):
         vnc_vms = self._vnc_api_client.get_all_vms()
-        for vnc_vm in vnc_vms:
-            if self._database.get_vm_model_by_uuid(vnc_vm.uuid):
-                continue
-            with self._vcenter_api_client:
+        with self._vcenter_api_client:
+            for vnc_vm in vnc_vms:
+                if self._database.get_vm_model_by_uuid(vnc_vm.uuid):
+                    continue
                 if self._vcenter_api_client.can_remove_vm(uuid=vnc_vm.uuid):
                     logger.info('Deleting %s from VNC', vnc_vm.name)
                     self._vnc_api_client.delete_vm(vnc_vm.uuid)
@@ -431,15 +431,6 @@ class VlanIdService(object):
         self._esxi_api_client = esxi_api_client
         self._vlan_id_pool = vlan_id_pool
         self._database = database
-
-    def sync_vlan_ids(self):
-        vrouter_uuid = self._esxi_api_client.read_vrouter_uuid()
-        with self._vcenter_api_client:
-            reserved_vlan_ids = self._vcenter_api_client.get_reserved_vlan_ids(vrouter_uuid)
-            for vlan_id in reserved_vlan_ids:
-                self._vlan_id_pool.reserve(vlan_id)
-
-        self.update_vlan_ids()
 
     def update_vlan_ids(self):
         for vmi_model in list(self._database.vlans_to_update):
