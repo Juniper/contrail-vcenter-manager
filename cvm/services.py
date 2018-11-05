@@ -282,17 +282,45 @@ class VirtualMachineService(Service):
                 logger.error('Unexpected exception %s during syncing VM', exc, exc_info=True)
 
     def delete_unused_vms_in_vnc(self):
-        vnc_vms = self._vnc_api_client.get_all_vms()
-        for vnc_vm in vnc_vms:
+        with self._vcenter_api_client:
+            vnc_vms = self._vnc_api_client.get_all_vms()
+            vnc_vmis = self._vnc_api_client.get_vmis_by_project(self._project)
+            vcenter_vms = self._vcenter_api_client.get_all_vms()
+
+            vcenter_vm_uuids = set()
+            vcenter_vm_models = set()
+            for vm in vcenter_vms:
+                try:
+                    vcenter_vm_uuids.add(vm.config.instanceUuid)
+                    vcenter_vm_models.add(VirtualMachineModel(vm, None))
+                except Exception, exc:
+                    logger.error('Unexpected exception %s during copying VM info from vCenter.', exc, exc_info=True)
+
+            vcenter_vmi_uuids = set()
+            for vm_model in vcenter_vm_models:
+                vcenter_vmi_uuids.update(vmi_model.uuid for vmi_model in vm_model.vmi_models)
+            vms_to_remove = (vnc_vm for vnc_vm in vnc_vms if vnc_vm.uuid not in vcenter_vm_uuids)
+            vmis_to_remove = (vnc_vmi for vnc_vmi in vnc_vmis if vnc_vmi.uuid not in vcenter_vmi_uuids)
+
+            self._delete_stale_vms_from_vnc(vmis_to_remove)
+            self._delete_stale_vmis_from_vnc(vms_to_remove)
+
+    def _delete_stale_vmis_from_vnc(self, vms_to_remove):
+        for vnc_vm in vms_to_remove:
             try:
-                if self._database.get_vm_model_by_uuid(vnc_vm.uuid):
-                    continue
-                with self._vcenter_api_client:
-                    if self._vcenter_api_client.can_remove_vm(uuid=vnc_vm.uuid):
-                        logger.info('Deleting %s from VNC', vnc_vm.name)
-                        self._vnc_api_client.delete_vm(vnc_vm.uuid)
+                logger.info('Deleting stale %s from VNC', vnc_vm.name)
+                self._vnc_api_client.delete_vm(uuid=vnc_vm.uuid)
             except Exception, exc:
                 logger.error('Unexpected exception %s during removing VM from VNC', exc, exc_info=True)
+
+    def _delete_stale_vms_from_vnc(self, vmis_to_remove):
+        for vnc_vmi in vmis_to_remove:
+            try:
+                logger.info('Deleting stale %s from VNC', vnc_vmi.display_name)
+                self._vnc_api_client.delete_vmi(uuid=vnc_vmi.uuid)
+            except Exception, exc:
+                logger.error('Unexpected exception %s during removing VMI from VNC', exc, exc_info=True)
+            self._database.ports_to_delete.append(vnc_vmi.uuid)
 
     def remove_vm(self, name):
         vm_model = self._database.get_vm_model_by_name(name)
@@ -380,11 +408,11 @@ class VirtualNetworkService(Service):
                 logger.error('Unexpected exception %s during syncing VN', exc, exc_info=True)
 
     def _create_vn_model(self, dpg, vnc_vn):
-            logger.info('Fetched new portgroup key: %s name: %s', dpg.key, vnc_vn.name)
-            vn_model = VirtualNetworkModel(dpg, vnc_vn)
-            self._vcenter_api_client.enable_vlan_override(vn_model.vmware_vn)
-            self._database.save(vn_model)
-            logger.info('Created %s', vn_model)
+        logger.info('Fetched new portgroup key: %s name: %s', dpg.key, vnc_vn.name)
+        vn_model = VirtualNetworkModel(dpg, vnc_vn)
+        self._vcenter_api_client.enable_vlan_override(vn_model.vmware_vn)
+        self._database.save(vn_model)
+        logger.info('Created %s', vn_model)
 
 
 class VRouterPortService(object):
@@ -462,15 +490,6 @@ class VlanIdService(object):
         self._vlan_id_pool = vlan_id_pool
         self._database = database
 
-    def sync_vlan_ids(self):
-        vrouter_uuid = self._esxi_api_client.read_vrouter_uuid()
-        with self._vcenter_api_client:
-            reserved_vlan_ids = self._vcenter_api_client.get_reserved_vlan_ids(vrouter_uuid)
-            for vlan_id in reserved_vlan_ids:
-                self._vlan_id_pool.reserve(vlan_id)
-
-        self.update_vlan_ids()
-
     def update_vlan_ids(self):
         for vmi_model in list(self._database.vlans_to_update):
             try:
@@ -487,7 +506,6 @@ class VlanIdService(object):
                 self._database.vlans_to_restore.remove(vmi_model)
             except Exception, exc:
                 logger.error('Unexpected exception %s during restoring vCenter VLAN', exc, exc_info=True)
-
 
     def _update_vlan_id(self, vmi_model):
         with self._vcenter_api_client:
