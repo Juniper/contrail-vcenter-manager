@@ -127,6 +127,10 @@ def make_filter_spec(obj, filters):
 
 
 class VCenterAPIClient(VSphereAPIClient):
+    RELOCATE_TASK = 'VirtualMachine.relocate'
+    DESTROY_TASK = 'VirtualMachine.destroy'
+    UNREGISTER_TASK = 'VirtualMachine.unregister'
+
     def __init__(self, vcenter_cfg):
         super(VCenterAPIClient, self).__init__()
         self._vcenter_cfg = vcenter_cfg
@@ -248,6 +252,21 @@ class VCenterAPIClient(VSphereAPIClient):
     def can_rename_vmi(self, vmi_model, new_name):
         return self.can_rename_vm(vmi_model.vm_model, new_name)
 
+    def is_vm_relocate(self, vm_name):
+        # List is sorted from new tasks to older
+        sorted_tasks = sorted(
+            self._si.content.taskManager.recentTask,
+            key=get_key_from_task, reverse=True
+        )
+        for task in sorted_tasks:
+            if task.info.entityName != vm_name:
+                continue
+            if task.info.descriptionId == self.RELOCATE_TASK:
+                return True
+            if task.info.descriptionId in (self.DESTROY_TASK, self.UNREGISTER_TASK):
+                return False
+        return False
+
 
 def make_dv_port_spec(dv_port, vlan_id=None):
     dv_port_config_spec = vim.dvs.DistributedVirtualPort.ConfigSpec()
@@ -293,6 +312,10 @@ def get_vm_uuid_for_vmi(vnc_vmi):
     if refs:
         return refs[0]['uuid']
     return None
+
+
+def get_key_from_task(task):
+    return int(task.info.key.split('-')[1])
 
 
 class VNCAPIClient(object):
