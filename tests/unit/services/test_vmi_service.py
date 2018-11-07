@@ -96,7 +96,7 @@ def test_remove_vmis_for_vm_model(vmi_service, database, vcenter_api_client, vnc
                                   vlan_id_pool):
     database.save(vm_model)
     database.save(vmi_model)
-    vcenter_api_client.can_remove_vm.return_value = True
+    vcenter_api_client.is_vm_relocate.return_value = False
 
     vmi_service.remove_vmis_for_vm_model(vm_model.name)
 
