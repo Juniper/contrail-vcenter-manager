@@ -1,5 +1,6 @@
 import atexit
 import json
+import gevent
 import logging
 import random
 from uuid import uuid4
@@ -48,17 +49,23 @@ class ESXiAPIClient(VSphereAPIClient):
 
     def __init__(self, esxi_cfg):
         super(ESXiAPIClient, self).__init__()
-        self._si = SmartConnectNoSSL(
-            host=esxi_cfg.get('host'),
-            user=esxi_cfg.get('username'),
-            pwd=esxi_cfg.get('password'),
-            port=esxi_cfg.get('port'),
-            preferredApiVersions=esxi_cfg.get('preferred_api_versions')
-        )
-        self._datacenter = self._si.content.rootFolder.childEntity[0]
-        atexit.register(Disconnect, self._si)
-        self._property_collector = self._si.content.propertyCollector
-        self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
+        self._lock = gevent.lock.BoundedSemaphore()
+        self._esxi_cfg = esxi_cfg
+        self._create_connection()
+
+    def _create_connection(self):
+        with self._lock:
+            self._si = SmartConnectNoSSL(
+                host=self._esxi_cfg.get('host'),
+                user=self._esxi_cfg.get('username'),
+                pwd=self._esxi_cfg.get('password'),
+                port=self._esxi_cfg.get('port'),
+                preferredApiVersions=self._esxi_cfg.get('preferred_api_versions')
+            )
+            atexit.register(Disconnect, self._si)
+            self._datacenter = self._si.content.rootFolder.childEntity[0]
+            self._property_collector = self._si.content.propertyCollector
+            self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
 
     def get_all_vms(self):
         return self._datacenter.vmFolder.childEntity
@@ -85,10 +92,25 @@ class ESXiAPIClient(VSphereAPIClient):
             self._wait_options.maxWaitSeconds = max_wait_seconds
 
     def wait_for_updates(self):
-        update_set = self._property_collector.WaitForUpdatesEx(self._version, self._wait_options)
-        if update_set:
-            self._version = update_set.version
-        return update_set
+        with self._lock:
+            update_set = self._property_collector.WaitForUpdatesEx(self._version, self._wait_options)
+            if update_set:
+                self._version = update_set.version
+            return update_set
+
+    def cancel_wait_for_updates(self):
+        with self._lock:
+            try:
+                self._property_collector.CancelWaitForUpdates()
+            except Exception:
+                Disconnect(self._si)
+                for i in range(5):
+                    try:
+                        logger.error('Reconnecting session with ESXi')
+                        self._create_connection()
+                    except Exception:
+                        logger.error('Failed to reconnect session with ESXi')
+                        gevent.sleep(2 * i)
 
     def read_vm_properties(self, vmware_vm):
         filter_spec = make_filter_spec(vmware_vm, VM_PROPERTY_FILTERS)
