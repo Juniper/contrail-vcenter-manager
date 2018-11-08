@@ -104,7 +104,7 @@ class SandeshConverter(object):
         return VirtualMachineData(
             uuid=vm_model.uuid,
             name=vm_model.name,
-            hostname=vm_model.host_name,
+            host_uuid=vm_model.host_uuid,
             interfaces=[self.convert_vmi(vmi_model) for vmi_model in vmi_models]
         )
 
