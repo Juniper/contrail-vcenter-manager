@@ -45,3 +45,6 @@ ID_PERMS = IdPermsType(creator='vcenter-manager', enable=True)
 
 WAIT_FOR_PORT_RETRY_TIME = 1.0*25/1000  # 25 ms
 WAIT_FOR_PORT_RETRY_LIMIT = int(10/WAIT_FOR_PORT_RETRY_TIME)  # Timeout after 10 s
+
+WAIT_FOR_UPDATE_TIMEOUT = 20
+SUPERVISOR_TIMEOUT = 25

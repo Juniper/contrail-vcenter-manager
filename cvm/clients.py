@@ -1,5 +1,6 @@
 import atexit
 import json
+import gevent
 import logging
 import random
 from uuid import uuid4
@@ -12,7 +13,7 @@ from vnc_api import vnc_api
 from vnc_api.exceptions import NoIdError, RefsExistError
 
 from contrail_vrouter_api.vrouter_api import ContrailVRouterApi
-from cvm.constants import (VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
+from cvm.constants import (EVENTS_TO_OBSERVE, VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
                            VNC_VCENTER_IPAM, VNC_VCENTER_IPAM_FQN,
                            VNC_VCENTER_PROJECT)
@@ -44,21 +45,24 @@ class VSphereAPIClient(object):
 
 
 class ESXiAPIClient(VSphereAPIClient):
-    _version = ''
-
     def __init__(self, esxi_cfg):
         super(ESXiAPIClient, self).__init__()
+        self._esxi_cfg = esxi_cfg
+        self._create_connection()
+
+    def _create_connection(self):
         self._si = SmartConnectNoSSL(
-            host=esxi_cfg.get('host'),
-            user=esxi_cfg.get('username'),
-            pwd=esxi_cfg.get('password'),
-            port=esxi_cfg.get('port'),
-            preferredApiVersions=esxi_cfg.get('preferred_api_versions')
+            host=self._esxi_cfg.get('host'),
+            user=self._esxi_cfg.get('username'),
+            pwd=self._esxi_cfg.get('password'),
+            port=self._esxi_cfg.get('port'),
+            preferredApiVersions=self._esxi_cfg.get('preferred_api_versions')
         )
-        self._datacenter = self._si.content.rootFolder.childEntity[0]
         atexit.register(Disconnect, self._si)
+        self._datacenter = self._si.content.rootFolder.childEntity[0]
         self._property_collector = self._si.content.propertyCollector
         self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
+        self._version = ''
 
     def get_all_vms(self):
         return self._datacenter.vmFolder.childEntity
@@ -89,6 +93,10 @@ class ESXiAPIClient(VSphereAPIClient):
         if update_set:
             self._version = update_set.version
         return update_set
+
+    def renew_connection(self):
+        Disconnect(self._si)
+        self._create_connection()
 
     def read_vm_properties(self, vmware_vm):
         filter_spec = make_filter_spec(vmware_vm, VM_PROPERTY_FILTERS)
