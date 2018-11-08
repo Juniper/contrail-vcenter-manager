@@ -31,6 +31,7 @@ from cvm.sandesh_handler import SandeshHandler
 from cvm.services import (VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService,
                           VRouterPortService, VlanIdService)
+from cvm.supervisor import Supervisor
 
 gevent.monkey.patch_all()
 
@@ -54,10 +55,6 @@ def build_monitor(config, lock, database):
     esxi_cfg, vcenter_cfg, vnc_cfg = config['esxi'], config['vcenter'], config['vnc']
 
     esxi_api_client = ESXiAPIClient(esxi_cfg)
-    event_history_collector = esxi_api_client.create_event_history_collector(const.EVENTS_TO_OBSERVE)
-    esxi_api_client.add_filter(event_history_collector, ['latestPage'])
-    esxi_api_client.make_wait_options(120)
-    esxi_api_client.wait_for_updates()
 
     vcenter_api_client = VCenterAPIClient(vcenter_cfg)
 
@@ -120,7 +117,7 @@ def build_monitor(config, lock, database):
     vmware_controller = VmwareController(vm_service, vn_service,
                                          vmi_service, vrouter_port_service,
                                          vlan_id_service, update_handler, lock)
-    return VMwareMonitor(esxi_api_client, vmware_controller)
+    return VMwareMonitor(esxi_api_client, database, vmware_controller)
 
 
 def run_introspect(cfg, database, lock):
@@ -177,9 +174,10 @@ def main(args):
     cfg = load_config(args.config_file)
     vmware_monitor = build_monitor(cfg, lock, database)
     run_introspect(cfg, database, lock)
-    vmware_monitor.sync()
+    esxi_api_client = vmware_monitor._esxi_api_client
+    supervisor = Supervisor(vmware_monitor, esxi_api_client)
     greenlets = [
-        gevent.spawn(vmware_monitor.start()),
+        gevent.spawn(supervisor.supervise, vmware_monitor, esxi_api_client)
     ]
     gevent.joinall(greenlets)
 
