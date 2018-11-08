@@ -45,11 +45,22 @@ def test_false(vrouter_port_service, database, vrouter_api_client, vmi_model, vr
     vrouter_api_client.add_port.assert_not_called()
 
 
-def test_true(vrouter_port_service, database, vrouter_api_client, vmi_model):
+def test_true(vrouter_port_service, database, vrouter_api_client, vmi_model, vrouter_response):
+    database.ports_to_update.append(vmi_model)
+    vrouter_response['ip-address'] = '192.168.200.6'
+    vrouter_api_client.read_port.return_value = vrouter_response
+
+    vrouter_port_service.sync_ports()
+
+    vrouter_api_client.delete_port.assert_called_once_with(vmi_model.uuid)
+    vrouter_api_client.add_port.assert_called_once_with(vmi_model)
+
+
+def test_new_port(vrouter_port_service, database, vrouter_api_client, vmi_model):
     database.ports_to_update.append(vmi_model)
     vrouter_api_client.read_port.return_value = None
 
     vrouter_port_service.sync_ports()
 
-    vrouter_api_client.delete_port.assert_called_once_with(vmi_model.uuid)
+    vrouter_api_client.delete_port.assert_not_called()
     vrouter_api_client.add_port.assert_called_once_with(vmi_model)

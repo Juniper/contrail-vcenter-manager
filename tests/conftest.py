@@ -441,7 +441,9 @@ def database():
 
 @pytest.fixture()
 def vrouter_api_client():
-    return Mock()
+    client = Mock()
+    client.read_port.return_value = None
+    return client
 
 
 @pytest.fixture()
