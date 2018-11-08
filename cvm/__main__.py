@@ -25,12 +25,14 @@ from cvm.controllers import (GuestNetHandler, PowerStateHandler, UpdateHandler,
                              VmUpdatedHandler, VmwareController,
                              VmwareToolsStatusHandler)
 from cvm.database import Database
+from cvm.event_listener import EventListener
 from cvm.models import VlanIdPool
 from cvm.monitors import VMwareMonitor
 from cvm.sandesh_handler import SandeshHandler
 from cvm.services import (VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService,
                           VRouterPortService, VlanIdService)
+from cvm.supervisor import Supervisor
 
 gevent.monkey.patch_all()
 
@@ -50,14 +52,14 @@ def translate_logging_level(level):
     return level
 
 
-def build_monitor(config, lock, database):
+def build_context(config):
+    database = Database()
+    lock = gevent.lock.BoundedSemaphore()
+    update_set_queue = gevent.queue.Queue()
+
     esxi_cfg, vcenter_cfg, vnc_cfg = config['esxi'], config['vcenter'], config['vnc']
 
     esxi_api_client = ESXiAPIClient(esxi_cfg)
-    event_history_collector = esxi_api_client.create_event_history_collector(const.EVENTS_TO_OBSERVE)
-    esxi_api_client.add_filter(event_history_collector, ['latestPage'])
-    esxi_api_client.make_wait_options(120)
-    esxi_api_client.wait_for_updates()
 
     vcenter_api_client = VCenterAPIClient(vcenter_cfg)
 
@@ -120,7 +122,16 @@ def build_monitor(config, lock, database):
     vmware_controller = VmwareController(vm_service, vn_service,
                                          vmi_service, vrouter_port_service,
                                          vlan_id_service, update_handler, lock)
-    return VMwareMonitor(esxi_api_client, vmware_controller), esxi_api_client
+    vmware_monitor = VMwareMonitor(vmware_controller, update_set_queue)
+    event_listener = EventListener(vmware_controller, update_set_queue, esxi_api_client, database)
+    supervisor = Supervisor(event_listener, esxi_api_client)
+    context = {
+        'lock': lock,
+        'database': database,
+        'vmware_monitor': vmware_monitor,
+        'supervisor': supervisor,
+    }
+    return context
 
 
 def run_introspect(cfg, database, lock):
@@ -171,28 +182,17 @@ def run_introspect(cfg, database, lock):
     )
 
 
-def update_set_listener(esxi_api_client, update_set_queue):
-    logger = logging.getLogger('cvm')
-    while True:
-        logger.info('Started waiting for updates')
-        update_set = esxi_api_client.wait_for_updates()
-        logger.info('Got update set from ESXi')
-        if update_set:
-            logger.info('Not empty update set put on queue')
-            update_set_queue.put(update_set)
-
-
 def main(args):
-    database = Database()
-    lock = gevent.lock.BoundedSemaphore()
-    update_set_queue = gevent.queue.Queue()
     cfg = load_config(args.config_file)
-    vmware_monitor, esxi_api_client = build_monitor(cfg, lock, database)
+    context = build_context(cfg)
+    lock = context['lock']
+    database = context['database']
+    vmware_monitor = context['vmware_monitor']
+    supervisor = context['supervisor']
     run_introspect(cfg, database, lock)
-    vmware_monitor.sync()
     greenlets = [
-        gevent.spawn(vmware_monitor.start, update_set_queue),
-        gevent.spawn(update_set_listener, esxi_api_client, update_set_queue),
+        gevent.spawn(supervisor.supervise),
+        gevent.spawn(vmware_monitor.monitor),
     ]
     gevent.joinall(greenlets, raise_error=True)
 
