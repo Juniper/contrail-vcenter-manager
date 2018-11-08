@@ -35,6 +35,7 @@ from cvm.services import (VirtualMachineInterfaceService,
 gevent.monkey.patch_all()
 
 
+
 def load_config(config_file):
     with open(config_file, 'r') as ymlfile:
         return yaml.load(ymlfile)
@@ -56,7 +57,7 @@ def build_monitor(config, lock, database):
     esxi_api_client = ESXiAPIClient(esxi_cfg)
     event_history_collector = esxi_api_client.create_event_history_collector(const.EVENTS_TO_OBSERVE)
     esxi_api_client.add_filter(event_history_collector, ['latestPage'])
-    esxi_api_client.make_wait_options(120)
+    esxi_api_client.make_wait_options(20)
     esxi_api_client.wait_for_updates()
 
     vcenter_api_client = VCenterAPIClient(vcenter_cfg)
@@ -171,15 +172,49 @@ def run_introspect(cfg, database, lock):
     )
 
 
+def supervisor(vmware_monitor, esxi_api_client, to_supervisor, from_supervisor):
+    logger = logging.getLogger('cvm')
+    greenlet = gevent.spawn(vmware_monitor.start, to_supervisor, from_supervisor)
+    while True:
+        try:
+            from_supervisor.put('PERMISSION_FOR_WAIT_FOR_UPDATES')
+            logger.info('SEND PERMISSON FOR WAIT FOR UPDATES')
+            to_supervisor.get(timeout=25)
+            logger.info('GOT MESSAGE FROM LISTENER GREENLET')
+        except gevent.queue.Empty:
+            try:
+                logger.error('Canceling wait for updates call...')
+                esxi_api_client.cancel_wait_for_updates()
+                to_supervisor.get(timeout=3)
+                logger.error('Cancelled wait for updates call...')
+            except Exception:
+                logger.error('Failed to cancel wait for updates')
+                logger.info('Renew connection to ESXi..')
+                while True:
+                    try:
+                        esxi_api_client.renew_connection()
+                        break
+                    except Exception:
+                        logger.error('Unable to renew ESXi connetion. Retrying..')
+                        gevent.sleep(5)
+                logger.info('Respawing event handling greenlet')
+                greenlet.kill(block=False)
+                greenlet.gevent.spawn(vmware_monitor.start, to_supervisor, from_supervisor)
+                logger.info('Respawned event handling greenlet')
+
+
 def main(args):
     database = Database()
     lock = gevent.lock.BoundedSemaphore()
+    to_supervisor = gevent.queue.Queue()
+    from_supervisor = gevent.queue.Queue()
     cfg = load_config(args.config_file)
     vmware_monitor = build_monitor(cfg, lock, database)
     run_introspect(cfg, database, lock)
     vmware_monitor.sync()
+    esxi_api_client = vmware_monitor._esxi_api_client
     greenlets = [
-        gevent.spawn(vmware_monitor.start()),
+        gevent.spawn(supervisor, vmware_monitor, esxi_api_client, to_supervisor, from_supervisor)
     ]
     gevent.joinall(greenlets)
 
