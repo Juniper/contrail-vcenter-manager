@@ -26,7 +26,7 @@ def update_set_queue(vm_created_update):
 
 def test_pass_update_to_controller(monitor, controller, update_set_queue, vm_created_update):
     try:
-        monitor.start(update_set_queue)
+        monitor.monitor(update_set_queue)
     except StopIteration:
         pass
 
