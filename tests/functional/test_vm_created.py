@@ -44,7 +44,10 @@ def test_vm_created(_, controller, database, vcenter_api_client, vnc_api_client,
     vnc_api_client.create_and_read_instance_ip.assert_called_once()
 
     # Check if VMI's vRouter Port has been added:
+    vrouter_api_client.read_port.assert_called_once()
+    vrouter_api_client.delete_port.assert_not_called()
     vrouter_api_client.add_port.assert_called_once_with(vmi_model)
+    vrouter_api_client.disable_port.assert_not_called()
 
     # Check if VLAN ID has been set using VLAN Override
     vcenter_port = vcenter_api_client.set_vlan_id.call_args[0][0]

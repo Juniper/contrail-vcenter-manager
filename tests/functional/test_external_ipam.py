@@ -20,7 +20,7 @@ def test_external_ipam(controller, database, vnc_api_client, vrouter_api_client,
 
     # vRouter port should not be updated - it will gather IP info from the Controller
     vrouter_api_client.add_port.assert_called_once()
-    vrouter_api_client.delete_port.assert_called_once()
+    vrouter_api_client.delete_port.assert_not_called()
 
     # The VMI itself should not be updated, since there's no new info
     # (one call is from VmCreated)
