@@ -90,6 +90,9 @@ class ESXiAPIClient(VSphereAPIClient):
             self._version = update_set.version
         return update_set
 
+    def cancel_wait_for_updates(self):
+        self._property_collector.CancelWaitForUpdatesEx()
+
     def read_vm_properties(self, vmware_vm):
         filter_spec = make_filter_spec(vmware_vm, VM_PROPERTY_FILTERS)
         options = vmodl.query.PropertyCollector.RetrieveOptions()

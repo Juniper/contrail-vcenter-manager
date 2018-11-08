@@ -171,15 +171,30 @@ def run_introspect(cfg, database, lock):
     )
 
 
+def supervisor(esxi_api_client, queue, logger):
+    while True:
+        try:
+            queue.get(timeout=125)
+        except gevent.queue.Empty:
+            logger.error('Canceling wait for updates call...')
+            esxi_api_client.cancel_wait_for_updates()
+            queue.get(timeout=1)
+            logger.error('Cancelled wait for updates call...')
+
+
 def main(args):
     database = Database()
+    logger = logging.getLogger('cvm')
     lock = gevent.lock.BoundedSemaphore()
+    queue = gevent.queue.Queue()
     cfg = load_config(args.config_file)
     vmware_monitor = build_monitor(cfg, lock, database)
     run_introspect(cfg, database, lock)
     vmware_monitor.sync()
+    esxi_api_client = vmware_monitor._esxi_api_client
     greenlets = [
-        gevent.spawn(vmware_monitor.start()),
+        gevent.spawn(vmware_monitor.start, queue),
+        gevent.spawn(supervisor, esxi_api_client, queue, logger)
     ]
     gevent.joinall(greenlets)
 
