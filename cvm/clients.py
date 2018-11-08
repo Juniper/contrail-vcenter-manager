@@ -45,21 +45,24 @@ class VSphereAPIClient(object):
 
 
 class ESXiAPIClient(VSphereAPIClient):
-    _version = ''
-
     def __init__(self, esxi_cfg):
         super(ESXiAPIClient, self).__init__()
+        self._esxi_cfg = esxi_cfg
+        self._create_connection()
+
+    def _create_connection(self):
         self._si = SmartConnectNoSSL(
-            host=esxi_cfg.get('host'),
-            user=esxi_cfg.get('username'),
-            pwd=esxi_cfg.get('password'),
-            port=esxi_cfg.get('port'),
-            preferredApiVersions=esxi_cfg.get('preferred_api_versions')
+            host=self._esxi_cfg.get('host'),
+            user=self._esxi_cfg.get('username'),
+            pwd=self._esxi_cfg.get('password'),
+            port=self._esxi_cfg.get('port'),
+            preferredApiVersions=self._esxi_cfg.get('preferred_api_versions')
         )
-        self._datacenter = self._si.content.rootFolder.childEntity[0]
         atexit.register(Disconnect, self._si)
+        self._datacenter = self._si.content.rootFolder.childEntity[0]
         self._property_collector = self._si.content.propertyCollector
         self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
+        self._version = ''
 
     def get_all_vms(self):
         return self._datacenter.vmFolder.childEntity
@@ -90,6 +93,9 @@ class ESXiAPIClient(VSphereAPIClient):
         if update_set:
             self._version = update_set.version
         return update_set
+
+    def renew_connection(self):
+        self._create_connection()
 
     def read_vm_properties(self, vmware_vm):
         filter_spec = make_filter_spec(vmware_vm, VM_PROPERTY_FILTERS)
@@ -361,7 +367,7 @@ class VNCAPIClient(object):
 
     def get_vmi_uuids_by_vm_uuid(self, vm_uuid):
         vm = self.read_vm(vm_uuid)
-        return [vmi_ref['uuid'] for vmi_ref in vm.get_virtual_machine_interface_back_refs()]
+        return [vmi_ref['uuid'] for vmi_ref in vm.get_virtual_machine_interface_back_refs() or ()]
 
     def read_vm(self, uuid):
         return self.vnc_lib.virtual_machine_read(id=uuid)

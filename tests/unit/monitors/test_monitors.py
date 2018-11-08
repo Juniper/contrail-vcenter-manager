@@ -13,20 +13,20 @@ def controller():
 
 
 @pytest.fixture()
-def monitor(controller, esxi_api_client):
-    return VMwareMonitor(esxi_api_client, controller)
-
-
-@pytest.fixture()
 def update_set_queue(vm_created_update):
     queue = Mock()
     queue.get.return_value = vm_created_update
     return queue
 
 
-def test_pass_update_to_controller(monitor, controller, update_set_queue, vm_created_update):
+@pytest.fixture()
+def monitor(controller, update_set_queue):
+    return VMwareMonitor(controller, update_set_queue)
+
+
+def test_pass_update_to_controller(monitor, controller, vm_created_update):
     try:
-        monitor.start(update_set_queue)
+        monitor.monitor()
     except StopIteration:
         pass
 
