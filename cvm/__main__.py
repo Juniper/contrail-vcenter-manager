@@ -34,6 +34,8 @@ from cvm.services import (VirtualMachineInterfaceService,
 
 gevent.monkey.patch_all()
 
+logger = logging.getLogger('cvm')
+
 
 def load_config(config_file):
     with open(config_file, 'r') as ymlfile:
@@ -171,15 +173,30 @@ def run_introspect(cfg, database, lock):
     )
 
 
+def supervisor(esxi_api_client, queue):
+    while True:
+        try:
+            queue.get(timeout=125)
+            logger.info('GOT MESSAGE FROM LISTENER GREENLET')
+        except gevent.queue.Empty:
+            logger.error('Canceling wait for updates call...')
+            esxi_api_client.cancel_wait_for_updates()
+            queue.get(timeout=1)
+            logger.error('Cancelled wait for updates call...')
+
+
 def main(args):
     database = Database()
     lock = gevent.lock.BoundedSemaphore()
+    queue = gevent.queue.Queue()
     cfg = load_config(args.config_file)
     vmware_monitor = build_monitor(cfg, lock, database)
     run_introspect(cfg, database, lock)
     vmware_monitor.sync()
+    esxi_api_client = vmware_monitor._esxi_api_client
     greenlets = [
-        gevent.spawn(vmware_monitor.start()),
+        gevent.spawn(vmware_monitor.start, queue),
+        gevent.spawn(supervisor, esxi_api_client, queue)
     ]
     gevent.joinall(greenlets)
 
@@ -195,6 +212,5 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         sys.exit(0)
     except Exception:
-        logger = logging.getLogger('cvm')
         logger.critical('', exc_info=True)
         raise
