@@ -1,3 +1,5 @@
+import gevent
+import time
 import logging
 import uuid
 from collections import deque
@@ -7,6 +9,7 @@ from vnc_api.vnc_api import (InstanceIp, MacAddressesType, VirtualMachine,
                              VirtualMachineInterface)
 
 from cvm.constants import CONTRAIL_VM_NAME, ID_PERMS
+from cvm.utils import synchronized
 
 logger = logging.getLogger(__name__)
 
@@ -25,18 +28,30 @@ class VirtualMachineModel(object):
     def __init__(self, vmware_vm, vm_properties):
         self.vmware_vm = vmware_vm
         self.vm_properties = vm_properties
+        t2 = time.time()
         self.devices = vmware_vm.config.hardware.device
-        self.host_name = vmware_vm.summary.runtime.host.name
+        logger.info('VirtualMachineModel.devices took: %s', time.time() - t2)
+        t3 = time.time()
+        host = vm_properties['summary.runtime.host']
+        self.host_uuid = host.hardware.systemInfo.uuid
+        logger.info('VirtualMachineModel.host_* took: %s', time.time() - t3)
         self.property_filter = None
+        t0 = time.time()
         self.ports = self._read_ports()
+        logger.info('VirtualMachineModel._read_ports took: %s', time.time() - t0)
+        t1 = time.time()
         self.vmi_models = self._construct_interfaces()
+        logger.info('VirtualMachineModel._construct_interfaces took: %s', time.time() - t1)
 
     def update(self, vmware_vm, vm_properties):
         self.vmware_vm = vmware_vm
         self.vm_properties = vm_properties
         self.devices = vmware_vm.config.hardware.device
-        self.host_name = vmware_vm.summary.runtime.host.name
+        host = vm_properties['summary.runtime.host']
+        self.host_uuid = host.hardware.systemInfo.uuid
+        t0 = time.time()
         self.ports = self._read_ports()
+        logger.info('VirtualMachineModel._read_ports took: %s', time.time() - t0)
 
     def rename(self, name):
         self.vm_properties['name'] = name
@@ -238,24 +253,29 @@ class VirtualMachineInterfaceModel(object):
 
 class VlanIdPool(object):
     def __init__(self, start, end):
+        self._lock = gevent.lock.RLock()
         self._available_ids = deque(xrange(start, end + 1))
 
+    @synchronized
     def reserve(self, vlan_id):
         try:
             self._available_ids.remove(vlan_id)
         except ValueError:
             pass
 
+    @synchronized
     def get_available(self):
         try:
             return self._available_ids.popleft()
         except IndexError:
             raise Exception('No viable VLAN ID')
 
+    @synchronized
     def free(self, vlan_id):
         if vlan_id not in self._available_ids:
             self._available_ids.append(vlan_id)
 
+    @synchronized
     def is_available(self, vlan_id):
         return vlan_id in self._available_ids
 

@@ -1,3 +1,4 @@
+import gevent
 import ipaddress
 import logging
 import time
@@ -10,6 +11,7 @@ from cvm.constants import (CONTRAIL_VM_NAME, VM_UPDATE_FILTERS,
                            DVS_UNSTABLE_CLUSTER_ERROR)
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
+from cvm.utils import synchronized
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +53,7 @@ class VirtualMachineInterfaceService(Service):
         super(VirtualMachineInterfaceService, self).__init__(vnc_api_client, database,
                                                              esxi_api_client=esxi_api_client,
                                                              vcenter_api_client=vcenter_api_client)
+        self._lock = gevent.lock.RLock()
         self._vlan_id_pool = vlan_id_pool
 
     def update_vmis(self):
@@ -101,6 +104,7 @@ class VirtualMachineInterfaceService(Service):
     def _update_in_vnc(self, vmi_model):
         self._vnc_api_client.update_vmi(vmi_model.vnc_vmi)
 
+    @synchronized
     def _add_instance_ip_to(self, vmi_model):
         vmi_model.construct_instance_ip()
         if vmi_model.vnc_instance_ip:
@@ -203,7 +207,9 @@ class VirtualMachineService(Service):
                                                     vcenter_api_client=vcenter_api_client)
 
     def update(self, vmware_vm):
+        t0 = time.time()
         vm_properties = self.get_vm_vmware_properties(vmware_vm)
+        logger.info('Reading VM properties took : %s', time.time() - t0)
         if is_contrail_vm_name(vm_properties['name']):
             return
         try:
@@ -216,6 +222,7 @@ class VirtualMachineService(Service):
             self._update(vm_model, vmware_vm, vm_properties)
             return
         self._create(vmware_vm, vm_properties)
+        logger.info('VirtualMachineService.update took: %s', time.time() - t0)
 
     def get_vm_vmware_properties(self, vmware_vm):
         return self._esxi_api_client.read_vm_properties(vmware_vm)
@@ -227,20 +234,30 @@ class VirtualMachineService(Service):
         return self._database.get_vm_model_by_name(vm_name)
 
     def _update(self, vm_model, vmware_vm, vm_properties):
+        t0 = time.time()
         logger.info('Updating %s', vm_model)
         vm_model.update(vmware_vm, vm_properties)
         logger.info('Updated %s', vm_model)
+        logger.info('Updating VM model took: %s', time.time() - t0)
         for vmi_model in vm_model.vmi_models:
             self._database.vmis_to_update.append(vmi_model)
         self._database.save(vm_model)
+        logger.info('VirtualMachineService._update took: %s', time.time() - t0)
 
     def _create(self, vmware_vm, vm_properties):
+        t0 = time.time()
         vm_model = VirtualMachineModel(vmware_vm, vm_properties)
-        self._database.vmis_to_update += vm_model.vmi_models
+        logger.info('Constructing VirtualMachineModel model took: %s', time.time() - t0)
+        self._database.vmis_to_update.extend(vm_model.vmi_models)
+        t1 = time.time()
         self._add_property_filter_for_vm(vm_model, vmware_vm, VM_UPDATE_FILTERS)
+        logger.info('VirtualMachineService._add_property_filter_for_vm took: %s', time.time() - t1)
+        t2 = time.time()
         self._update_in_vnc(vm_model.vnc_vm)
+        logger.info('VirtualMachineService._update_in_vnc took: %s', time.time() - t2)
         logger.info('Created %s', vm_model)
         self._database.save(vm_model)
+        logger.info('VirtualMachineService._create took: %s', time.time() - t0)
 
     def _add_property_filter_for_vm(self, vm_model, vmware_vm, filters):
         property_filter = self._esxi_api_client.add_filter(vmware_vm, filters)
@@ -333,7 +350,7 @@ class VirtualMachineService(Service):
             old_vmi_models.pop(uuid, None)
             self._database.vmis_to_update.append(new_vmi_model)
 
-        self._database.vmis_to_delete += old_vmi_models.values()
+        self._database.vmis_to_delete.extend(old_vmi_models.values())
 
     def update_power_state(self, vmware_vm, power_state):
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
@@ -353,8 +370,10 @@ def is_contrail_vm_name(name):
 class VirtualNetworkService(Service):
     def __init__(self, vcenter_api_client, vnc_api_client, database):
         super(VirtualNetworkService, self).__init__(vnc_api_client, database)
+        self._lock = gevent.lock.RLock()
         self._vcenter_api_client = vcenter_api_client
 
+    @synchronized
     def update_vns(self):
         for vmi_model in list(self._database.vmis_to_update):
             try:
