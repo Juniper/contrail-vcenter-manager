@@ -48,3 +48,14 @@ request sandesh VirtualMachineInterfaceRequest {
 response sandesh VirtualMachineInterfaceResponse {
     1: list<VirtualMachineInterfaceData> interfaces;
 }
+
+struct GreenletStack {
+    1: list<string> stack;
+}
+
+request sandesh GreenletStackListRequest {
+}
+
+response sandesh GreenletStackListResponse {
+    1: list<GreenletStack> greenlets;
+}

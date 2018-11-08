@@ -1,3 +1,6 @@
+import gc
+import traceback
+import greenlet
 from cvm.sandesh.vcenter_manager.ttypes import (VirtualMachineData,
                                                 VirtualMachineInterfaceData,
                                                 VirtualMachineInterfaceRequest,
@@ -6,7 +9,10 @@ from cvm.sandesh.vcenter_manager.ttypes import (VirtualMachineData,
                                                 VirtualMachineResponse,
                                                 VirtualNetworkData,
                                                 VirtualNetworkRequest,
-                                                VirtualNetworkResponse)
+                                                VirtualNetworkResponse,
+                                                GreenletStack,
+                                                GreenletStackListRequest,
+                                                GreenletStackListResponse)
 
 
 class SandeshHandler(object):
@@ -19,6 +25,7 @@ class SandeshHandler(object):
         VirtualMachineRequest.handle_request = self.handle_virtual_machine_request
         VirtualNetworkRequest.handle_request = self.handle_virtual_network_request
         VirtualMachineInterfaceRequest.handle_request = self.handle_virtual_machine_interface_request
+        GreenletStackListRequest.handle_request = self.handle_greenlet_stack_list_request
 
     def handle_virtual_machine_request(self, request):
         with self._lock:
@@ -58,6 +65,18 @@ class SandeshHandler(object):
                 self._converter.convert_vmi(vmi_model) for vmi_model in vmi_models if vmi_model is not None
             ]
         response = VirtualMachineInterfaceResponse(virtual_interfaces_data)
+        response.response(request.context())
+
+    @classmethod
+    def handle_greenlet_stack_list_request(cls, request):
+        tracebacks = [
+            traceback.format_stack(ob.gr_frame)
+            for ob in gc.get_objects() if isinstance(ob, greenlet.greenlet)
+        ]
+        greenlets = [
+            GreenletStack(stack=stack) for stack in tracebacks
+        ]
+        response = GreenletStackListResponse(greenlets=greenlets)
         response.response(request.context())
 
 
