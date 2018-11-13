@@ -7,13 +7,14 @@ def test_create_port(vrouter_port_service, database, vrouter_api_client, vmi_mod
 
     vrouter_port_service.sync_ports()
 
-    vrouter_api_client.delete_port.assert_called_once_with(vmi_model.uuid)
+    vrouter_api_client.delete_port.assert_not_called()
     vrouter_api_client.add_port.assert_called_once_with(vmi_model)
     vrouter_api_client.enable_port.assert_called_once_with(vmi_model.uuid)
 
 
 @patch('cvm.services.VRouterPortService._port_needs_an_update', Mock(return_value=False))
 def test_no_update(vrouter_port_service, database, vrouter_api_client, vmi_model):
+    vrouter_api_client.read_port.return_value = {'dummy': 'dummy-value'}
     database.ports_to_update.append(vmi_model)
 
     vrouter_port_service.sync_ports()
