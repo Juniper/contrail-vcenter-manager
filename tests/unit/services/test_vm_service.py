@@ -92,7 +92,7 @@ def test_delete_unused_vms(vm_service, esxi_api_client, vnc_api_client, vcenter_
 
 def test_remove_vm(vm_service, database, vcenter_api_client, vnc_api_client, vm_model):
     database.save(vm_model)
-    vcenter_api_client.can_remove_vm.return_value = True
+    vcenter_api_client.is_vm_relocate.return_value = False
 
     vm_service.remove_vm('VM1')
 
