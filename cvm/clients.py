@@ -171,7 +171,7 @@ class VCenterAPIClient(VSphereAPIClient):
         task = self._dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
         success_message = 'Successfully set VLAN ID: %d for port: %s' % (vcenter_port.vlan_id, vcenter_port.port_key)
         fault_message = 'Failed to set VLAN ID: %d for port: %s' % (vcenter_port.vlan_id, vcenter_port.port_key)
-        wait_for_task(task, success_message, fault_message)
+        return wait_for_task(task, success_message, fault_message)
 
     def get_vlan_id(self, vcenter_port):
         logger.info('Reading VLAN ID of port %s', vcenter_port.port_key)
@@ -300,11 +300,14 @@ def make_pg_config_vlan_override(portgroup):
 
 
 def wait_for_task(task, success_message, fault_message):
-    state = WaitForTask(task)
+    state = WaitForTask(task, raiseOnError=False)
     if state == 'success':
         logger.info(success_message)
+        error_msg = None
     else:
-        logger.error(fault_message, task.info.error.msg)
+        logger.error('%s due to: %s', fault_message, task.info.error.msg)
+        error_msg = task.info.error.msg
+    return state, error_msg
 
 
 def get_vm_uuid_for_vmi(vnc_vmi):
