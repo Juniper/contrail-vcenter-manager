@@ -6,7 +6,8 @@ from pyVmomi import vmodl  # pylint: disable=no-name-in-module
 from vnc_api.gen.resource_xsd import PermType2
 from cvm.constants import (CONTRAIL_VM_NAME, VM_UPDATE_FILTERS,
                            VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT,
-                           WAIT_FOR_PORT_RETRY_TIME, WAIT_FOR_PORT_RETRY_LIMIT)
+                           WAIT_FOR_PORT_RETRY_TIME, WAIT_FOR_PORT_RETRY_LIMIT,
+                           DVS_UNSTABLE_CLUSTER_ERROR)
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
 
@@ -493,9 +494,19 @@ class VlanIdService(object):
             self._database.vlans_to_update.remove(vmi_model)
 
     def _update_vcenter_vlan(self, vmi_model):
-        if vmi_model.vm_model.is_powered_on:
+        if not vmi_model.vm_model.is_powered_on:
+            logger.info('VM %s not powered on, cannot set VLAN ID in vCenter', vmi_model.vm_model.name)
+            return
+        i = 0
+        while True:
+            if i != 0:
+                logger.error('Task failed to complete, retrying...')
             with self._vcenter_api_client:
                 if wait_for_port(vmi_model):
-                    self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
-        else:
-            logger.info('VM %s not powered on, cannot set VLAN ID in vCenter', vmi_model.vm_model.name)
+                    state, error_msg = self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
+                    if state == 'success':
+                        return
+                    if error_msg != DVS_UNSTABLE_CLUSTER_ERROR:
+                        break
+            i += 1
+        logger.error('Unable to finish the task.')

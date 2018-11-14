@@ -303,7 +303,7 @@ class PowerStateHandler(AbstractChangeHandler):
             return
         self._vm_service.update_power_state(obj, value)
         self._vrouter_port_service.sync_port_states()
-        self._vlan_id_service.update_vcenter_vlans()
+        self._vlan_id_service.update_vlan_ids()
 
     def _validate_vm(self, vmware_vm):
         return self._is_vm_in_database(name=vmware_vm.name)
