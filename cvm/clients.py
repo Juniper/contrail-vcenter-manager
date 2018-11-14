@@ -300,11 +300,11 @@ def make_pg_config_vlan_override(portgroup):
 
 
 def wait_for_task(task, success_message, fault_message):
-    state = WaitForTask(task)
+    state = WaitForTask(task, raiseOnError=False)
     if state == 'success':
         logger.info(success_message)
     else:
-        logger.error(fault_message, task.info.error.msg)
+        logger.error('%s due to: %s', fault_message, task.info.error.msg)
 
 
 def get_vm_uuid_for_vmi(vnc_vmi):
