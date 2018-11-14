@@ -6,7 +6,8 @@ from pyVmomi import vmodl  # pylint: disable=no-name-in-module
 from vnc_api.gen.resource_xsd import PermType2
 from cvm.constants import (CONTRAIL_VM_NAME, VM_UPDATE_FILTERS,
                            VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT,
-                           WAIT_FOR_PORT_RETRY_TIME, WAIT_FOR_PORT_RETRY_LIMIT)
+                           WAIT_FOR_PORT_RETRY_TIME, WAIT_FOR_PORT_RETRY_LIMIT,
+                           DVS_UNSTABLE_CLUSTER_ERROR)
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
 
@@ -470,6 +471,7 @@ class VlanIdService(object):
     def _preserve_old_vlan_id(self, current_vlan_id, vmi_model):
         if self._database.is_vlan_available(vmi_model, current_vlan_id):
             vmi_model.vcenter_port.vlan_id = current_vlan_id
+            vmi_model.vcenter_port.vlan_success = True
             self._vlan_id_pool.reserve(current_vlan_id)
         else:
             self._assign_new_vlan_id(vmi_model)
@@ -486,16 +488,33 @@ class VlanIdService(object):
         with self._vcenter_api_client:
             self._vcenter_api_client.restore_vlan_id(vmi_model.vcenter_port)
 
-    def update_vcenter_vlans(self):
+    def update_vcenter_vlans(self, retry=False):
         for vmi_model in list(self._database.vlans_to_update):
-            logger.info('Updating VLAN ID of %s in vCenter', vmi_model.display_name)
-            self._update_vcenter_vlan(vmi_model)
+            self._update_vcenter_vlan(vmi_model, retry=retry)
             self._database.vlans_to_update.remove(vmi_model)
 
-    def _update_vcenter_vlan(self, vmi_model):
-        if vmi_model.vm_model.is_powered_on:
-            with self._vcenter_api_client:
-                if wait_for_port(vmi_model):
-                    self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
+    def _update_vcenter_vlan(self, vmi_model, retry=False):
+        if vmi_model.vcenter_port.vlan_success:
+            logger.info('VLAN ID is already set with success')
+            return
+        if retry:
+            i = 0
+            while True:
+                if i != 0:
+                    logger.error('Task failed to complete, retrying...')
+                with self._vcenter_api_client:
+                    logger.info('Updating VLAN ID of %s in vCenter', vmi_model.display_name)
+                    if wait_for_port(vmi_model):
+                        state, error_msg = self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
+                        if state == 'success':
+                            vmi_model.vcenter_port.vlan_success = True
+                            return
+                        if error_msg != DVS_UNSTABLE_CLUSTER_ERROR:
+                            break
+                i += 1
+            logger.error('Unable to finish the task.')
         else:
-            logger.info('VM %s not powered on, cannot set VLAN ID in vCenter', vmi_model.vm_model.name)
+            with self._vcenter_api_client:
+                state, _ = self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
+                if state == 'success':
+                    vmi_model.vcenter_port.vlan_success = True

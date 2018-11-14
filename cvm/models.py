@@ -263,7 +263,8 @@ class VCenterPort(object):
         self.port_key = device.backing.port.portKey
         self.portgroup_key = device.backing.port.portgroupKey
         self.vlan_id = None
+        self.vlan_success = False
 
     def __repr__(self):
-        return 'VCenterPort(mac_address=%s, port_key=%s, portgroup_key=%s, vlan_id=%s)' \
-               % (self.mac_address, self.port_key, self.portgroup_key, self.vlan_id)
+        return 'VCenterPort(mac_address=%s, port_key=%s, portgroup_key=%s, vlan_id=%s, vlan_success=%s)' \
+               % (self.mac_address, self.port_key, self.portgroup_key, self.vlan_id, self.vlan_success)
