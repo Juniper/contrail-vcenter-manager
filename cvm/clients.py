@@ -15,7 +15,7 @@ from contrail_vrouter_api.vrouter_api import ContrailVRouterApi
 from cvm.constants import (VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
                            VNC_VCENTER_IPAM, VNC_VCENTER_IPAM_FQN,
-                           VNC_VCENTER_PROJECT)
+                           VNC_VCENTER_PROJECT, DVS_UNSTABLE_CLUSTER_ERROR)
 from cvm.models import find_vrouter_uuid
 
 logger = logging.getLogger(__name__)
@@ -168,10 +168,23 @@ class VCenterAPIClient(VSphereAPIClient):
             return
         logger.info('Setting vCenter VLAN ID of port %s to %d', vcenter_port.port_key, vcenter_port.vlan_id)
         dv_port_spec = make_dv_port_spec(dv_port, vcenter_port.vlan_id)
-        task = self._dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
+        self._set_vlan_id_retry(vcenter_port, dv_port_spec)
+
+    def _set_vlan_id_retry(self, vcenter_port, dv_port_spec):
         success_message = 'Successfully set VLAN ID: %d for port: %s' % (vcenter_port.vlan_id, vcenter_port.port_key)
         fault_message = 'Failed to set VLAN ID: %d for port: %s' % (vcenter_port.vlan_id, vcenter_port.port_key)
-        wait_for_task(task, success_message, fault_message)
+        i = 0
+        while True:
+            if i != 0:
+                logger.error('Task failed to complete, retrying...')
+            task = self._dvs.ReconfigureDVPort_Task(port=[dv_port_spec])
+            state, error_msg = wait_for_task(task, success_message, fault_message)
+            if state == 'success':
+                return
+            if error_msg != DVS_UNSTABLE_CLUSTER_ERROR:
+                break
+            i += 1
+        logger.error('Unable to finish the task.')
 
     def get_vlan_id(self, vcenter_port):
         logger.info('Reading VLAN ID of port %s', vcenter_port.port_key)
@@ -300,11 +313,14 @@ def make_pg_config_vlan_override(portgroup):
 
 
 def wait_for_task(task, success_message, fault_message):
-    state = WaitForTask(task)
+    state = WaitForTask(task, raiseOnError=False)
     if state == 'success':
         logger.info(success_message)
+        error_msg = None
     else:
-        logger.error(fault_message, task.info.error.msg)
+        logger.error('%s due to: %s', fault_message, task.info.error.msg)
+        error_msg = task.info.error.msg
+    return state, error_msg
 
 
 def get_vm_uuid_for_vmi(vnc_vmi):
