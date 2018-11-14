@@ -172,7 +172,7 @@ class VmRegisteredHandler(AbstractEventHandler):
         self._vm_service.update(vmware_vm)
         self._vn_service.update_vns()
         self._vmi_service.register_vmis()
-        self._vlan_id_service.update_vlan_ids()
+        self._vlan_id_service.update_vcenter_vlans(retry=False)
         self._vrouter_port_service.sync_ports()
 
 
@@ -303,7 +303,7 @@ class PowerStateHandler(AbstractChangeHandler):
             return
         self._vm_service.update_power_state(obj, value)
         self._vrouter_port_service.sync_port_states()
-        self._vlan_id_service.update_vcenter_vlans()
+        self._vlan_id_service.update_vcenter_vlans(retry=True)
 
     def _validate_vm(self, vmware_vm):
         return self._is_vm_in_database(name=vmware_vm.name)
