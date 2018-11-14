@@ -1,4 +1,4 @@
-from mock import patch
+from mock import patch, Mock
 
 from tests.utils import assert_vm_model_state
 
@@ -44,6 +44,11 @@ def test_set_vlan_id_on_power_on(_, controller, database, vcenter_api_client, es
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
     database.save(vn_model_1)
+
+    # CVM sets VLAN ID in vCenter only when current VLAN conflicts with VLAN of another VM
+    database.is_vlan_available = Mock()
+    database.is_vlan_available.return_value = False
+    vcenter_api_client.set_vlan_id.return_value = 'success', None
 
     # VM is powered off when the VM Registered event comes
     esxi_api_client.read_vm_properties.return_value = vm_properties_1_off
