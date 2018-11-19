@@ -53,9 +53,8 @@ def test_full_remove_vm(_, controller, database, vcenter_api_client, vnc_api_cli
     vnc_api_client.delete_vmi.assert_called_with(vmi_model.uuid)
 
     # Check that VMI's vRouter Port has been deleted:
-    vrouter_api_client.delete_port.assert_called_with(vmi_model.uuid)
-    assert vrouter_api_client.delete_port.call_count == 2
-    assert vrouter_api_client.add_port.call_count == 1
+    vrouter_api_client.delete_port.assert_called_once_with(vmi_model.uuid)
+    vrouter_api_client.add_port.assert_called_once()
 
     # Check that VLAN ID has been released
     vcenter_api_client.restore_vlan_id.assert_called_once_with(vmi_model.vcenter_port)
@@ -117,9 +116,8 @@ def test_vm_removed_local_remove(_, controller, database, vcenter_api_client, vn
     vnc_api_client.delete_vmi.assert_not_called()
 
     # Check that VMI's vRouter Port has been deleted:
-    vrouter_api_client.delete_port.assert_called_with(vmi_model.uuid)
-    assert vrouter_api_client.delete_port.call_count == 2
-    assert vrouter_api_client.add_port.call_count == 1
+    vrouter_api_client.delete_port.assert_called_once_with(vmi_model.uuid)
+    vrouter_api_client.add_port.assert_called_once
 
     # Cannot remove VLAN ID from vCenter
     vcenter_api_client.restore_vlan_id.assert_not_called()
