@@ -92,7 +92,7 @@ def test_delete_unused_vms(vm_service, esxi_api_client, vnc_api_client, vcenter_
 
 def test_remove_vm(vm_service, database, vcenter_api_client, vnc_api_client, vm_model):
     database.save(vm_model)
-    vcenter_api_client.is_vm_relocate.return_value = False
+    vcenter_api_client.is_vm_removed.return_value = True
 
     vm_service.remove_vm('VM1')
 
@@ -110,7 +110,7 @@ def test_remove_no_vm(vm_service, vnc_api_client):
 def test_remove_other_host(vm_service, database, vcenter_api_client, vnc_api_client, vm_model):
     """ We can't remove VMs from VNC if they exist on other host. """
     database.save(vm_model)
-    vcenter_api_client.can_remove_vm.return_value = False
+    vcenter_api_client.is_vm_removed.return_value = False
 
     vm_service.remove_vm('VM1')
 

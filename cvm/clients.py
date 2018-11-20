@@ -127,7 +127,6 @@ def make_filter_spec(obj, filters):
 
 
 class VCenterAPIClient(VSphereAPIClient):
-    RELOCATE_TASK = 'VirtualMachine.relocate'
     DESTROY_TASK = 'VirtualMachine.destroy'
     UNREGISTER_TASK = 'VirtualMachine.unregister'
 
@@ -252,19 +251,20 @@ class VCenterAPIClient(VSphereAPIClient):
     def can_rename_vmi(self, vmi_model, new_name):
         return self.can_rename_vm(vmi_model.vm_model, new_name)
 
-    def is_vm_relocate(self, vm_name):
+    def is_vm_removed(self, vm_name):
         # List is sorted from new tasks to older
+        logger.info('Checking if VM: %s was removed', vm_name)
         sorted_tasks = sorted(
             self._si.content.taskManager.recentTask,
             key=get_key_from_task, reverse=True
         )
         for task in sorted_tasks:
-            if task.info.entityName != vm_name:
-                continue
-            if task.info.descriptionId == self.RELOCATE_TASK:
-                return True
-            if task.info.descriptionId in (self.DESTROY_TASK, self.UNREGISTER_TASK):
-                return False
+            entity_name = task.info.entityName
+            if entity_name == vm_name or '/{}/'.format(entity_name) in vm_name:
+                if task.info.descriptionId in (self.DESTROY_TASK, self.UNREGISTER_TASK):
+                    logger.info('VM: %s was removed', vm_name)
+                    return True
+        logger.info('VM: %s was not removed', vm_name)
         return False
 
 

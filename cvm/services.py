@@ -169,7 +169,7 @@ class VirtualMachineInterfaceService(Service):
             return
 
         with self._vcenter_api_client:
-            full_remove = not self._vcenter_api_client.is_vm_relocate(vm_model.name)
+            full_remove = self._vcenter_api_client.is_vm_removed(vm_model.name)
         vmi_models = self._database.get_vmi_models_by_vm_uuid(vm_model.uuid)
 
         for vmi_model in vmi_models:
@@ -283,7 +283,7 @@ class VirtualMachineService(Service):
         if not vm_model:
             return
         with self._vcenter_api_client:
-            if not self._vcenter_api_client.is_vm_relocate(vm_model.name):
+            if self._vcenter_api_client.is_vm_removed(vm_model.name):
                 self._vnc_api_client.delete_vm(vm_model.uuid)
             else:
                 logger.info('VM %s still exists on another host and can\'t be deleted from VNC', name)
