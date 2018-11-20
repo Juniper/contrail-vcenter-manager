@@ -226,7 +226,7 @@ class VCenterAPIClient(VSphereAPIClient):
 
     def can_rename_vm(self, vm_model, new_name):
         vmware_vm = self._get_object([vim.VirtualMachine], new_name)
-        return vmware_vm and (vmware_vm.summary.runtime.host.name == vm_model.host_name)
+        return vmware_vm and (vmware_vm.summary.runtime.host.hardware.systemInfo.uuid == vm_model.host_uuid)
 
     def can_remove_vmi(self, vnc_vmi):
         vm_uuid = get_vm_uuid_for_vmi(vnc_vmi)
