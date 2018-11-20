@@ -167,6 +167,7 @@ def vmware_vm_no_uuid(host_1):
 def host_1():
     host = Mock(vm=[])
     host.configure_mock(name='host-1')
+    host.hardware.systemInfo.uuid = 'host_uuid_1'
     return host
 
 
@@ -174,56 +175,62 @@ def host_1():
 def host_2():
     host = Mock(vm=[])
     host.configure_mock(name='host-2')
+    host.hardware.systemInfo.uuid = 'host_uuid_2'
     return host
 
 
 @pytest.fixture()
-def vm_properties_1():
+def vm_properties_1(host_1):
     return {
         'config.instanceUuid': 'vmware-vm-uuid-1',
         'name': 'VM1',
         'runtime.powerState': 'poweredOn',
         'guest.toolsRunningStatus': 'guestToolsRunning',
+        'summary.runtime.host': host_1,
     }
 
 
 @pytest.fixture()
-def vm_properties_1_off():
+def vm_properties_1_off(host_1):
     return {
         'config.instanceUuid': 'vmware-vm-uuid-1',
         'name': 'VM1',
         'runtime.powerState': 'poweredOff',
         'guest.toolsRunningStatus': 'guestToolsRunning',
+        'summary.runtime.host': host_1,
     }
 
 
 @pytest.fixture()
-def vm_properties_2():
+def vm_properties_2(host_1):
     return {
         'config.instanceUuid': 'vmware-vm-uuid-2',
         'name': 'VM2',
         'runtime.powerState': 'poweredOn',
         'guest.toolsRunningStatus': 'guestToolsRunning',
+        'summary.runtime.host': host_1,
     }
 
 
 @pytest.fixture()
-def vm_properties_renamed():
+def vm_properties_renamed(host_1):
     return {
         'config.instanceUuid': 'vmware-vm-uuid-1',
         'name': 'VM1-renamed',
         'runtime.powerState': 'poweredOn',
         'guest.toolsRunningStatus': 'guestToolsRunning',
+        'summary.runtime.host': host_1,
     }
 
 
 @pytest.fixture()
-def contrail_vm_properties():
+def contrail_vm_properties(host_1):
     return {
         'config.instanceUuid': '12345678-1234-1234-1234-123456789012',
         'name': 'ContrailVM',
         'runtime.powerState': 'poweredOn',
         'guest.toolsRunningStatus': 'guestToolsRunning',
+        'summary.runtime.host': host_1,
     }
 
 

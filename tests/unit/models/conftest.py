@@ -13,10 +13,11 @@ def vmware_vm_1_updated():
 
 
 @pytest.fixture()
-def vm_properties_1_updated():
+def vm_properties_1_updated(host_1):
     return {
         'config.instanceUuid': 'vmware-vm-uuid-1',
         'name': 'VM1-renamed',
         'runtime.powerState': 'poweredOff',
         'guest.toolsRunningStatus': 'guestToolsNotRunning',
+        'summary.runtime.host': host_1,
     }
