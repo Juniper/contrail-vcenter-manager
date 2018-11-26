@@ -17,11 +17,16 @@ def monitor(controller, esxi_api_client):
     return VMwareMonitor(esxi_api_client, controller)
 
 
-def test_pass_update_to_controller(monitor, controller, esxi_api_client, vm_created_update):
-    esxi_api_client.wait_for_updates.return_value = vm_created_update
+@pytest.fixture()
+def update_set_queue(vm_created_update):
+    queue = Mock()
+    queue.get.return_value = vm_created_update
+    return queue
 
+
+def test_pass_update_to_controller(monitor, controller, update_set_queue, vm_created_update):
     try:
-        monitor.start()
+        monitor.start(update_set_queue)
     except StopIteration:
         pass
 
