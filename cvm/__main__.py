@@ -120,7 +120,7 @@ def build_monitor(config, lock, database):
     vmware_controller = VmwareController(vm_service, vn_service,
                                          vmi_service, vrouter_port_service,
                                          vlan_id_service, update_handler, lock)
-    return VMwareMonitor(esxi_api_client, vmware_controller)
+    return VMwareMonitor(esxi_api_client, vmware_controller), esxi_api_client
 
 
 def run_introspect(cfg, database, lock):
@@ -171,17 +171,30 @@ def run_introspect(cfg, database, lock):
     )
 
 
+def update_set_listener(esxi_api_client, update_set_queue):
+    logger = logging.getLogger('cvm')
+    while True:
+        logger.info('Started waiting for updates')
+        update_set = esxi_api_client.wait_for_updates()
+        logger.info('Got update set from ESXi')
+        if update_set:
+            logger.info('Not empty update set put on queue')
+            update_set_queue.put(update_set)
+
+
 def main(args):
     database = Database()
     lock = gevent.lock.BoundedSemaphore()
+    update_set_queue = gevent.queue.Queue()
     cfg = load_config(args.config_file)
-    vmware_monitor = build_monitor(cfg, lock, database)
+    vmware_monitor, esxi_api_client = build_monitor(cfg, lock, database)
     run_introspect(cfg, database, lock)
     vmware_monitor.sync()
     greenlets = [
-        gevent.spawn(vmware_monitor.start()),
+        gevent.spawn(vmware_monitor.start, update_set_queue),
+        gevent.spawn(update_set_listener, esxi_api_client, update_set_queue),
     ]
-    gevent.joinall(greenlets)
+    gevent.joinall(greenlets, raise_error=True)
 
 
 if __name__ == '__main__':
