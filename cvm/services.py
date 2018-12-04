@@ -342,17 +342,8 @@ class VirtualNetworkService(Service):
         super(VirtualNetworkService, self).__init__(vnc_api_client, database)
         self._vcenter_api_client = vcenter_api_client
 
-    def sync_vns(self):
-        with self._vcenter_api_client:
-            for vnc_vn in self._vnc_api_client.get_vns_by_project(self._project):
-                dpg = self._vcenter_api_client.get_dpg_by_name(vnc_vn.name)
-                if vnc_vn and dpg:
-                    self._create_vn_model(dpg, vnc_vn)
-                else:
-                    logger.error('Unable to fetch new portgroup for name: %s', vnc_vn.name)
-
     def update_vns(self):
-        for vmi_model in self._database.vmis_to_update:
+        for vmi_model in list(self._database.vmis_to_update):
             portgroup_key = vmi_model.vcenter_port.portgroup_key
             if self._database.get_vn_model_by_key(portgroup_key) is not None:
                 continue
@@ -365,6 +356,9 @@ class VirtualNetworkService(Service):
                     self._create_vn_model(dpg, vnc_vn)
                 else:
                     logger.error('Unable to fetch new portgroup for key: %s', portgroup_key)
+                    self._database.vmis_to_update.remove(vmi_model)
+                    self._database.vmis_to_delete.append(vmi_model)
+                    vmi_model.remove_from_vm_model()
 
     def _create_vn_model(self, dpg, vnc_vn):
         logger.info('Fetched new portgroup key: %s name: %s', dpg.key, vnc_vn.name)
