@@ -171,7 +171,8 @@ class VirtualMachineInterfaceModel(object):
                                       id_perms=ID_PERMS)
         vmi.set_uuid(self.uuid)
         vmi.add_virtual_machine(self.vm_model.vnc_vm)
-        vmi.set_virtual_network(self.vn_model.vnc_vn)
+        if self.vn_model:
+            vmi.set_virtual_network(self.vn_model.vnc_vn)
         vmi.set_virtual_machine_interface_mac_addresses(MacAddressesType([self.vcenter_port.mac_address]))
         vmi.set_port_security_enabled(True)
         vmi.set_security_group(self.security_group)

@@ -1,9 +1,5 @@
 # pylint: disable=redefined-outer-name
 import pytest
-from mock import Mock
-from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
-from vnc_api import vnc_api
-
 from cvm.constants import ID_PERMS
 from cvm.controllers import (GuestNetHandler, PowerStateHandler, UpdateHandler,
                              VmReconfiguredHandler, VmRegisteredHandler,
@@ -13,10 +9,14 @@ from cvm.controllers import (GuestNetHandler, PowerStateHandler, UpdateHandler,
 from cvm.database import Database
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel, VlanIdPool)
+from cvm.monitors import VMwareMonitor
 from cvm.services import (VirtualMachineInterfaceService,
                           VirtualMachineService, VirtualNetworkService,
-                          VRouterPortService, VlanIdService)
+                          VlanIdService, VRouterPortService)
+from mock import Mock
+from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from tests.utils import assign_ip_to_instance_ip, wrap_into_update_set
+from vnc_api import vnc_api
 
 
 @pytest.fixture()
@@ -463,3 +463,8 @@ def controller(vm_service, vn_service, vmi_service, vrouter_port_service, vlan_i
     update_handler = UpdateHandler(handlers)
     return VmwareController(vm_service, vn_service, vmi_service,
                             vrouter_port_service, vlan_id_service, update_handler, lock)
+
+
+@pytest.fixture()
+def monitor(controller, esxi_api_client):
+    return VMwareMonitor(esxi_api_client, controller)
