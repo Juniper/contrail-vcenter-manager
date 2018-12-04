@@ -1,5 +1,4 @@
 import logging
-import time
 from abc import ABCMeta, abstractmethod
 
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
@@ -22,7 +21,7 @@ class VmwareController(object):
         logger.info('Synchronizing CVM...')
         with self._lock:
             self._vm_service.get_vms_from_vmware()
-            self._vn_service.sync_vns()
+            self._vn_service.update_vns()
             self._vmi_service.sync_vmis()
             self._vm_service.delete_unused_vms_in_vnc()
             self._vlan_id_service.sync_vlan_ids()
