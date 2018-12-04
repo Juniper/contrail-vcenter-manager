@@ -13,7 +13,6 @@ def test_update_vns_no_vns(vn_service, database, vcenter_api_client, vnc_api_cli
 
 
 def test_update_vns(vn_service, database, vcenter_api_client, vnc_api_client, vmi_model, vnc_vn_1, portgroup):
-    vmi_model.vcenter_port.portgroup_key = 'dvportgroup-1'
     database.vmis_to_update.append(vmi_model)
     vcenter_api_client.get_dpg_by_key.return_value = portgroup
     vnc_api_client.read_vn.return_value = vnc_vn_1
@@ -34,19 +33,14 @@ def test_update_vns(vn_service, database, vcenter_api_client, vnc_api_client, vm
     vnc_api_client.read_vn.assert_called_once_with(fq_name)
 
 
-def test_sync_vns(vn_service, database, vcenter_api_client, vnc_api_client, vnc_vn_1, portgroup):
-    vnc_api_client.get_vns_by_project.return_value = [vnc_vn_1]
-    vcenter_api_client.get_dpg_by_name.return_value = portgroup
+def test_non_contrail_pgs(vn_service, database, vcenter_api_client, vnc_api_client, vmi_model, portgroup):
+    database.vmis_to_update.append(vmi_model)
+    vcenter_api_client.get_dpg_by_key.return_value = portgroup
+    vnc_api_client.read_vn.return_value = None
 
-    vn_service.sync_vns()
+    vn_service.update_vns()
 
-    vn_model = database.get_vn_model_by_key('dvportgroup-1')
-    assert vn_model is not None
-    assert_vn_model_state(
-        vn_model,
-        key='dvportgroup-1',
-        vnc_vn=vnc_vn_1,
-        vmware_vn=portgroup,
-    )
-
-    vcenter_api_client.enable_vlan_override.assert_called_once_with(portgroup)
+    assert not database.get_vn_model_by_key('dvportgroup-1')
+    vcenter_api_client.enable_vlan_override.assert_not_called()
+    assert vmi_model not in database.vmis_to_update
+    assert vmi_model in database.vmis_to_delete
