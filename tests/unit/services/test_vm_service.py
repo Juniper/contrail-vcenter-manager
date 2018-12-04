@@ -68,6 +68,21 @@ def test_sync_vms(vm_service, database, esxi_api_client, vnc_api_client, vmware_
     vnc_api_client.update_vm.assert_called_once()
 
 
+def test_sync_no_uuid_vm(vm_service, database, esxi_api_client, vnc_api_client, vmware_vm_1, vmware_vm_no_uuid):
+    esxi_api_client.get_all_vms.return_value = [vmware_vm_1, vmware_vm_no_uuid]
+
+    vm_service.get_vms_from_vmware()
+
+    vm_model = database.get_vm_model_by_uuid('vmware-vm-uuid-1')
+    assert vm_model.devices == vmware_vm_1.config.hardware.device
+    assert_vm_model_state(
+        vm_model=vm_model,
+        uuid='vmware-vm-uuid-1',
+        name='VM1',
+    )
+    vnc_api_client.update_vm.assert_called_once()
+
+
 def test_sync_no_vms(vm_service, database, esxi_api_client, vnc_api_client):
     """ Syncing when there's no VMware VMs doesn't update anything. """
     esxi_api_client.get_all_vms.return_value = []
