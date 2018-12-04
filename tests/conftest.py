@@ -150,6 +150,15 @@ def vmware_vm_2(host_1):
 
 
 @pytest.fixture()
+def vmware_vm_no_uuid(host_1):
+    vmware_vm = Mock(spec=vim.VirtualMachine)
+    vmware_vm.configure_mock(name='VM1')
+    vmware_vm.summary.runtime.host = host_1
+    vmware_vm.config = None
+    return vmware_vm
+
+
+@pytest.fixture()
 def host_1():
     host = Mock(vm=[])
     host.configure_mock(name='host-1')

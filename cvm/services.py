@@ -216,7 +216,12 @@ class VirtualMachineService(Service):
         vm_properties = self.get_vm_vmware_properties(vmware_vm)
         if is_contrail_vm_name(vm_properties['name']):
             return
-        vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
+        try:
+            vm_uuid = vmware_vm.config.instanceUuid
+        except AttributeError:
+            logger.error('VM: %s has no vCenter uuid', vm_properties.get('name'))
+            return
+        vm_model = self._database.get_vm_model_by_uuid(vm_uuid)
         if vm_model:
             self._update(vm_model, vmware_vm, vm_properties)
             return
