@@ -57,6 +57,8 @@ class AbstractChangeHandler(object):
                     self._handle_change(obj, value)
                 except vmodl.fault.ManagedObjectNotFound:
                     self._log_managed_object_not_found(value)
+                except Exception, exc:
+                    logger.error('Unexpected exception: %s during handling %s', exc, value, exc_info=True)
 
     @abstractmethod
     def _log_managed_object_not_found(self, value):
@@ -110,6 +112,9 @@ class AbstractEventHandler(AbstractChangeHandler):
                 self._handle_event(value)
             except vmodl.fault.ManagedObjectNotFound:
                 self._log_managed_object_not_found(value)
+            except Exception, exc:
+                logger.error('Unexpected exception: %s during handling %s for VM: %s',
+                             exc, value, value.vm.name, exc_info=True)
         if isinstance(value, list):
             for change in sorted(value, key=lambda e: e.key):
                 self._handle_change(obj, change)
