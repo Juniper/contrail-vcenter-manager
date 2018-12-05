@@ -11,7 +11,7 @@ def test_full_remove_vm(_, controller, database, vcenter_api_client, vnc_api_cli
     database.save(vn_model_1)
 
     # In this scenario vCenter should return no relocation
-    vcenter_api_client.is_vm_relocate.return_value = False
+    vcenter_api_client.is_vm_removed.return_value = True
 
     # Some vlan ids should be already reserved
     vcenter_api_client.get_vlan_id.return_value = None
@@ -74,7 +74,7 @@ def test_vm_removed_local_remove(_, controller, database, vcenter_api_client, vn
     database.save(vn_model_1)
 
     # In this scenario vCenter should return info about relocation
-    vcenter_api_client.is_vm_relocate.return_value = True
+    vcenter_api_client.is_vm_removed.return_value = False
 
     # Some vlan ids should be already reserved
     vcenter_api_client.get_vlan_id.return_value = None
