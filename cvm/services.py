@@ -60,14 +60,20 @@ class VirtualMachineInterfaceService(Service):
 
     def update_vmis(self):
         for vmi_model in list(self._database.vmis_to_update):
-            logger.info('Updating %s', vmi_model)
-            self._update_vmi(vmi_model)
-            self._database.vmis_to_update.remove(vmi_model)
-            logger.info('Updated %s', vmi_model)
+            try:
+                logger.info('Updating %s', vmi_model)
+                self._update_vmi(vmi_model)
+                self._database.vmis_to_update.remove(vmi_model)
+                logger.info('Updated %s', vmi_model)
+            except Exception, exc:
+                logger.error('Unexpected exception %s during updating VMI', exc, exc_info=True)
 
         for vmi_model in list(self._database.vmis_to_delete):
-            self._delete(vmi_model)
-            self._database.vmis_to_delete.remove(vmi_model)
+            try:
+                self._delete(vmi_model)
+                self._database.vmis_to_delete.remove(vmi_model)
+            except Exception, exc:
+                logger.error('Unexpected exception %s during deleting VMI', exc, exc_info=True)
 
     def _update_vmis_vn(self, vmi_model):
         new_vn_model = self._database.get_vn_model_by_key(vmi_model.vcenter_port.portgroup_key)
@@ -267,16 +273,21 @@ class VirtualMachineService(Service):
                 self.update(vmware_vm)
             except vmodl.fault.ManagedObjectNotFound:
                 logger.error('One VM was moved out of ESXi during CVM sync')
+            except Exception, exc:
+                logger.error('Unexpected exception %s during syncing VM', exc, exc_info=True)
 
     def delete_unused_vms_in_vnc(self):
         vnc_vms = self._vnc_api_client.get_all_vms()
         for vnc_vm in vnc_vms:
-            if self._database.get_vm_model_by_uuid(vnc_vm.uuid):
-                continue
-            with self._vcenter_api_client:
-                if self._vcenter_api_client.can_remove_vm(uuid=vnc_vm.uuid):
-                    logger.info('Deleting %s from VNC', vnc_vm.name)
-                    self._vnc_api_client.delete_vm(vnc_vm.uuid)
+            try:
+                if self._database.get_vm_model_by_uuid(vnc_vm.uuid):
+                    continue
+                with self._vcenter_api_client:
+                    if self._vcenter_api_client.can_remove_vm(uuid=vnc_vm.uuid):
+                        logger.info('Deleting %s from VNC', vnc_vm.name)
+                        self._vnc_api_client.delete_vm(vnc_vm.uuid)
+            except Exception, exc:
+                logger.error('Unexpected exception %s during removing VM from VNC', exc, exc_info=True)
 
     def remove_vm(self, name):
         vm_model = self._database.get_vm_model_by_name(name)
@@ -345,11 +356,14 @@ class VirtualNetworkService(Service):
     def sync_vns(self):
         with self._vcenter_api_client:
             for vnc_vn in self._vnc_api_client.get_vns_by_project(self._project):
-                dpg = self._vcenter_api_client.get_dpg_by_name(vnc_vn.name)
-                if vnc_vn and dpg:
-                    self._create_vn_model(dpg, vnc_vn)
-                else:
-                    logger.error('Unable to fetch new portgroup for name: %s', vnc_vn.name)
+                try:
+                    dpg = self._vcenter_api_client.get_dpg_by_name(vnc_vn.name)
+                    if vnc_vn and dpg:
+                        self._create_vn_model(dpg, vnc_vn)
+                    else:
+                        logger.error('Unable to fetch new portgroup for name: %s', vnc_vn.name)
+                except Exception, exc:
+                    logger.error('Unexpected exception %s during syncing VN', exc, exc_info=True)
 
     def update_vns(self):
         for vmi_model in self._database.vmis_to_update:
@@ -387,14 +401,22 @@ class VRouterPortService(object):
     def sync_port_states(self):
         ports = list(self._database.ports_to_update)
         for vmi_model in ports:
-            self._set_port_state(vmi_model)
-            self._database.ports_to_update.remove(vmi_model)
+            try:
+                self._set_port_state(vmi_model)
+                self._database.ports_to_update.remove(vmi_model)
+            except Exception, exc:
+                logger.error('Unexpected exception %s during syncing vRouter port: %s',
+                             exc, vmi_model.uuid, exc_info=True)
 
     def _delete_ports(self):
         uuids = list(self._database.ports_to_delete)
         for uuid in uuids:
-            self._delete_port(uuid)
-            self._database.ports_to_delete.remove(uuid)
+            try:
+                self._delete_port(uuid)
+                self._database.ports_to_delete.remove(uuid)
+            except Exception, exc:
+                logger.error('Unexpected exception %s during deleting vRouter port: %s',
+                             exc, uuid, exc_info=True)
 
     def _delete_port(self, uuid):
         self._vrouter_api_client.delete_port(uuid)
@@ -402,12 +424,16 @@ class VRouterPortService(object):
     def _update_ports(self):
         ports = list(self._database.ports_to_update)
         for vmi_model in ports:
-            vrouter_port = self._vrouter_api_client.read_port(vmi_model.uuid)
-            if not vrouter_port:
-                self._create_port(vmi_model)
-                return
-            if self._port_needs_an_update(vrouter_port, vmi_model):
-                self._update_port(vmi_model)
+            try:
+                vrouter_port = self._vrouter_api_client.read_port(vmi_model.uuid)
+                if not vrouter_port:
+                    self._create_port(vmi_model)
+                    return
+                if self._port_needs_an_update(vrouter_port, vmi_model):
+                    self._update_port(vmi_model)
+            except Exception, exc:
+                logger.error('Unexpected exception %s during updating vRouter port: %s',
+                             exc, vmi_model.uuid, exc_info=True)
 
     def _create_port(self, vmi_model):
         self._vrouter_api_client.add_port(vmi_model)
@@ -451,14 +477,21 @@ class VlanIdService(object):
 
     def update_vlan_ids(self):
         for vmi_model in list(self._database.vlans_to_update):
-            logger.info('Updating %s', vmi_model)
-            self._update_vlan_id(vmi_model)
-            self._database.vlans_to_update.remove(vmi_model)
-            logger.info('Updated %s', vmi_model)
+            try:
+                logger.info('Updating %s', vmi_model)
+                self._update_vlan_id(vmi_model)
+                self._database.vlans_to_update.remove(vmi_model)
+                logger.info('Updated %s', vmi_model)
+            except Exception, exc:
+                logger.error('Unexpected exception %s during updating VLAN', exc, exc_info=True)
 
         for vmi_model in list(self._database.vlans_to_restore):
-            self._restore_vlan_id(vmi_model)
-            self._database.vlans_to_restore.remove(vmi_model)
+            try:
+                self._restore_vlan_id(vmi_model)
+                self._database.vlans_to_restore.remove(vmi_model)
+            except Exception, exc:
+                logger.error('Unexpected exception %s during restoring VLAN', exc, exc_info=True)
+
 
     def _update_vlan_id(self, vmi_model):
         with self._vcenter_api_client:
