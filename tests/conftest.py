@@ -39,8 +39,13 @@ def vnc_vn_2(project, ipam):
 def vnc_vm():
     vm = vnc_api.VirtualMachine('vnc-vm-uuid')
     vm.set_uuid('vnc-vm-uuid')
-    vm.set_annotations(vnc_api.KeyValuePairs(
-        [vnc_api.KeyValuePair('vrouter-uuid', 'vrouter-uuid-1')]))
+    return vm
+
+
+@pytest.fixture()
+def vnc_vm_2():
+    vm = vnc_api.VirtualMachine('vnc-vm-uuid-2')
+    vm.set_uuid('vnc-vm-uuid-2')
     return vm
 
 
@@ -334,6 +339,7 @@ def vnc_api_client(project, security_group):
     vnc_client.read_or_create_security_group.return_value = security_group
     vnc_client.create_and_read_instance_ip.side_effect = assign_ip_to_instance_ip
     vnc_client.read_vmi.return_value = None
+    vnc_client.get_vmi_uuids_by_vm_uuid.return_value = []
     return vnc_client
 
 

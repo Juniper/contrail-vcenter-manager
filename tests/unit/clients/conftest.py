@@ -78,6 +78,7 @@ def vnc_vm():
     vnc_vm = Mock()
     vnc_vm.uuid = 'vm-uuid'
     vnc_vm.name = 'vm-name'
+    vnc_vm.get_virtual_machine_interface_back_refs.return_value = [{u'uuid': u'vmi-uuid'}]
     return vnc_vm
 
 
