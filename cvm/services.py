@@ -203,7 +203,9 @@ class VirtualMachineService(Service):
                                                     vcenter_api_client=vcenter_api_client)
 
     def update(self, vmware_vm):
+        t0 = time.time()
         vm_properties = self.get_vm_vmware_properties(vmware_vm)
+        logger.info('Reading VM properties took : %s', time.time() - t0)
         if is_contrail_vm_name(vm_properties['name']):
             return
         try:
@@ -216,6 +218,7 @@ class VirtualMachineService(Service):
             self._update(vm_model, vmware_vm, vm_properties)
             return
         self._create(vmware_vm, vm_properties)
+        logger.info('VirtualMachineService.update took: %s', time.time() - t0)
 
     def get_vm_vmware_properties(self, vmware_vm):
         return self._esxi_api_client.read_vm_properties(vmware_vm)
@@ -227,20 +230,30 @@ class VirtualMachineService(Service):
         return self._database.get_vm_model_by_name(vm_name)
 
     def _update(self, vm_model, vmware_vm, vm_properties):
+        t0 = time.time()
         logger.info('Updating %s', vm_model)
         vm_model.update(vmware_vm, vm_properties)
         logger.info('Updated %s', vm_model)
+        logger.info('Updating VM model took: %s', time.time() - t0)
         for vmi_model in vm_model.vmi_models:
             self._database.vmis_to_update.append(vmi_model)
         self._database.save(vm_model)
+        logger.info('VirtualMachineService._update took: %s', time.time() - t0)
 
     def _create(self, vmware_vm, vm_properties):
+        t0 = time.time()
         vm_model = VirtualMachineModel(vmware_vm, vm_properties)
+        logger.info('Constructing VirtualMachineModel model took: %s', time.time() - t0)
         self._database.vmis_to_update += vm_model.vmi_models
+        t1 = time.time()
         self._add_property_filter_for_vm(vm_model, vmware_vm, VM_UPDATE_FILTERS)
+        logger.info('VirtualMachineService._add_property_filter_for_vm took: %s', time.time() - t1)
+        t2 = time.time()
         self._update_in_vnc(vm_model.vnc_vm)
+        logger.info('VirtualMachineService._update_in_vnc took: %s', time.time() - t2)
         logger.info('Created %s', vm_model)
         self._database.save(vm_model)
+        logger.info('VirtualMachineService._create took: %s', time.time() - t0)
 
     def _add_property_filter_for_vm(self, vm_model, vmware_vm, filters):
         property_filter = self._esxi_api_client.add_filter(vmware_vm, filters)
