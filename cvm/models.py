@@ -1,3 +1,4 @@
+import time
 import logging
 import uuid
 from collections import deque
@@ -28,15 +29,21 @@ class VirtualMachineModel(object):
         self.devices = vmware_vm.config.hardware.device
         self.host_name = vmware_vm.summary.runtime.host.name
         self.property_filter = None
+        t0 = time.time()
         self.ports = self._read_ports()
+        logger.info('VirtualMachineModel._read_ports took: %s', time.time() - t0)
+        t1 = time.time()
         self.vmi_models = self._construct_interfaces()
+        logger.info('VirtualMachineModel._construct_interfaces took: %s', time.time() - t1)
 
     def update(self, vmware_vm, vm_properties):
         self.vmware_vm = vmware_vm
         self.vm_properties = vm_properties
         self.devices = vmware_vm.config.hardware.device
         self.host_name = vmware_vm.summary.runtime.host.name
+        t0 = time.time()
         self.ports = self._read_ports()
+        logger.info('VirtualMachineModel._read_ports took: %s', time.time() - t0)
 
     def rename(self, name):
         self.vm_properties['name'] = name
