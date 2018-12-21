@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import time
 import random
 import socket
 import sys
@@ -179,7 +180,7 @@ def update_set_listener(esxi_api_client, update_set_queue):
         logger.info('Got update set from ESXi')
         if update_set:
             logger.info('Not empty update set put on queue')
-            update_set_queue.put(update_set)
+            update_set_queue.put((update_set, time.time()))
 
 
 def main(args):
