@@ -10,7 +10,7 @@ import gevent
 import yaml
 from cfgm_common.uve.nodeinfo.ttypes import NodeStatus, NodeStatusUVE
 from pysandesh.connection_info import ConnectionState
-from pysandesh.sandesh_base import Sandesh
+from pysandesh.sandesh_base import Sandesh, SandeshConfig
 from sandesh_common.vns.constants import (INSTANCE_ID_DEFAULT, Module2NodeType,
                                           ModuleNames, NodeTypeNames,
                                           ServiceHttpPortMap)
@@ -141,6 +141,7 @@ def run_introspect(cfg, database, lock):
     sandesh = Sandesh()
     sandesh_handler = SandeshHandler(database, lock)
     sandesh_handler.bind_handlers()
+    config = SandeshConfig(http_server_ip=sandesh_config['http_server_ip'])
     sandesh.init_generator(
         module='cvm',
         source=sandesh_config['hostname'],
@@ -149,7 +150,8 @@ def run_introspect(cfg, database, lock):
         collectors=sandesh_config['collectors'],
         client_context='cvm_context',
         http_port=sandesh_config['introspect_port'],
-        sandesh_req_uve_pkg_list=['cfgm_common', 'cvm']
+        sandesh_req_uve_pkg_list=['cfgm_common', 'cvm'],
+        config=config
     )
     sandesh.sandesh_logger().set_logger_params(
         logger=sandesh.logger(),
