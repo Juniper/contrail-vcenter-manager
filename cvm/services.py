@@ -1,3 +1,4 @@
+import gevent
 import ipaddress
 import logging
 import time
@@ -10,6 +11,7 @@ from cvm.constants import (CONTRAIL_VM_NAME, VM_UPDATE_FILTERS,
                            DVS_UNSTABLE_CLUSTER_ERROR)
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
+from cvm.utils import synchronized
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +53,7 @@ class VirtualMachineInterfaceService(Service):
         super(VirtualMachineInterfaceService, self).__init__(vnc_api_client, database,
                                                              esxi_api_client=esxi_api_client,
                                                              vcenter_api_client=vcenter_api_client)
+        self._lock = gevent.lock.RLock()
         self._vlan_id_pool = vlan_id_pool
 
     def update_vmis(self):
@@ -101,6 +104,7 @@ class VirtualMachineInterfaceService(Service):
     def _update_in_vnc(self, vmi_model):
         self._vnc_api_client.update_vmi(vmi_model.vnc_vmi)
 
+    @synchronized
     def _add_instance_ip_to(self, vmi_model):
         vmi_model.construct_instance_ip()
         if vmi_model.vnc_instance_ip:
@@ -236,7 +240,8 @@ class VirtualMachineService(Service):
 
     def _create(self, vmware_vm, vm_properties):
         vm_model = VirtualMachineModel(vmware_vm, vm_properties)
-        self._database.vmis_to_update += vm_model.vmi_models
+        for vmi_model in vm_model.vmi_models:
+            self._database.vmis_to_update.append(vmi_model)
         self._add_property_filter_for_vm(vm_model, vmware_vm, VM_UPDATE_FILTERS)
         self._update_in_vnc(vm_model.vnc_vm)
         logger.info('Created %s', vm_model)
@@ -353,8 +358,10 @@ def is_contrail_vm_name(name):
 class VirtualNetworkService(Service):
     def __init__(self, vcenter_api_client, vnc_api_client, database):
         super(VirtualNetworkService, self).__init__(vnc_api_client, database)
+        self._lock = gevent.lock.RLock()
         self._vcenter_api_client = vcenter_api_client
 
+    @synchronized
     def update_vns(self):
         for vmi_model in list(self._database.vmis_to_update):
             try:
