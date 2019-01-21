@@ -11,9 +11,9 @@ class VMwareMonitor(object):
     def sync(self):
         self._controller.sync()
 
-    def start(self, update_set_queue):
+    def start(self, changes_queue):
         while True:
-            update_set = update_set_queue.get()
-            logger.info('Starting process update set')
-            self._controller.handle_update(update_set)
-            logger.info('Finished procesing update set')
+            obj, change = changes_queue.get()
+            logger.info('Starting process change')
+            self._controller.handle_update(obj, change)
+            logger.info('Finished procesing change')
