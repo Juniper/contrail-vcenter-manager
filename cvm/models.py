@@ -1,3 +1,4 @@
+import gevent
 import logging
 import uuid
 from collections import deque
@@ -7,6 +8,7 @@ from vnc_api.vnc_api import (InstanceIp, MacAddressesType, VirtualMachine,
                              VirtualMachineInterface)
 
 from cvm.constants import CONTRAIL_VM_NAME, ID_PERMS
+from cvm.utils import synchronized
 
 logger = logging.getLogger(__name__)
 
@@ -238,24 +240,29 @@ class VirtualMachineInterfaceModel(object):
 
 class VlanIdPool(object):
     def __init__(self, start, end):
+        self._lock = gevent.lock.RLock()
         self._available_ids = deque(xrange(start, end + 1))
 
+    @synchronized
     def reserve(self, vlan_id):
         try:
             self._available_ids.remove(vlan_id)
         except ValueError:
             pass
 
+    @synchronized
     def get_available(self):
         try:
             return self._available_ids.popleft()
         except IndexError:
             raise Exception('No viable VLAN ID')
 
+    @synchronized
     def free(self, vlan_id):
         if vlan_id not in self._available_ids:
             self._available_ids.append(vlan_id)
 
+    @synchronized
     def is_available(self, vlan_id):
         return vlan_id in self._available_ids
 

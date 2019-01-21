@@ -1,4 +1,5 @@
 import atexit
+import gevent
 import itertools
 import json
 import logging
@@ -135,8 +136,10 @@ class VCenterAPIClient(VSphereAPIClient):
         super(VCenterAPIClient, self).__init__()
         self._vcenter_cfg = vcenter_cfg
         self._dvs = None
+        self._lock = gevent.lock.RLock()
 
     def __enter__(self):
+        self._lock.acquire()
         self._si = SmartConnectNoSSL(
             host=self._vcenter_cfg.get('host'),
             user=self._vcenter_cfg.get('username'),
@@ -149,6 +152,7 @@ class VCenterAPIClient(VSphereAPIClient):
 
     def __exit__(self, *args):
         Disconnect(self._si)
+        self._lock.release()
 
     def get_dpg_by_key(self, key):
         for dpg in self._datacenter.network:
