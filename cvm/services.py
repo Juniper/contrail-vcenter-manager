@@ -236,7 +236,8 @@ class VirtualMachineService(Service):
 
     def _create(self, vmware_vm, vm_properties):
         vm_model = VirtualMachineModel(vmware_vm, vm_properties)
-        self._database.vmis_to_update += vm_model.vmi_models
+        for vmi_model in vm_model.vmi_models:
+            self._database.vmis_to_update.append(vmi_model)
         self._add_property_filter_for_vm(vm_model, vmware_vm, VM_UPDATE_FILTERS)
         self._update_in_vnc(vm_model.vnc_vm)
         logger.info('Created %s', vm_model)
