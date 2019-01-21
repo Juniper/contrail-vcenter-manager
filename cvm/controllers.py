@@ -28,21 +28,18 @@ class VmwareController(object):
             self._vrouter_port_service.sync_ports()
         logger.info('Synchronization complete')
 
-    def handle_update(self, update_set):
+    def handle_update(self, obj, change):
         with self._lock:
-            self._update_handler.handle_update(update_set)
+            self._update_handler.handle_update(obj, change)
 
 
 class UpdateHandler(object):
     def __init__(self, handlers):
         self._handlers = handlers
 
-    def handle_update(self, update_set):
-        for property_filter_update in update_set.filterSet:
-            for object_update in property_filter_update.objectSet:
-                for property_change in object_update.changeSet:
-                    for handler in self._handlers:
-                        handler.handle_change(object_update.obj, property_change)
+    def handle_update(self, obj, change):
+        for handler in self._handlers:
+            handler.handle_change(obj, change)
 
 
 class AbstractChangeHandler(object):
