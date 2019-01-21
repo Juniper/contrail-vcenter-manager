@@ -177,22 +177,41 @@ def update_set_listener(esxi_api_client, update_set_queue):
         logger.info('Started waiting for updates')
         update_set = esxi_api_client.wait_for_updates()
         logger.info('Got update set from ESXi')
+        # logger.info('update_set: %s', update_set)
         if update_set:
             logger.info('Not empty update set put on queue')
             update_set_queue.put(update_set)
+
+
+def unwrap_update_set(update_set_queue, changes_queue):
+    while True:
+        update_set = update_set_queue.get()
+        for property_filter_update in update_set.filterSet:
+            for object_update in property_filter_update.objectSet:
+                for property_change in object_update.changeSet:
+                    name = getattr(property_change, 'name', None)
+                    value = getattr(property_change, 'val', None)
+                    if name.startswith('latestPage') and isinstance(value, list):
+                        for change in sorted(value, key=lambda e: e.key):
+                            changes_queue.put((object_update.obj, change))
+                    else:
+                        changes_queue.put((object_update.obj, property_change))
 
 
 def main(args):
     database = Database()
     lock = gevent.lock.BoundedSemaphore()
     update_set_queue = gevent.queue.Queue()
+    changes_queue = gevent.queue.Queue()
     cfg = load_config(args.config_file)
     vmware_monitor, esxi_api_client = build_monitor(cfg, lock, database)
     run_introspect(cfg, database, lock)
     vmware_monitor.sync()
     greenlets = [
-        gevent.spawn(vmware_monitor.start, update_set_queue),
         gevent.spawn(update_set_listener, esxi_api_client, update_set_queue),
+        gevent.spawn(unwrap_update_set, update_set_queue, changes_queue),
+        gevent.spawn(vmware_monitor.start, changes_queue, 1),
+        gevent.spawn(vmware_monitor.start, changes_queue, 2),
     ]
     gevent.joinall(greenlets, raise_error=True)
 
