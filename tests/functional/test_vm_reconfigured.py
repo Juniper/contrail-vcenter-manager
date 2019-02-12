@@ -59,6 +59,9 @@ def test_vm_reconfigured(_, controller, database, vcenter_api_client, vnc_api_cl
     vrouter_api_client.delete_port.assert_called_once_with(vmi_model.uuid)
     assert vrouter_api_client.add_port.call_count == 2
     assert vrouter_api_client.add_port.call_args[0][0] == vmi_model
+    # Check if VMI's vRouter Port connected to old portgroup was deleted
+    assert vrouter_api_client.delete_port.call_count == 1
+    assert vrouter_api_client.delete_port.call_args[0][0] == vmi_model.uuid
 
     # Check if VLAN ID has been set using VLAN Override
     assert vcenter_api_client.set_vlan_id.call_count == 2

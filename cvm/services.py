@@ -80,6 +80,8 @@ class VirtualMachineInterfaceService(Service):
             return
 
         if vmi_model.vn_model != new_vn_model:
+            if vmi_model.vn_model is not None:
+                self._database.ports_to_delete.append(vmi_model.uuid)
             vmi_model.vn_model = new_vn_model
 
     def _update_vmi(self, vmi_model):
