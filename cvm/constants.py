@@ -41,7 +41,8 @@ CONTRAIL_NETWORK = 'VM-PG'
 VLAN_ID_RANGE_START = 1
 VLAN_ID_RANGE_END = 4095
 
-ID_PERMS = IdPermsType(creator='vcenter-manager', enable=True)
+ID_PERMS_CREATOR = 'vcenter-manager'
+ID_PERMS = IdPermsType(creator=ID_PERMS_CREATOR, enable=True)
 
 WAIT_FOR_PORT_RETRY_TIME = 1.0*25/1000  # 25 ms
 WAIT_FOR_PORT_RETRY_LIMIT = int(10/WAIT_FOR_PORT_RETRY_TIME)  # Timeout after 10 s
