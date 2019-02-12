@@ -386,11 +386,10 @@ class VNCAPIClient(object):
             return
 
         logger.info('Network change detected. Updating Interface %s info in VNC.', new_vmi.name)
-
-        self._delete_instance_ip_of(old_vmi)
-        logger.info('Updating Virtual Network of Interface %s to %s', new_vmi.name, new_vn_fq_name[2])
-        vnc_vn = self.read_vn(new_vn_fq_name)
-        old_vmi.set_virtual_network(vnc_vn)
+        self.delete_vmi(old_vmi.uuid)
+        logger.info('Deleted VMI %s from VNC with old network %s', old_vmi.uuid, old_vn_fq_name[2])
+        self.create_vmi(new_vmi)
+        logger.info('Created VMI %s in VNC with new network %s', new_vmi.uuid, new_vn_fq_name[2])
 
     def _delete_instance_ip_of(self, vnc_vmi):
         logger.info('Deleting old Instance IP for Interface %s', vnc_vmi.name)
@@ -616,6 +615,7 @@ class VRouterAPIClient(object):
     def add_port(self, vmi_model):
         """ Add port to VRouter Agent. """
         try:
+            self.delete_port(vmi_model.uuid)
             ip_address = vmi_model.ip_address
             if vmi_model.vnc_instance_ip:
                 ip_address = vmi_model.vnc_instance_ip.instance_ip_address
