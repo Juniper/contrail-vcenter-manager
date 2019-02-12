@@ -391,6 +391,19 @@ class VNCAPIClient(object):
         logger.info('Updating Virtual Network of Interface %s to %s', new_vmi.name, new_vn_fq_name[2])
         vnc_vn = self.read_vn(new_vn_fq_name)
         old_vmi.set_virtual_network(vnc_vn)
+        self._update_routing_instances(old_vmi, vnc_vn)
+
+    def _update_routing_instances(self, old_vmi, vnc_vn):
+        for index, routing_instance_ref in enumerate(vnc_vn.get_routing_instances()):
+            routing_instance_fq_name = routing_instance_ref['to']
+            routing_instance = self.vnc_lib.routing_instance_read(fq_name=routing_instance_fq_name)
+            forwarding_policy = vnc_api.PolicyBasedForwardingRuleType(direction='both')
+            if index == 0:
+                # Overwrite old routing instances by first new one
+                old_vmi.set_routing_instance(routing_instance, forwarding_policy)
+            else:
+                # Add next routing instance
+                old_vmi.add_routing_instance(routing_instance, forwarding_policy)
 
     def _delete_instance_ip_of(self, vnc_vmi):
         logger.info('Deleting old Instance IP for Interface %s', vnc_vmi.name)
@@ -616,6 +629,7 @@ class VRouterAPIClient(object):
     def add_port(self, vmi_model):
         """ Add port to VRouter Agent. """
         try:
+            self.delete_port(vmi_model.uuid)
             ip_address = vmi_model.ip_address
             if vmi_model.vnc_instance_ip:
                 ip_address = vmi_model.vnc_instance_ip.instance_ip_address
