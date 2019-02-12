@@ -80,6 +80,8 @@ class VirtualMachineInterfaceService(Service):
             return
 
         if vmi_model.vn_model != new_vn_model:
+            if vmi_model.vn_model is not None:
+                self._database.ports_to_delete.append(vmi_model.uuid)
             vmi_model.vn_model = new_vn_model
 
     def _update_vmi(self, vmi_model):
@@ -330,7 +332,9 @@ class VirtualMachineService(Service):
         new_vmi_models = {vmi_model.uuid: vmi_model for vmi_model in vm_model.vmi_models}
 
         for uuid, new_vmi_model in new_vmi_models.items():
-            old_vmi_models.pop(uuid, None)
+            old_vmi_model = old_vmi_models.pop(uuid, None)
+            if old_vmi_model is not None:
+                new_vmi_model.vn_model = old_vmi_model.vn_model
             self._database.vmis_to_update.append(new_vmi_model)
 
         self._database.vmis_to_delete += old_vmi_models.values()

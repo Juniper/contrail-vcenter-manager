@@ -24,9 +24,6 @@ def test_vm_reconfigured(_, controller, database, vcenter_api_client, vnc_api_cl
     vmware_vm_1.config.hardware.device[0].backing.port.portgroupKey = 'dvportgroup-2'
     vmware_vm_1.config.hardware.device[0].backing.port.portKey = '11'
 
-    # We need to update vRouter API Client Mock to return newly created VM's port
-    vrouter_api_client.read_port.return_value = {'dummy':'dummy_value'}
-
     # Then VmReconfiguredEvent is being handled
     controller.handle_update(vm_reconfigured_update)
 
