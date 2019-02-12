@@ -1,3 +1,5 @@
+from mock import Mock
+
 from vnc_api.exceptions import NoIdError
 
 
@@ -37,10 +39,14 @@ def test_update_vmi_vn(vnc_api_client, vnc_lib, vnc_vmi_1, vnc_vmi_2, vnc_vn_2):
     vnc_lib.virtual_machine_interface_read.return_value = vnc_vmi_1
     vnc_lib.virtual_network_read.return_value = vnc_vn_2
     vnc_vmi_1.get_instance_ip_back_refs.return_value = [{'to': ['instance-ip-fqname']}]
+    vnc_vn_2.get_routing_instances.return_value = [{'to': ['domain', 'project', 'vnc-vn-2', 'vnc-vn-2']}]
+    routing_instance = Mock()
+    vnc_lib.routing_instance_read.return_value = routing_instance
 
     vnc_api_client.update_vmi(vnc_vmi_2)
 
     vnc_vmi_1.set_virtual_network.assert_called_once_with(vnc_vn_2)
+    vnc_vmi_1.set_routing_instance.asser_called_once_with(routing_instance)
     vnc_lib.virtual_machine_interface_update.assert_called_once_with(vnc_vmi_1)
     vnc_lib.instance_ip_delete.assert_called_once()
 
