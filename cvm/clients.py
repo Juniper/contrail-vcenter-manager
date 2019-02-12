@@ -13,7 +13,7 @@ from vnc_api import vnc_api
 from vnc_api.exceptions import NoIdError, RefsExistError
 
 from contrail_vrouter_api.vrouter_api import ContrailVRouterApi
-from cvm.constants import (VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
+from cvm.constants import (ID_PERMS_CREATOR, VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
                            VNC_VCENTER_IPAM, VNC_VCENTER_IPAM_FQN,
                            VNC_VCENTER_PROJECT)
@@ -352,16 +352,26 @@ class VNCAPIClient(object):
         logger.info('Virtual Machine %s created in VNC', vnc_vm.name)
 
     def get_all_vms(self):
-        vms = self.vnc_lib.virtual_machines_list().get('virtual-machines')
-        return [self.read_vm(vm['uuid']) for vm in vms]
+        vms_data = self.vnc_lib.virtual_machines_list().get('virtual-machines')
+        vms = []
+        for vm_data in vms_data:
+            vnc_vm = self.read_vm(vm_data['uuid'])
+            if vnc_vm.id_perms.creator == ID_PERMS_CREATOR:
+                vms.append(vnc_vm)
+        return vms
 
     def get_all_vm_uuids(self):
-        vms = self.vnc_lib.virtual_machines_list().get('virtual-machines')
-        return [vm['uuid'] for vm in vms]
+        vms_data = self.vnc_lib.virtual_machines_list().get('virtual-machines')
+        vm_uuids = []
+        for vm_data in vms_data:
+            vnc_vm = self.read_vm(vm_data['uuid'])
+            if vnc_vm.id_perms.creator == ID_PERMS_CREATOR:
+                vm_uuids.append(vm_data['uuid'])
+        return vm_uuids
 
     def get_vmi_uuids_by_vm_uuid(self, vm_uuid):
         vm = self.read_vm(vm_uuid)
-        return [vmi_ref['uuid'] for vmi_ref in vm.get_virtual_machine_interface_back_refs()]
+        return [vmi_ref['uuid'] for vmi_ref in vm.get_virtual_machine_interface_back_refs() or ()]
 
     def read_vm(self, uuid):
         return self.vnc_lib.virtual_machine_read(id=uuid)
