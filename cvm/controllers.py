@@ -26,6 +26,7 @@ class VmwareController(object):
             self._vm_service.delete_unused_vms_in_vnc()
             self._vlan_id_service.update_vlan_ids()
             self._vrouter_port_service.sync_ports()
+            self._vrouter_port_service.delete_stale_vrouter_ports()
         logger.info('Synchronization complete')
 
     def handle_update(self, update_set):
