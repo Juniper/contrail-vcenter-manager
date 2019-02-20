@@ -451,6 +451,14 @@ class VRouterPortService(object):
                 vrouter_port.get('tx-vlan-id') != vmi_model.vcenter_port.vlan_id or
                 vrouter_port.get('ip-address') != vmi_model.vnc_instance_ip.instance_ip_address)
 
+    def delete_stale_vrouter_ports(self):
+        logger.info('Deleting stale vRouter ports...')
+        port_uuids = self._vrouter_api_client.get_all_port_uuids()
+        for port_uuid in port_uuids:
+            if self._database.get_vmi_model_by_uuid(port_uuid) is None:
+                logger.info('Deleting stale vRouter port: %s', port_uuid)
+                self._vrouter_api_client.delete_port(port_uuid)
+
 
 class VlanIdService(object):
     def __init__(self, vcenter_api_client, esxi_api_client, vlan_id_pool, database):
