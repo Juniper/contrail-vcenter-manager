@@ -3,6 +3,7 @@ import itertools
 import json
 import logging
 import random
+import os
 from uuid import uuid4
 
 import requests
@@ -628,6 +629,7 @@ class VRouterAPIClient(object):
         self.vrouter_api = ContrailVRouterApi()
         self.vrouter_host = 'http://localhost'
         self.vrouter_port = '9091'
+        self.port_files_path = '/var/lib/contrail/ports/'
 
     def add_port(self, vmi_model):
         """ Add port to VRouter Agent. """
@@ -691,3 +693,12 @@ class VRouterAPIClient(object):
             logger.error('There was a problem with vRouter API Client: %s', e)
         logger.info('Unable to read vRouter port with uuid: %s', vmi_uuid)
         return None
+
+    def get_all_port_uuids(self):
+        if not os.path.exists(self.port_files_path):
+            return ()
+        port_uuids = []
+        for file_name in os.listdir(self.port_files_path):
+            if os.path.isfile(os.path.join(self.port_files_path, file_name)):
+                port_uuids.append(file_name)
+        return port_uuids
