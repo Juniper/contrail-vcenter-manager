@@ -245,18 +245,22 @@ class VlanIdPool(object):
     def reserve(self, vlan_id):
         try:
             self._available_ids.remove(vlan_id)
+            logger.info('Reserved VLAN %s', vlan_id)
         except ValueError:
             pass
 
     def get_available(self):
         try:
-            return self._available_ids.popleft()
+            vlan_id = self._available_ids.popleft()
+            logger.info('Reserved VLAN %s', vlan_id)
+            return vlan_id
         except IndexError:
             raise Exception('No viable VLAN ID')
 
     def free(self, vlan_id):
         if vlan_id not in self._available_ids:
             self._available_ids.append(vlan_id)
+        logger.info('Freed VLAN %s', vlan_id)
 
     def is_available(self, vlan_id):
         return vlan_id in self._available_ids
