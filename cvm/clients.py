@@ -4,6 +4,7 @@ import json
 import logging
 import random
 import os
+import time
 from uuid import uuid4
 
 import requests
@@ -17,7 +18,7 @@ from contrail_vrouter_api.vrouter_api import ContrailVRouterApi
 from cvm.constants import (ID_PERMS_CREATOR, VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
                            VNC_VCENTER_IPAM, VNC_VCENTER_IPAM_FQN,
-                           VNC_VCENTER_PROJECT)
+                           VNC_VCENTER_PROJECT, HISTORY_COLLECTOR_PAGE_SIZE)
 from cvm.models import find_vrouter_uuid
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,7 @@ class ESXiAPIClient(VSphereAPIClient):
         )
         atexit.register(Disconnect, self._si)
         self._datacenter = self._si.content.rootFolder.childEntity[0]
+        self._host = self._datacenter.hostFolder.childEntity[0].host[0]
         self._property_collector = self._si.content.propertyCollector
         self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
         self._version = ''
@@ -78,7 +80,7 @@ class ESXiAPIClient(VSphereAPIClient):
         entity_spec.recursion = vim.event.EventFilterSpec.RecursionOption.children
         event_filter_spec.entity = entity_spec
         history_collector = event_manager.CreateCollectorForEvents(filter=event_filter_spec)
-        history_collector.SetCollectorPageSize(1000)
+        history_collector.SetCollectorPageSize(HISTORY_COLLECTOR_PAGE_SIZE)
         return history_collector
 
     def add_filter(self, obj, filters):
@@ -110,8 +112,10 @@ class ESXiAPIClient(VSphereAPIClient):
         return properties
 
     def read_vrouter_uuid(self):
-        host = self._datacenter.hostFolder.childEntity[0].host[0]
-        return find_vrouter_uuid(host)
+        return find_vrouter_uuid(self._host)
+
+    def read_host_uuid(self):
+        return self._host.hardware.systemInfo.uuid
 
 
 def make_prop_set(obj, filters):
@@ -137,8 +141,8 @@ def make_filter_spec(obj, filters):
 
 
 class VCenterAPIClient(VSphereAPIClient):
-    DESTROY_TASK = 'VirtualMachine.destroy'
-    UNREGISTER_TASK = 'VirtualMachine.unregister'
+    WAITING_TIMEOUT = 20
+    WAITING_SLEEP = 3
 
     def __init__(self, vcenter_cfg):
         super(VCenterAPIClient, self).__init__()
@@ -172,7 +176,7 @@ class VCenterAPIClient(VSphereAPIClient):
         return None
 
     def set_vlan_id(self, vcenter_port):
-        dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
+        dv_port = self.fetch_port_from_dvs(vcenter_port.port_key)
         if not dv_port:
             return
         logger.info('Setting vCenter VLAN ID of port %s to %d', vcenter_port.port_key, vcenter_port.vlan_id)
@@ -184,7 +188,7 @@ class VCenterAPIClient(VSphereAPIClient):
 
     def get_vlan_id(self, vcenter_port):
         logger.info('Reading VLAN ID of port %s', vcenter_port.port_key)
-        dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
+        dv_port = self.fetch_port_from_dvs(vcenter_port.port_key)
         if not dv_port.config.setting.vlan.inherited:
             vlan_id = dv_port.config.setting.vlan.vlanId
             logger.info('Port: %s VLAN ID: %s', vcenter_port.port_key, vlan_id)
@@ -194,7 +198,7 @@ class VCenterAPIClient(VSphereAPIClient):
 
     def restore_vlan_id(self, vcenter_port):
         logger.info('Restoring VLAN ID of port %s to inherited value', vcenter_port.port_key)
-        dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
+        dv_port = self.fetch_port_from_dvs(vcenter_port.port_key)
         dv_port_config_spec = make_dv_port_spec(dv_port)
         task = self._dvs.ReconfigureDVPort_Task(port=[dv_port_config_spec])
         success_message = 'Successfully restored VLAN ID for port: %s' % (vcenter_port.port_key,)
@@ -211,7 +215,7 @@ class VCenterAPIClient(VSphereAPIClient):
     def _get_dvswitch(self, name):
         return self._get_object([vim.dvs.VmwareDistributedVirtualSwitch], name)
 
-    def _fetch_port_from_dvs(self, port_key):
+    def fetch_port_from_dvs(self, port_key):
         criteria = vim.dvs.PortCriteria()
         criteria.portKey = port_key
         try:
@@ -244,21 +248,31 @@ class VCenterAPIClient(VSphereAPIClient):
     def can_rename_vmi(self, vmi_model, new_name):
         return self.can_rename_vm(vmi_model.vm_model, new_name)
 
-    def is_vm_removed(self, vm_name):
-        # List is sorted from new tasks to older
+    def is_vm_removed(self, vm_name, host_uuid):
         logger.info('Checking if VM: %s was removed', vm_name)
-        sorted_tasks = sorted(
-            self._si.content.taskManager.recentTask,
-            key=get_key_from_task, reverse=True
-        )
-        for task in sorted_tasks:
-            entity_name = task.info.entityName
-            if entity_name == vm_name or '/{}/'.format(entity_name) in vm_name:
-                if task.info.descriptionId in (self.DESTROY_TASK, self.UNREGISTER_TASK):
-                    logger.info('VM: %s was removed', vm_name)
-                    return True
-        logger.info('VM: %s was not removed', vm_name)
-        return False
+        start_time = time.time()
+        while True:
+            vm = self._get_vm_by_name(vm_name)
+            if vm is None:
+                logger.info('VM: %s was removed', vm_name)
+                return True
+            host = vm.runtime.host
+            if host is None:
+                logger.info('Host for VM %s is None. Waiting for update...', vm_name)
+            else:
+                current_host_uuid = host.hardware.systemInfo.uuid
+                if current_host_uuid != host_uuid:
+                    logger.info('VM: %s was not removed', vm_name)
+                    return False
+            if time.time() - start_time > self.WAITING_TIMEOUT:
+                logger.error('Unable to confirm that VM was removed or not...', vm_name)
+                return False
+            time.sleep(self.WAITING_SLEEP)
+
+    def _get_vm_by_name(self, vm_name):
+        if 'vmfs' in vm_name:
+            vm_name = vm_name.split('/')[-2]
+        return self._get_object([vim.VirtualMachine], vm_name)
 
 
 def make_dv_port_spec(dv_port, vlan_id=None):
@@ -335,10 +349,10 @@ class VNCAPIClient(object):
 
     def delete_vm(self, uuid):
         logger.info('Attempting to delete Virtual Machine %s from VNC...', uuid)
-        vm = self.read_vm(uuid)
-        for vmi_ref in vm.get_virtual_machine_interface_back_refs() or []:
-            self.delete_vmi(vmi_ref.get('uuid'))
         try:
+            vm = self.read_vm(uuid)
+            for vmi_ref in vm.get_virtual_machine_interface_back_refs() or []:
+                self.delete_vmi(vmi_ref.get('uuid'))
             self.vnc_lib.virtual_machine_delete(id=uuid)
             logger.info('Virtual Machine %s removed from VNC', uuid)
         except NoIdError:
@@ -364,18 +378,24 @@ class VNCAPIClient(object):
         vms_data = self.vnc_lib.virtual_machines_list().get('virtual-machines')
         vms = []
         for vm_data in vms_data:
-            vnc_vm = self.read_vm(vm_data['uuid'])
-            if vnc_vm.id_perms.creator == ID_PERMS_CREATOR:
-                vms.append(vnc_vm)
+            try:
+                vnc_vm = self.read_vm(vm_data['uuid'])
+                if vnc_vm.id_perms.creator == ID_PERMS_CREATOR:
+                    vms.append(vnc_vm)
+            except Exception, exc:
+                logger.error('Unexpected exception %s during pulling VM from VNC', exc, exc_info=True)
         return vms
 
     def get_all_vm_uuids(self):
         vms_data = self.vnc_lib.virtual_machines_list().get('virtual-machines')
         vm_uuids = []
         for vm_data in vms_data:
-            vnc_vm = self.read_vm(vm_data['uuid'])
-            if vnc_vm.id_perms.creator == ID_PERMS_CREATOR:
-                vm_uuids.append(vm_data['uuid'])
+            try:
+                vnc_vm = self.read_vm(vm_data['uuid'])
+                if vnc_vm.id_perms.creator == ID_PERMS_CREATOR:
+                    vm_uuids.append(vm_data['uuid'])
+            except Exception, exc:
+                logger.error('Unexpected exception %s during pulling VM uuid from VNC', exc, exc_info=True)
         return vm_uuids
 
     def get_vmi_uuids_by_vm_uuid(self, vm_uuid):
@@ -427,6 +447,7 @@ class VNCAPIClient(object):
             logger.info('Virtual Machine Interface %s already exists in VNC', vnc_vmi.name)
 
     def delete_vmi(self, uuid):
+        logger.info('Deleting Virtual Machine Interface %s from VNC...', uuid)
         vmi = self.read_vmi(uuid)
         if not vmi:
             logger.error('Virtual Machine Interface %s not found in VNC. Unable to delete', uuid)
@@ -434,7 +455,9 @@ class VNCAPIClient(object):
 
         self._detach_floating_ips(vmi)
 
-        for instance_ip_ref in vmi.get_instance_ip_back_refs() or []:
+        instance_ip_refs = vmi.get_instance_ip_back_refs()
+        logger.info('VMI %s has following instance ip refs: %s', uuid, instance_ip_refs)
+        for instance_ip_ref in instance_ip_refs or []:
             self._detach_service_instances_from_instance_ip(instance_ip_ref['uuid'])
             self.delete_instance_ip(instance_ip_ref.get('uuid'))
 
@@ -540,8 +563,10 @@ class VNCAPIClient(object):
             logger.error("Unable to create Instance IP: %s due to: %s", instance_ip.name, e)
 
     def delete_instance_ip(self, uuid):
+        logger.info('Deleting Instance IP: %s... from VNC', uuid)
         try:
             self.vnc_lib.instance_ip_delete(id=uuid)
+            logger.info('Removed Instance IP %s from VNC', uuid)
         except NoIdError:
             logger.error('Instance IP not found: %s', uuid)
 

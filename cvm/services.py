@@ -7,7 +7,7 @@ from vnc_api.gen.resource_xsd import PermType2
 from cvm.constants import (CONTRAIL_VM_NAME, VM_UPDATE_FILTERS,
                            VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT,
                            WAIT_FOR_PORT_RETRY_TIME, WAIT_FOR_PORT_RETRY_LIMIT,
-                           DVS_UNSTABLE_CLUSTER_ERROR)
+                           SET_VLAN_ID_RETRY_LIMIT)
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
 
@@ -25,24 +25,6 @@ class Service(object):
         self._ipam = self._vnc_api_client.read_or_create_ipam()
         if self._esxi_api_client:
             self._vrouter_uuid = esxi_api_client.read_vrouter_uuid()
-
-
-def wait_for_port(vmi_model):
-    logger.info('Waiting for port %s to be ready...', vmi_model.vcenter_port.port_key)
-    for _ in xrange(WAIT_FOR_PORT_RETRY_LIMIT):
-        try:
-            device = next(device for device
-                          in vmi_model.vm_model.vmware_vm.config.hardware.device
-                          if device.key == vmi_model.vcenter_port.device.key)
-            if device.connectable.connected:
-                logger.info('DVPort %s is ready.', vmi_model.vcenter_port.port_key)
-                return True
-        except StopIteration:
-            logger.error('No device detected')
-            return False
-        time.sleep(WAIT_FOR_PORT_RETRY_TIME)
-    logger.info('Waiting for port timed out')
-    return False
 
 
 class VirtualMachineInterfaceService(Service):
@@ -161,8 +143,9 @@ class VirtualMachineInterfaceService(Service):
         if not vm_model:
             return
 
+        host_uuid = self._esxi_api_client.read_host_uuid()
         with self._vcenter_api_client:
-            full_remove = self._vcenter_api_client.is_vm_removed(vm_model.name)
+            full_remove = self._vcenter_api_client.is_vm_removed(vm_model.name, host_uuid)
         vmi_models = self._database.get_vmi_models_by_vm_uuid(vm_model.uuid)
 
         for vmi_model in vmi_models:
@@ -196,6 +179,27 @@ class VirtualMachineInterfaceService(Service):
             self._update_vmi(vmi_model)
             self._database.vmis_to_update.remove(vmi_model)
             logger.info('Updated %s', vmi_model)
+
+    def delete_unused_vmis_in_vnc(self):
+        for vm_model in self._database.get_all_vm_models():
+            try:
+                self.delete_unused_vm_vmis_in_vnc(vm_model.uuid)
+            except Exception, exc:
+                logger.error('Unexpected exception %s during deleting stale VMIs from VNC', exc, exc_info=True)
+
+    def delete_unused_vm_vmis_in_vnc(self, vm_uuid):
+        vm_model = self._database.get_vm_model_by_uuid(vm_uuid)
+        vmi_model_uuids = set(
+            vmi_model.uuid for vmi_model in vm_model.vmi_models
+        )
+        vnc_vmi_uuids = self._vnc_api_client.get_vmi_uuids_by_vm_uuid(vm_uuid)
+        for vnc_vmi_uuid in vnc_vmi_uuids:
+            try:
+                if vnc_vmi_uuid not in vmi_model_uuids:
+                    logger.info('Deleting stale VMI: %s from VNC...', vnc_vmi_uuid)
+                    self._vnc_api_client.delete_vmi(vnc_vmi_uuid)
+            except Exception, exc:
+                logger.error('Unexpected exception %s during deleting stale VMI from VNC', exc, exc_info=True)
 
 
 class VirtualMachineService(Service):
@@ -269,19 +273,22 @@ class VirtualMachineService(Service):
 
     def delete_unused_vms_in_vnc(self):
         logger.info('Deleting stale information in VNC...')
-        with self._vcenter_api_client:
-            vnc_vm_uuids = self._vnc_api_client.get_all_vm_uuids()
-            vcenter_vms = self._vcenter_api_client.get_all_vms()
+        try:
+            with self._vcenter_api_client:
+                vnc_vm_uuids = self._vnc_api_client.get_all_vm_uuids()
+                vcenter_vms = self._vcenter_api_client.get_all_vms()
 
-            vcenter_vm_uuids = set()
-            for vm in vcenter_vms:
-                try:
-                    vcenter_vm_uuids.add(vm.config.instanceUuid)
-                except Exception, exc:
-                    logger.error('Unexpected exception %s during copying VM info from vCenter.', exc, exc_info=True)
+                vcenter_vm_uuids = set()
+                for vm in vcenter_vms:
+                    try:
+                        vcenter_vm_uuids.add(vm.config.instanceUuid)
+                    except Exception, exc:
+                        logger.error('Unexpected exception %s during copying VM info from vCenter.', exc, exc_info=True)
 
-            vms_to_remove = (uuid for uuid in vnc_vm_uuids if uuid not in vcenter_vm_uuids)
-            self._delete_stale_vms_from_vnc(vms_to_remove)
+                vms_to_remove = (uuid for uuid in vnc_vm_uuids if uuid not in vcenter_vm_uuids)
+                self._delete_stale_vms_from_vnc(vms_to_remove)
+        except Exception, exc:
+            logger.error('Unexpected exception %s during deleting unused VMs from VNC', exc, exc_info=True)
 
     def _delete_stale_vms_from_vnc(self, vms_to_remove):
         for uuid in vms_to_remove:
@@ -298,8 +305,9 @@ class VirtualMachineService(Service):
         logger.info('Deleting %s', vm_model)
         if not vm_model:
             return
+        host_uuid = self._esxi_api_client.read_host_uuid()
         with self._vcenter_api_client:
-            if self._vcenter_api_client.is_vm_removed(vm_model.name):
+            if self._vcenter_api_client.is_vm_removed(vm_model.name, host_uuid):
                 self._vnc_api_client.delete_vm(vm_model.uuid)
             else:
                 logger.info('VM %s still exists on another host and can\'t be deleted from VNC', name)
@@ -457,11 +465,14 @@ class VRouterPortService(object):
 
     def delete_stale_vrouter_ports(self):
         logger.info('Deleting stale vRouter ports...')
-        port_uuids = self._vrouter_api_client.get_all_port_uuids()
-        for port_uuid in port_uuids:
-            if self._database.get_vmi_model_by_uuid(port_uuid) is None:
-                logger.info('Deleting stale vRouter port: %s', port_uuid)
-                self._vrouter_api_client.delete_port(port_uuid)
+        try:
+            port_uuids = self._vrouter_api_client.get_all_port_uuids()
+            for port_uuid in port_uuids:
+                if self._database.get_vmi_model_by_uuid(port_uuid) is None:
+                    logger.info('Deleting stale vRouter port: %s', port_uuid)
+                    self._vrouter_api_client.delete_port(port_uuid)
+        except Exception, exc:
+            logger.error('Unexpected exception %s during deleting stale vRouter ports', exc, exc_info=True)
 
 
 class VlanIdService(object):
@@ -516,33 +527,74 @@ class VlanIdService(object):
         with self._vcenter_api_client:
             self._vcenter_api_client.restore_vlan_id(vmi_model.vcenter_port)
 
-    def update_vcenter_vlans(self, retry=False):
+    def update_vcenter_vlans(self):
         for vmi_model in list(self._database.vlans_to_update):
-            self._update_vcenter_vlan(vmi_model, retry=retry)
+            self._update_vcenter_vlan(vmi_model)
             self._database.vlans_to_update.remove(vmi_model)
 
-    def _update_vcenter_vlan(self, vmi_model, retry=False):
+    def _update_vcenter_vlan(self, vmi_model):
         if vmi_model.vcenter_port.vlan_success:
             logger.info('VLAN ID is already set with success')
             return
-        if retry:
-            i = 0
-            while True:
-                if i != 0:
-                    logger.error('Task failed to complete, retrying...')
+        if not vmi_model.vm_model.is_powered_on:
+            logger.info('Unable to set VLAN ID for powered off VM')
+            return
+        for i in range(SET_VLAN_ID_RETRY_LIMIT):
+            if i != 0:
+                logger.error('Task failed to complete, retrying...')
+            try:
                 with self._vcenter_api_client:
                     logger.info('Updating VLAN ID of %s in vCenter', vmi_model.display_name)
-                    if wait_for_port(vmi_model):
+                    if self._wait_for_device_connected(vmi_model) and self._wait_for_proxy_host(vmi_model):
                         state, error_msg = self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
                         if state == 'success':
                             vmi_model.vcenter_port.vlan_success = True
                             return
-                        if error_msg != DVS_UNSTABLE_CLUSTER_ERROR:
-                            break
-                i += 1
-            logger.error('Unable to finish the task.')
-        else:
-            with self._vcenter_api_client:
-                state, _ = self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
-                if state == 'success':
-                    vmi_model.vcenter_port.vlan_success = True
+            except Exception, exc:
+                logger.error('Unexpected exception: %s during setting VLAN ID for %s', exc, vmi_model, exc_info=exc)
+        logger.error('Unable to finish the task.')
+
+    @classmethod
+    def _wait_for_device_connected(cls, vmi_model):
+        port_key = vmi_model.vcenter_port.port_key
+        vm_name = vmi_model.vm_model.name
+        logger.info('Waiting for VM %s interface connected to port %s...', vm_name, port_key)
+        for _ in xrange(WAIT_FOR_PORT_RETRY_LIMIT):
+            try:
+                device = next(device for device
+                              in vmi_model.vm_model.vmware_vm.config.hardware.device
+                              if device.key == vmi_model.vcenter_port.device.key)
+                if device.connectable.connected:
+                    logger.info('VM %s interface is connected to port %s.', vm_name, port_key)
+                    return True
+            except StopIteration:
+                logger.error('For VM %s did not detect such interface', vm_name)
+                return False
+            except Exception, exc:
+                logger.error('Unexpected exception: %s during waiting for VM %s interface connected to port %s',
+                             exc, vm_name, port_key, exc_info=exc)
+            logger.info('VM %s interface still is not connected to port %s.', vm_name, port_key)
+            time.sleep(WAIT_FOR_PORT_RETRY_TIME)
+        logger.info('Waiting for VM %s interface to be connected to port %s timed out', vm_name, port_key)
+        return False
+
+    def _wait_for_proxy_host(self, vmi_model):
+        port_key = vmi_model.vcenter_port.port_key
+        logger.info('Waiting for port %s proxyHost...', port_key)
+        for _ in xrange(WAIT_FOR_PORT_RETRY_LIMIT):
+            try:
+                dv_port = self._vcenter_api_client.fetch_port_from_dvs(port_key)
+                port_host_uuid = dv_port.proxyHost.hardware.systemInfo.uuid
+                if port_host_uuid == self._esxi_api_client.read_host_uuid():
+                    logger.info('proxyHost %s for port %s is ready.', dv_port.proxyHost.name, port_key)
+                    return True
+            except Exception, exc:
+                logger.error('Unexpected exception: %s during waiting for port %s proxyHost',
+                             exc, port_key, exc_info=exc)
+            proxy_host_name = None
+            if dv_port.proxyHost is not None:
+                proxy_host_name = dv_port.proxyHost.name
+            logger.info('proxyHost for port %s still is not ready. Still refers to %s', port_key, proxy_host_name)
+            time.sleep(WAIT_FOR_PORT_RETRY_TIME)
+        logger.error('Waiting for proxyHost for port %s timed out', port_key)
+        return False
