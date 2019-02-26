@@ -1,5 +1,4 @@
 import pytest
-from mock import patch
 
 from tests.utils import reserve_vlan_ids
 
@@ -11,8 +10,7 @@ def prepare_database(database, vm_model, vn_model_1):
     return database
 
 
-@patch('cvm.services.wait_for_port')
-def test_assign_new_vlan_id(_, vlan_id_service, database, vcenter_api_client,
+def test_assign_new_vlan_id(vlan_id_service, database, vcenter_api_client,
                             vlan_id_pool, vmi_model):
     database.vlans_to_update.append(vmi_model)
     reserve_vlan_ids(vlan_id_pool, [0, 1])
@@ -35,8 +33,7 @@ def test_retain_old_vlan_id(vlan_id_service, database, vcenter_api_client, vmi_m
     assert not database.vlans_to_update
 
 
-@patch('cvm.services.wait_for_port')
-def test_current_not_available(_, vlan_id_service, database, vcenter_api_client,
+def test_current_not_available(vlan_id_service, database, vcenter_api_client,
                                vlan_id_pool, vmi_model, vmi_model_2):
     database.vlans_to_update.append(vmi_model)
     vmi_model_2.vcenter_port.vlan_id = 20

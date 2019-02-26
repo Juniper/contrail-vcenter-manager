@@ -1,12 +1,9 @@
-from mock import patch
-
 from tests.utils import (assert_vm_model_state, assert_vmi_model_state,
                          assert_vnc_vm_state, assert_vnc_vmi_state,
                          reserve_vlan_ids)
 
 
-@patch('cvm.services.wait_for_port')
-def test_vm_created(_, controller, database, vcenter_api_client, vnc_api_client, vrouter_api_client, vlan_id_pool,
+def test_vm_created(controller, database, vcenter_api_client, vnc_api_client, vrouter_api_client, vlan_id_pool,
                     vm_created_update, vnc_vn_1, vn_model_1):
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
