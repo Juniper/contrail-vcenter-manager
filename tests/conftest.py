@@ -356,6 +356,7 @@ def vcenter_api_client():
     vcenter_client.__enter__ = Mock()
     vcenter_client.__exit__ = Mock()
     vcenter_client.get_ip_pool_for_dpg.return_value = None
+    vcenter_client.set_vlan_id.return_value = 'success', 'success message'
     return vcenter_client
 
 
@@ -453,7 +454,10 @@ def vrouter_port_service(vrouter_api_client, database):
 
 @pytest.fixture()
 def vlan_id_service(vcenter_api_client, esxi_api_client, vlan_id_pool, database):
-    return VlanIdService(vcenter_api_client, esxi_api_client, vlan_id_pool, database)
+    vlan_id_service = VlanIdService(vcenter_api_client, esxi_api_client, vlan_id_pool, database)
+    vlan_id_service._wait_for_proxy_host = Mock(return_value=True)
+    vlan_id_service._wait_for_device_connected = Mock(return_value=True)
+    return vlan_id_service
 
 
 @pytest.fixture()
