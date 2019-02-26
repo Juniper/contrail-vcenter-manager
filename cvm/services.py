@@ -7,7 +7,7 @@ from vnc_api.gen.resource_xsd import PermType2
 from cvm.constants import (CONTRAIL_VM_NAME, VM_UPDATE_FILTERS,
                            VNC_ROOT_DOMAIN, VNC_VCENTER_PROJECT,
                            WAIT_FOR_PORT_RETRY_TIME, WAIT_FOR_PORT_RETRY_LIMIT,
-                           DVS_UNSTABLE_CLUSTER_ERROR)
+                           SET_VLAN_ID_RETRY_LIMIT)
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
 
@@ -25,24 +25,6 @@ class Service(object):
         self._ipam = self._vnc_api_client.read_or_create_ipam()
         if self._esxi_api_client:
             self._vrouter_uuid = esxi_api_client.read_vrouter_uuid()
-
-
-def wait_for_port(vmi_model):
-    logger.info('Waiting for port %s to be ready...', vmi_model.vcenter_port.port_key)
-    for _ in xrange(WAIT_FOR_PORT_RETRY_LIMIT):
-        try:
-            device = next(device for device
-                          in vmi_model.vm_model.vmware_vm.config.hardware.device
-                          if device.key == vmi_model.vcenter_port.device.key)
-            if device.connectable.connected:
-                logger.info('DVPort %s is ready.', vmi_model.vcenter_port.port_key)
-                return True
-        except StopIteration:
-            logger.error('No device detected')
-            return False
-        time.sleep(WAIT_FOR_PORT_RETRY_TIME)
-    logger.info('Waiting for port timed out')
-    return False
 
 
 class VirtualMachineInterfaceService(Service):
@@ -512,33 +494,68 @@ class VlanIdService(object):
         with self._vcenter_api_client:
             self._vcenter_api_client.restore_vlan_id(vmi_model.vcenter_port)
 
-    def update_vcenter_vlans(self, retry=False):
+    def update_vcenter_vlans(self):
         for vmi_model in list(self._database.vlans_to_update):
-            self._update_vcenter_vlan(vmi_model, retry=retry)
+            self._update_vcenter_vlan(vmi_model)
             self._database.vlans_to_update.remove(vmi_model)
 
-    def _update_vcenter_vlan(self, vmi_model, retry=False):
+    def _update_vcenter_vlan(self, vmi_model):
         if vmi_model.vcenter_port.vlan_success:
             logger.info('VLAN ID is already set with success')
             return
-        if retry:
-            i = 0
-            while True:
-                if i != 0:
-                    logger.error('Task failed to complete, retrying...')
-                with self._vcenter_api_client:
-                    logger.info('Updating VLAN ID of %s in vCenter', vmi_model.display_name)
-                    if wait_for_port(vmi_model):
-                        state, error_msg = self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
-                        if state == 'success':
-                            vmi_model.vcenter_port.vlan_success = True
-                            return
-                        if error_msg != DVS_UNSTABLE_CLUSTER_ERROR:
-                            break
-                i += 1
-            logger.error('Unable to finish the task.')
-        else:
+        if not vmi_model.vm_model.is_powered_on:
+            logger.info('Unable to set VLAN ID for powered off VM')
+            return
+        for i in range(SET_VLAN_ID_RETRY_LIMIT):
+            if i != 0:
+                logger.error('Task failed to complete, retrying...')
             with self._vcenter_api_client:
-                state, _ = self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
-                if state == 'success':
-                    vmi_model.vcenter_port.vlan_success = True
+                logger.info('Updating VLAN ID of %s in vCenter', vmi_model.display_name)
+                if self._wait_for_device_connected(vmi_model) and self._wait_for_proxy_host(vmi_model):
+                    state, error_msg = self._vcenter_api_client.set_vlan_id(vmi_model.vcenter_port)
+                    if state == 'success':
+                        vmi_model.vcenter_port.vlan_success = True
+                        return
+        logger.error('Unable to finish the task.')
+
+    @classmethod
+    def _wait_for_device_connected(cls, vmi_model):
+        port_key = vmi_model.vcenter_port.port_key
+        vm_name = vmi_model.vm_model.name
+        logger.info('Waiting for VM %s interface connected to port %s...', vm_name, port_key)
+        for _ in xrange(WAIT_FOR_PORT_RETRY_LIMIT):
+            try:
+                device = next(device for device
+                              in vmi_model.vm_model.vmware_vm.config.hardware.device
+                              if device.key == vmi_model.vcenter_port.device.key)
+                if device.connectable.connected:
+                    logger.info('VM %s interface is connected to port %s.', vm_name, port_key)
+                    return True
+            except StopIteration:
+                logger.error('For VM %s did not detect such interface', vm_name)
+                return False
+            except Exception, exc:
+                logger.error('Unexpected exception: %s during waiting for VM %s interface connected to port %s',
+                             exc, vm_name, port_key, exc_info=exc)
+            logger.info('VM %s interface still is not connected to port %s.', vm_name, port_key)
+            time.sleep(WAIT_FOR_PORT_RETRY_TIME)
+        logger.info('Waiting for VM %s interface to be connected to port %s timed out', vm_name, port_key)
+        return False
+
+    def _wait_for_proxy_host(self, vmi_model):
+        port_key = vmi_model.vcenter_port.port_key
+        logger.info('Waiting for port %s proxyHost...', port_key)
+        for _ in xrange(WAIT_FOR_PORT_RETRY_LIMIT):
+            try:
+                dv_port = self._vcenter_api_client.fetch_port_from_dvs(port_key)
+                port_host_uuid = dv_port.proxyHost.hardware.systemInfo.uuid
+                if port_host_uuid == self._esxi_api_client.read_host_uuid():
+                    logger.info('proxyHost for port %s is ready.', port_key)
+                    return True
+            except Exception, exc:
+                logger.error('Unexpected exception: %s during waiting for port %s proxyHost',
+                             exc, port_key, exc_info=exc)
+            logger.info('proxyHost for port %s still is not ready.', port_key)
+            time.sleep(WAIT_FOR_PORT_RETRY_TIME)
+        logger.error('Waiting for proxyHost for port %s timed out', port_key)
+        return False

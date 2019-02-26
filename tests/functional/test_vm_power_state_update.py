@@ -1,4 +1,4 @@
-from mock import patch, Mock
+from mock import Mock
 
 from tests.utils import assert_vm_model_state
 
@@ -38,8 +38,7 @@ def test_vm_power_state_update(controller, database, vrouter_api_client, vm_crea
     vrouter_api_client.enable_port.assert_called_with(vmi_model.uuid)
 
 
-@patch('cvm.services.wait_for_port', return_value=True)
-def test_set_vlan_id_on_power_on(_, controller, database, vcenter_api_client, esxi_api_client, vrouter_api_client,
+def test_set_vlan_id_on_power_on(controller, database, vcenter_api_client, esxi_api_client, vrouter_api_client,
                                  vm_registered_update, vm_power_on_state_update, vn_model_1, vm_properties_1_off):
     # Virtual Networks are already created for us and after synchronization,
     # their models are stored in our database
