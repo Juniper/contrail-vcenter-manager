@@ -73,7 +73,9 @@ class ESXiAPIClient(VSphereAPIClient):
         entity_spec.entity = self._datacenter
         entity_spec.recursion = vim.event.EventFilterSpec.RecursionOption.children
         event_filter_spec.entity = entity_spec
-        return event_manager.CreateCollectorForEvents(filter=event_filter_spec)
+        history_collector = event_manager.CreateCollectorForEvents(filter=event_filter_spec)
+        history_collector.SetCollectorPageSize(1000)
+        return history_collector
 
     def add_filter(self, obj, filters):
         filter_spec = make_filter_spec(obj, filters)
