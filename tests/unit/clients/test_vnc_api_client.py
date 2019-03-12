@@ -36,12 +36,12 @@ def test_update_create_new_vmi(vnc_api_client, vnc_lib, vnc_vmi_1):
 def test_update_vmi_vn(vnc_api_client, vnc_lib, vnc_vmi_1, vnc_vmi_2, vnc_vn_2):
     vnc_lib.virtual_machine_interface_read.return_value = vnc_vmi_1
     vnc_lib.virtual_network_read.return_value = vnc_vn_2
-    vnc_vmi_1.get_instance_ip_back_refs.return_value = [{'to': ['instance-ip-fqname']}]
+    vnc_vmi_1.get_instance_ip_back_refs.return_value = [{'to': ['instance-ip-fqname'], 'uuid': 'instance-ip-uuid'}]
 
     vnc_api_client.update_vmi(vnc_vmi_2)
 
-    vnc_vmi_1.set_virtual_network.assert_called_once_with(vnc_vn_2)
-    vnc_lib.virtual_machine_interface_update.assert_called_once_with(vnc_vmi_1)
+    vnc_lib.virtual_machine_interface_delete.assert_called_once_with(id=vnc_vmi_1.uuid)
+    vnc_lib.virtual_machine_interface_create.assert_called_once_with(vnc_vmi_2)
     vnc_lib.instance_ip_delete.assert_called_once()
 
 
