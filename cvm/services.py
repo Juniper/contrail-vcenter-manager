@@ -197,6 +197,27 @@ class VirtualMachineInterfaceService(Service):
             self._database.vmis_to_update.remove(vmi_model)
             logger.info('Updated %s', vmi_model)
 
+    def delete_unused_vmis_in_vnc(self):
+        for vm_model in self._database.get_all_vm_models():
+            try:
+                self.delete_unused_vm_vmis_in_vnc(vm_model.uuid)
+            except Exception, exc:
+                logger.error('Unexpected exception %s during deleting stale VMIs from VNC', exc, exc_info=True)
+
+    def delete_unused_vm_vmis_in_vnc(self, vm_uuid):
+        vm_model = self._database.get_vm_model_by_uuid(vm_uuid)
+        vmi_model_uuids = set(
+            vmi_model.uuid for vmi_model in vm_model.vmi_models
+        )
+        vnc_vmi_uuids = self._vnc_api_client.get_vmi_uuids_by_vm_uuid(vm_uuid)
+        for vnc_vmi_uuid in vnc_vmi_uuids:
+            try:
+                if vnc_vmi_uuid not in vmi_model_uuids:
+                    logger.info('Deleting stale VMI: %s from VNC...', vnc_vmi_uuid)
+                    self._vnc_api_client.delete_vmi(vnc_vmi_uuid)
+            except Exception, exc:
+                logger.error('Unexpected exception %s during deleting stale VMI from VNC', exc, exc_info=True)
+
 
 class VirtualMachineService(Service):
     def __init__(self, esxi_api_client, vcenter_api_client, vnc_api_client, database):
