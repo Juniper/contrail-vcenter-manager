@@ -24,6 +24,7 @@ class VmwareController(object):
             self._vn_service.update_vns()
             self._vmi_service.update_vmis()
             self._vm_service.delete_unused_vms_in_vnc()
+            self._vmi_service.delete_stale_vmis_from_vnc()
             self._vlan_id_service.update_vlan_ids()
             self._vrouter_port_service.sync_ports()
             self._vrouter_port_service.delete_stale_vrouter_ports()
@@ -179,6 +180,8 @@ class VmRegisteredHandler(AbstractEventHandler):
         self._vmi_service.register_vmis()
         self._vlan_id_service.update_vlan_ids()
         self._vrouter_port_service.sync_ports()
+        vm_uuid = vmware_vm.config.instanceUuid
+        self._vmi_service.delete_stale_vm_vmis_from_vnc(vm_uuid)
 
 
 class VmRenamedHandler(AbstractEventHandler):
