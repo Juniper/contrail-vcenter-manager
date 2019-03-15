@@ -1,5 +1,8 @@
-def test_sync(controller, database, esxi_api_client, vcenter_api_client, vrouter_api_client, vnc_api_client, vmware_vm_1,
+from mock import Mock
+
+def test_sync(controller, vmi_service, database, esxi_api_client, vcenter_api_client, vrouter_api_client, vnc_api_client, vmware_vm_1,
               vmware_vm_2, vnc_vn_1, portgroup, vnc_vm, vnc_vm_2, vm_properties_1):
+    vmi_service.delete_unused_vmis_in_vnc = Mock()
     vmware_vm_1.config.instanceUuid = 'vnc-vm-uuid'
     esxi_api_client.get_all_vms.return_value = [vmware_vm_1]
     vcenter_api_client.get_all_vms.return_value = [vmware_vm_1]
