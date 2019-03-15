@@ -260,6 +260,15 @@ class VCenterAPIClient(VSphereAPIClient):
         logger.info('VM: %s was not removed', vm_name)
         return False
 
+    def get_vms_mac_addresses(self, vm_name):
+        mac_addresses = set()
+        vmware_vm = self._get_object([vim.VirtualMachine], vm_name)
+        for device in vmware_vm.config.hardware.device:
+            if not isinstance(device, vim.vm.device.VirtualEthernetCard):
+                continue
+            mac_addresses.add(device.macAddress)
+        return mac_addresses
+
 
 def make_dv_port_spec(dv_port, vlan_id=None):
     dv_port_config_spec = vim.dvs.DistributedVirtualPort.ConfigSpec()
@@ -381,6 +390,12 @@ class VNCAPIClient(object):
     def get_vmi_uuids_by_vm_uuid(self, vm_uuid):
         vm = self.read_vm(vm_uuid)
         return [vmi_ref['uuid'] for vmi_ref in vm.get_virtual_machine_interface_back_refs() or ()]
+
+    def get_vmi_by_vm_uuid(self, vm_uuid):
+        vmi_uuids = self.get_vmi_uuids_by_vm_uuid(vm_uuid)
+        return [
+            self.read_vmi(uuid) for uuid in vmi_uuids
+        ]
 
     def read_vm(self, uuid):
         return self.vnc_lib.virtual_machine_read(id=uuid)
