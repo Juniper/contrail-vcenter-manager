@@ -93,6 +93,7 @@ def test_vm_removed_local_remove(controller, database, vcenter_api_client, vnc_a
 
     # The VM is present on some other ESXi
     vcenter_api_client.can_remove_vm.return_value = False
+    vcenter_api_client.get_vms_mac_addresses.return_value = [vmi_model.vcenter_port.mac_address]
 
     # Then VmRemovedEvent is being handled
     controller.handle_update(vm_removed_update)

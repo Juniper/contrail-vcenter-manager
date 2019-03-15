@@ -163,8 +163,15 @@ class VirtualMachineInterfaceService(Service):
             full_remove = self._vcenter_api_client.is_vm_removed(vm_model.name)
         vmi_models = self._database.get_vmi_models_by_vm_uuid(vm_model.uuid)
 
+        if full_remove:
+            for vmi_model in vmi_models:
+                self._full_remove(vmi_model)
+            return
+
+        vcenter_mac_addresses = self._vcenter_api_client.get_vms_mac_addresses(vm_name)
         for vmi_model in vmi_models:
-            if full_remove:
+            local_mac_address = vmi_model.vcenter_port.mac_address
+            if local_mac_address not in vcenter_mac_addresses:
                 self._full_remove(vmi_model)
             else:
                 self._local_remove(vmi_model)

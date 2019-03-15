@@ -260,6 +260,15 @@ class VCenterAPIClient(VSphereAPIClient):
         logger.info('VM: %s was not removed', vm_name)
         return False
 
+    def get_vms_mac_addresses(self, vm_name):
+        mac_addresses = set()
+        vmware_vm = self._get_object([vim.VirtualMachine], vm_name)
+        for device in vmware_vm.config.hardware.device:
+            if not isinstance(device, vim.vm.device.VirtualEthernetCard):
+                continue
+            mac_addresses.add(device.macAddress)
+        return mac_addresses
+
 
 def make_dv_port_spec(dv_port, vlan_id=None):
     dv_port_config_spec = vim.dvs.DistributedVirtualPort.ConfigSpec()
