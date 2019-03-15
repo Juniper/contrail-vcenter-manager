@@ -179,6 +179,7 @@ class VmRegisteredHandler(AbstractEventHandler):
         self._vmi_service.register_vmis()
         self._vlan_id_service.update_vlan_ids()
         self._vrouter_port_service.sync_ports()
+        self._vmi_service.delete_stale_vm_vmis_from_vnc(vmware_vm)
 
 
 class VmRenamedHandler(AbstractEventHandler):

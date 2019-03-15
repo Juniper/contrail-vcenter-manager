@@ -179,6 +179,19 @@ class VirtualMachineInterfaceService(Service):
             self._database.vmis_to_update.remove(vmi_model)
             logger.info('Updated %s', vmi_model)
 
+    def delete_stale_vm_vmis_from_vnc(self, vmware_vm):
+        vm_uuid = vmware_vm.config.instanceUuid
+        vm_model = self._database.get_vm_model_by_uuid(vm_uuid)
+        vm_mac_addresses = set(
+            vmi_model.vcenter_port.mac_address for vmi_model in vm_model.vmi_models
+        )
+        vnc_vmis = self._vnc_api_client.get_vmis_by_vm_uuid(vm_uuid)
+        for vnc_vmi in vnc_vmis:
+            vmi_mac_addresses = set(vnc_vmi.virtual_machine_interface_mac_addresses.mac_address)
+            if len(vmi_mac_addresses.intersection(vm_mac_addresses)) == 0:
+                logger.info('Deleting stale VMI: %s from VNC...', vnc_vmi.uuid)
+                self._vnc_api_client.delete_vmi(vnc_vmi.uuid)
+
 
 class VirtualMachineService(Service):
     def __init__(self, esxi_api_client, vcenter_api_client, vnc_api_client, database):
