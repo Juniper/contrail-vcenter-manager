@@ -17,7 +17,7 @@ from contrail_vrouter_api.vrouter_api import ContrailVRouterApi
 from cvm.constants import (ID_PERMS_CREATOR, VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
                            VNC_VCENTER_IPAM, VNC_VCENTER_IPAM_FQN,
-                           VNC_VCENTER_PROJECT)
+                           VNC_VCENTER_PROJECT, HISTORY_COLLECTOR_PAGE_SIZE)
 from cvm.models import find_vrouter_uuid
 
 logger = logging.getLogger(__name__)
@@ -61,6 +61,7 @@ class ESXiAPIClient(VSphereAPIClient):
         )
         atexit.register(Disconnect, self._si)
         self._datacenter = self._si.content.rootFolder.childEntity[0]
+        self._host = self._datacenter.hostFolder.childEntity[0].host[0]
         self._property_collector = self._si.content.propertyCollector
         self._wait_options = vmodl.query.PropertyCollector.WaitOptions()
         self._version = ''
@@ -78,7 +79,7 @@ class ESXiAPIClient(VSphereAPIClient):
         entity_spec.recursion = vim.event.EventFilterSpec.RecursionOption.children
         event_filter_spec.entity = entity_spec
         history_collector = event_manager.CreateCollectorForEvents(filter=event_filter_spec)
-        history_collector.SetCollectorPageSize(1000)
+        history_collector.SetCollectorPageSize(HISTORY_COLLECTOR_PAGE_SIZE)
         return history_collector
 
     def add_filter(self, obj, filters):
@@ -110,8 +111,10 @@ class ESXiAPIClient(VSphereAPIClient):
         return properties
 
     def read_vrouter_uuid(self):
-        host = self._datacenter.hostFolder.childEntity[0].host[0]
-        return find_vrouter_uuid(host)
+        return find_vrouter_uuid(self._host)
+
+    def read_host_uuid(self):
+        return self._host.hardware.systemInfo.uuid
 
 
 def make_prop_set(obj, filters):
@@ -172,7 +175,7 @@ class VCenterAPIClient(VSphereAPIClient):
         return None
 
     def set_vlan_id(self, vcenter_port):
-        dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
+        dv_port = self.fetch_port_from_dvs(vcenter_port.port_key)
         if not dv_port:
             return
         logger.info('Setting vCenter VLAN ID of port %s to %d', vcenter_port.port_key, vcenter_port.vlan_id)
@@ -184,7 +187,7 @@ class VCenterAPIClient(VSphereAPIClient):
 
     def get_vlan_id(self, vcenter_port):
         logger.info('Reading VLAN ID of port %s', vcenter_port.port_key)
-        dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
+        dv_port = self.fetch_port_from_dvs(vcenter_port.port_key)
         if not dv_port.config.setting.vlan.inherited:
             vlan_id = dv_port.config.setting.vlan.vlanId
             logger.info('Port: %s VLAN ID: %s', vcenter_port.port_key, vlan_id)
@@ -194,7 +197,7 @@ class VCenterAPIClient(VSphereAPIClient):
 
     def restore_vlan_id(self, vcenter_port):
         logger.info('Restoring VLAN ID of port %s to inherited value', vcenter_port.port_key)
-        dv_port = self._fetch_port_from_dvs(vcenter_port.port_key)
+        dv_port = self.fetch_port_from_dvs(vcenter_port.port_key)
         dv_port_config_spec = make_dv_port_spec(dv_port)
         task = self._dvs.ReconfigureDVPort_Task(port=[dv_port_config_spec])
         success_message = 'Successfully restored VLAN ID for port: %s' % (vcenter_port.port_key,)
@@ -211,7 +214,7 @@ class VCenterAPIClient(VSphereAPIClient):
     def _get_dvswitch(self, name):
         return self._get_object([vim.dvs.VmwareDistributedVirtualSwitch], name)
 
-    def _fetch_port_from_dvs(self, port_key):
+    def fetch_port_from_dvs(self, port_key):
         criteria = vim.dvs.PortCriteria()
         criteria.portKey = port_key
         try:
