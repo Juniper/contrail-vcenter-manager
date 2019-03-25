@@ -90,8 +90,11 @@ class AbstractChangeHandler(object):
         if name is not None:
             vm_model = self._vm_service.get_vm_model_by_name(name)
             if vm_model is None:
-                logger.error('Virtual Machine %s does not exist in CVM database. Unable to update', name)
-                return False
+                vm_model = self._vm_service.get_vm_model_by_old_name(name)
+                if vm_model is None:
+                    logger.error('Virtual Machine %s does not exist in CVM database. Unable to update', name)
+                    return False
+                return True
             return True
         if uuid is not None:
             vm_model = self._vm_service.get_vm_model_by_uuid(uuid)

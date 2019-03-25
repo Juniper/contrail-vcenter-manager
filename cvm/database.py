@@ -1,5 +1,6 @@
 import logging
 
+from cvm.constants import VMFS
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
 
@@ -45,6 +46,14 @@ class Database(object):
         except IndexError:
             logger.info('Could not find VM model with name %s.', name)
             return None
+
+    def get_vm_model_by_old_name(self, old_name):
+        logger.info('Looking for VM model with old name: %s', old_name)
+        for vm_model in self.vm_models.values():
+            if VMFS in vm_model.name and '{0}/{0}'.format(old_name) in vm_model.name:
+                return vm_model
+        logger.info('Could not find VM model with old name %s.', old_name)
+        return None
 
     def get_vn_model_by_key(self, key):
         vn_model = self.vn_models.get(key, None)
