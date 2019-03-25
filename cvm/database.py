@@ -1,5 +1,6 @@
 import logging
 
+from cvm.constants import VMFS
 from cvm.models import (VirtualMachineInterfaceModel, VirtualMachineModel,
                         VirtualNetworkModel)
 
@@ -44,7 +45,18 @@ class Database(object):
             return [vm_model for vm_model in self.vm_models.values() if vm_model.name == name][0]
         except IndexError:
             logger.info('Could not find VM model with name %s.', name)
-            return None
+            return self._get_vm_model_by_old_name(name)
+
+    def _get_vm_model_by_old_name(self, old_name):
+        # Sometimes during stress tests VmRemoved event comes with old name, despite rename
+        # Renaming yVM-test-gtiltsxwws to /vmfs/volumes/23c13506-c7f8ba2b/yVM-test-gtiltsxwws/yVM-test-gtiltsxwws.vmx
+        # Detected event: <class 'pyVmomi.VmomiSupport.vim.event.VmRemovedEvent'> for VM: yVM-test-gtiltsxwws
+        logger.info('Looking for VM model with old name: %s', old_name)
+        for vm_model in self.vm_models.values():
+            if VMFS in vm_model.name and '{0}/{0}'.format(old_name) in vm_model.name:
+                return vm_model
+        logger.info('Could not find VM model with old name %s.', old_name)
+        return None
 
     def get_vn_model_by_key(self, key):
         vn_model = self.vn_models.get(key, None)

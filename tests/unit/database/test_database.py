@@ -10,6 +10,17 @@ def test_get_vm_model_by_uuid(database, vm_model):
     assert database.get_vm_model_by_uuid('dummy-uuid') is None
 
 
+def test_get_vm_model_by_old_name(database, vm_model):
+    database.save(vm_model)
+    old_name = vm_model.name
+    new_name = '/vmfs/volumes/23c13506-c7f8ba2b/{0}/{0}.vmx'.format(old_name)
+    vm_model.rename(new_name)
+
+    result = database._get_vm_model_by_old_name(old_name)
+
+    assert result is vm_model
+
+
 def test_delete_vm_model(database, vm_model):
     database.save(vm_model)
 

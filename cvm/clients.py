@@ -338,10 +338,10 @@ class VNCAPIClient(object):
 
     def delete_vm(self, uuid):
         logger.info('Attempting to delete Virtual Machine %s from VNC...', uuid)
-        vm = self.read_vm(uuid)
-        for vmi_ref in vm.get_virtual_machine_interface_back_refs() or []:
-            self.delete_vmi(vmi_ref.get('uuid'))
         try:
+            vm = self.read_vm(uuid)
+            for vmi_ref in vm.get_virtual_machine_interface_back_refs() or []:
+                self.delete_vmi(vmi_ref.get('uuid'))
             self.vnc_lib.virtual_machine_delete(id=uuid)
             logger.info('Virtual Machine %s removed from VNC', uuid)
         except NoIdError:
@@ -367,18 +367,24 @@ class VNCAPIClient(object):
         vms_data = self.vnc_lib.virtual_machines_list().get('virtual-machines')
         vms = []
         for vm_data in vms_data:
-            vnc_vm = self.read_vm(vm_data['uuid'])
-            if vnc_vm.id_perms.creator == ID_PERMS_CREATOR:
-                vms.append(vnc_vm)
+            try:
+                vnc_vm = self.read_vm(vm_data['uuid'])
+                if vnc_vm.id_perms.creator == ID_PERMS_CREATOR:
+                    vms.append(vnc_vm)
+            except Exception, exc:
+                logger.error('Unexpected exception %s during pulling VM from VNC', exc, exc_info=True)
         return vms
 
     def get_all_vm_uuids(self):
         vms_data = self.vnc_lib.virtual_machines_list().get('virtual-machines')
         vm_uuids = []
         for vm_data in vms_data:
-            vnc_vm = self.read_vm(vm_data['uuid'])
-            if vnc_vm.id_perms.creator == ID_PERMS_CREATOR:
-                vm_uuids.append(vm_data['uuid'])
+            try:
+                vnc_vm = self.read_vm(vm_data['uuid'])
+                if vnc_vm.id_perms.creator == ID_PERMS_CREATOR:
+                    vm_uuids.append(vm_data['uuid'])
+            except Exception, exc:
+                logger.error('Unexpected exception %s during pulling VM uuid from VNC', exc, exc_info=True)
         return vm_uuids
 
     def get_vmi_uuids_by_vm_uuid(self, vm_uuid):
@@ -430,6 +436,7 @@ class VNCAPIClient(object):
             logger.info('Virtual Machine Interface %s already exists in VNC', vnc_vmi.name)
 
     def delete_vmi(self, uuid):
+        logger.info('Deleting Virtual Machine Interface %s from VNC...', uuid)
         vmi = self.read_vmi(uuid)
         if not vmi:
             logger.error('Virtual Machine Interface %s not found in VNC. Unable to delete', uuid)
@@ -437,7 +444,9 @@ class VNCAPIClient(object):
 
         self._detach_floating_ips(vmi)
 
-        for instance_ip_ref in vmi.get_instance_ip_back_refs() or []:
+        instance_ip_refs = vmi.get_instance_ip_back_refs()
+        logger.info('VMI %s has following instance ip refs: %s', uuid, instance_ip_refs)
+        for instance_ip_ref in instance_ip_refs or []:
             self._detach_service_instances_from_instance_ip(instance_ip_ref['uuid'])
             self.delete_instance_ip(instance_ip_ref.get('uuid'))
 
@@ -543,8 +552,10 @@ class VNCAPIClient(object):
             logger.error("Unable to create Instance IP: %s due to: %s", instance_ip.name, e)
 
     def delete_instance_ip(self, uuid):
+        logger.info('Deleting Instance IP: %s... from VNC', uuid)
         try:
             self.vnc_lib.instance_ip_delete(id=uuid)
+            logger.info('Removed Instance IP %s from VNC', uuid)
         except NoIdError:
             logger.error('Instance IP not found: %s', uuid)
 
