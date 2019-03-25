@@ -367,18 +367,24 @@ class VNCAPIClient(object):
         vms_data = self.vnc_lib.virtual_machines_list().get('virtual-machines')
         vms = []
         for vm_data in vms_data:
-            vnc_vm = self.read_vm(vm_data['uuid'])
-            if vnc_vm.id_perms.creator == ID_PERMS_CREATOR:
-                vms.append(vnc_vm)
+            try:
+                vnc_vm = self.read_vm(vm_data['uuid'])
+                if vnc_vm.id_perms.creator == ID_PERMS_CREATOR:
+                    vms.append(vnc_vm)
+            except Exception, exc:
+                logger.error('Unexpected exception %s during pulling VM from VNC', exc, exc_info=True)
         return vms
 
     def get_all_vm_uuids(self):
         vms_data = self.vnc_lib.virtual_machines_list().get('virtual-machines')
         vm_uuids = []
         for vm_data in vms_data:
-            vnc_vm = self.read_vm(vm_data['uuid'])
-            if vnc_vm.id_perms.creator == ID_PERMS_CREATOR:
-                vm_uuids.append(vm_data['uuid'])
+            try:
+                vnc_vm = self.read_vm(vm_data['uuid'])
+                if vnc_vm.id_perms.creator == ID_PERMS_CREATOR:
+                    vm_uuids.append(vm_data['uuid'])
+            except Exception, exc:
+                logger.error('Unexpected exception %s during pulling VM uuid from VNC', exc, exc_info=True)
         return vm_uuids
 
     def get_vmi_uuids_by_vm_uuid(self, vm_uuid):
