@@ -52,3 +52,8 @@ WAIT_FOR_UPDATE_TIMEOUT = 20
 SUPERVISOR_TIMEOUT = 25
 
 HISTORY_COLLECTOR_PAGE_SIZE = 1000
+
+WAIT_FOR_PORT_RETRY_TIME = 1.0*25/1000  # 25 ms
+WAIT_FOR_PORT_RETRY_LIMIT = int(10/WAIT_FOR_PORT_RETRY_TIME)  # Timeout after 10 s
+
+DVS_UNSTABLE_CLUSTER_ERROR = 'Cannot complete a vSphere Distributed Switch operation for one or more host members.'
