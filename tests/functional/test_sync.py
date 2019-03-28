@@ -1,4 +1,4 @@
-def test_sync(controller, database, esxi_api_client, vcenter_api_client, vrouter_api_client, vnc_api_client, vmware_vm_1,
+def test_sync(monitor, database, esxi_api_client, vcenter_api_client, vrouter_api_client, vnc_api_client, vmware_vm_1,
               vmware_vm_2, vnc_vn_1, portgroup, vnc_vm, vnc_vm_2, vm_properties_1):
     vmware_vm_1.config.instanceUuid = 'vnc-vm-uuid'
     esxi_api_client.get_all_vms.return_value = [vmware_vm_1]
@@ -11,7 +11,7 @@ def test_sync(controller, database, esxi_api_client, vcenter_api_client, vrouter
     vrouter_api_client.read_port.side_effect = [None, {'id': 'vmi-uuid-2'}]
     vmware_vm_2.config.hardware.device[0].backing.port.portgroupKey = 'dvportgroup-1'
 
-    controller.sync()
+    monitor.sync()
 
     assert len(database.get_all_vm_models()) == 1
     assert len(database.get_all_vn_models()) == 1

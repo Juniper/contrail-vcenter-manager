@@ -97,14 +97,3 @@ class Database(object):
                       if vmi_model.vcenter_port.vlan_id == vlan_id
                       and vmi_model.uuid != new_vmi_model.uuid]
         return not bool(vmi_models)
-
-    def clear_database(self):
-        self.vm_models = {}
-        self.vn_models = {}
-        self.vmi_models = {}
-        self.vmis_to_update = []
-        self.vmis_to_delete = []
-        self.vlans_to_update = []
-        self.vlans_to_restore = []
-        self.ports_to_update = []
-        self.ports_to_delete = []
