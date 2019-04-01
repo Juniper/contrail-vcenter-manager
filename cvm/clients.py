@@ -116,6 +116,9 @@ class ESXiAPIClient(VSphereAPIClient):
     def read_host_uuid(self):
         return self._host.hardware.systemInfo.uuid
 
+    def current_time(self):
+        return self._si.CurrentTime()
+
 
 def make_prop_set(obj, filters):
     prop_set = []

@@ -1,7 +1,7 @@
 import gevent
 import logging
 
-from cvm.constants import SUPERVISOR_TIMEOUT
+from cvm.constants import SUPERVISOR_TIMEOUT, SUPERVISOR_INTERVAL
 
 logger = logging.getLogger(__name__)
 
@@ -10,24 +10,26 @@ class Supervisor(object):
     def __init__(self, event_listener, esxi_api_client):
         self._event_listener = event_listener
         self._esxi_api_client = esxi_api_client
-        self._to_supervisor = gevent.queue.Queue()
         self._greenlet = None
 
     def supervise(self):
-        self._greenlet = gevent.spawn(self._event_listener.listen, self._to_supervisor)
+        self._greenlet = gevent.spawn(self._event_listener.listen)
         while True:
             try:
-                self._to_supervisor.get()
-                self._to_supervisor.get(timeout=SUPERVISOR_TIMEOUT)
-            except Exception:
-                logger.error('Events listener greenlets hanged on WaitForUpdatesEX calls')
+                timer = gevent.Timeout(SUPERVISOR_TIMEOUT)
+                timer.start()
+                logger.info('Successful keep alive check: current time: %s', self._esxi_api_client.current_time())
+                timer.close()
+                gevent.sleep(SUPERVISOR_INTERVAL)
+            except Exception, exc:
+                logger.info('Failed keep alive check with exception: %s', exc, exc_info=True)
                 logger.error('Renewing connection to ESXi...')
                 self._renew_esxi_connection_retry()
                 logger.error('Renewed connection to ESXi')
-                logger.error('Respawing event handling greenlet')
+                logger.error('Respawing event listening greenlet')
                 self._greenlet.kill(block=False)
-                self._greenlet = gevent.spawn(self._event_listener.listen, self._to_supervisor)
-                logger.error('Respawned event handling greenlet')
+                self._greenlet = gevent.spawn(self._event_listener.listen)
+                logger.error('Respawned event listening greenlet')
 
     def _renew_esxi_connection_retry(self):
         i = 1
