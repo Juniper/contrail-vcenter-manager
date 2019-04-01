@@ -56,7 +56,7 @@ def build_monitor(config, lock, database):
     esxi_api_client = ESXiAPIClient(esxi_cfg)
     event_history_collector = esxi_api_client.create_event_history_collector(const.EVENTS_TO_OBSERVE)
     esxi_api_client.add_filter(event_history_collector, ['latestPage'])
-    esxi_api_client.make_wait_options(120)
+    esxi_api_client.make_wait_options(const.WAIT_FOR_UPDATE_TIMEOUT)
     esxi_api_client.wait_for_updates()
 
     vcenter_api_client = VCenterAPIClient(vcenter_cfg)
@@ -174,14 +174,22 @@ def run_introspect(cfg, database, lock):
 
 
 def update_set_listener(esxi_api_client, update_set_queue):
+    import time
     logger = logging.getLogger('cvm')
     while True:
-        logger.info('Started waiting for updates')
-        update_set = esxi_api_client.wait_for_updates()
-        logger.info('Got update set from ESXi')
-        if update_set:
-            logger.info('Not empty update set put on queue')
-            update_set_queue.put(update_set)
+        try:
+            timeout = gevent.Timeout(2 * const.WAIT_FOR_UPDATE_TIMEOUT)
+            timeout.start()
+            t0 = time.time()
+            update_set = esxi_api_client.wait_for_updates()
+            if update_set:
+                update_set_queue.put(update_set)
+            logger.info('Wait for update took: %s seconds', time.time() - t0)
+            timeout.cancel()
+        except gevent.Timeout:
+            logger.critical('Caught timeout %s in wait for updates call. Restarting...', time.time() - t0)
+            # restarting  myself
+            raise
 
 
 def main(args):
@@ -209,7 +217,7 @@ if __name__ == '__main__':
         sys.exit(0)
     except KeyboardInterrupt:
         sys.exit(0)
-    except Exception:
+    except:
         logger = logging.getLogger('cvm')
         logger.critical('', exc_info=True)
-        raise
+        sys.exit(1)
