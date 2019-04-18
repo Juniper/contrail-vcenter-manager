@@ -272,19 +272,22 @@ class VirtualMachineService(Service):
 
     def delete_unused_vms_in_vnc(self):
         logger.info('Deleting stale information in VNC...')
-        with self._vcenter_api_client:
-            vnc_vm_uuids = self._vnc_api_client.get_all_vm_uuids()
-            vcenter_vms = self._vcenter_api_client.get_all_vms()
+        try:
+            with self._vcenter_api_client:
+                vnc_vm_uuids = self._vnc_api_client.get_all_vm_uuids()
+                vcenter_vms = self._vcenter_api_client.get_all_vms()
 
-            vcenter_vm_uuids = set()
-            for vm in vcenter_vms:
-                try:
-                    vcenter_vm_uuids.add(vm.config.instanceUuid)
-                except Exception, exc:
-                    logger.error('Unexpected exception %s during copying VM info from vCenter.', exc, exc_info=True)
+                vcenter_vm_uuids = set()
+                for vm in vcenter_vms:
+                    try:
+                        vcenter_vm_uuids.add(vm.config.instanceUuid)
+                    except Exception, exc:
+                        logger.error('Unexpected exception %s during copying VM info from vCenter.', exc, exc_info=True)
 
-            vms_to_remove = (uuid for uuid in vnc_vm_uuids if uuid not in vcenter_vm_uuids)
-            self._delete_stale_vms_from_vnc(vms_to_remove)
+                vms_to_remove = (uuid for uuid in vnc_vm_uuids if uuid not in vcenter_vm_uuids)
+                self._delete_stale_vms_from_vnc(vms_to_remove)
+        except Exception, exc:
+            logger.error('Unexpected exception %s during deleting unused VMs from VNC', exc, exc_info=True)
 
     def _delete_stale_vms_from_vnc(self, vms_to_remove):
         for uuid in vms_to_remove:
@@ -460,11 +463,14 @@ class VRouterPortService(object):
 
     def delete_stale_vrouter_ports(self):
         logger.info('Deleting stale vRouter ports...')
-        port_uuids = self._vrouter_api_client.get_all_port_uuids()
-        for port_uuid in port_uuids:
-            if self._database.get_vmi_model_by_uuid(port_uuid) is None:
-                logger.info('Deleting stale vRouter port: %s', port_uuid)
-                self._vrouter_api_client.delete_port(port_uuid)
+        try:
+            port_uuids = self._vrouter_api_client.get_all_port_uuids()
+            for port_uuid in port_uuids:
+                if self._database.get_vmi_model_by_uuid(port_uuid) is None:
+                    logger.info('Deleting stale vRouter port: %s', port_uuid)
+                    self._vrouter_api_client.delete_port(port_uuid)
+        except Exception, exc:
+            logger.error('Unexpected exception %s during deleting stale vRouter ports', exc, exc_info=True)
 
 
 class VlanIdService(object):
