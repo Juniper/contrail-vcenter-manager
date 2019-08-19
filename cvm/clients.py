@@ -382,7 +382,7 @@ class VNCAPIClient(object):
                 vnc_vm = self.read_vm(vm_data['uuid'])
                 if vnc_vm.id_perms.creator == ID_PERMS_CREATOR:
                     vms.append(vnc_vm)
-            except Exception, exc:
+            except Exception as exc:
                 logger.error('Unexpected exception %s during pulling VM from VNC', exc, exc_info=True)
         return vms
 
@@ -394,7 +394,7 @@ class VNCAPIClient(object):
                 vnc_vm = self.read_vm(vm_data['uuid'])
                 if vnc_vm.id_perms.creator == ID_PERMS_CREATOR:
                     vm_uuids.append(vm_data['uuid'])
-            except Exception, exc:
+            except Exception as exc:
                 logger.error('Unexpected exception %s during pulling VM uuid from VNC', exc, exc_info=True)
         return vm_uuids
 
@@ -559,7 +559,7 @@ class VNCAPIClient(object):
             self.vnc_lib.instance_ip_create(instance_ip)
             logger.info("Created Instance IP: %s with IP: %s", instance_ip.name, instance_ip.instance_ip_address)
             return self._read_instance_ip(vmi_model)
-        except Exception, e:
+        except Exception as e:
             logger.error("Unable to create Instance IP: %s due to: %s", instance_ip.name, e)
 
     def delete_instance_ip(self, uuid):
@@ -680,7 +680,7 @@ class VRouterAPIClient(object):
             )
             self.vrouter_api.add_port(**parameters)
             logger.info('Added port to vRouter with parameters: %s', parameters)
-        except Exception, e:
+        except Exception as e:
             logger.error('There was a problem with vRouter API Client: %s', e)
 
     def delete_port(self, vmi_uuid):
@@ -688,21 +688,21 @@ class VRouterAPIClient(object):
         try:
             self.vrouter_api.delete_port(vmi_uuid)
             logger.info('Removed port from vRouter with uuid: %s', vmi_uuid)
-        except Exception, e:
+        except Exception as e:
             logger.error('There was a problem with vRouter API Client: %s', e)
 
     def enable_port(self, vmi_uuid):
         try:
             self.vrouter_api.enable_port(vmi_uuid)
             logger.info('Enabled vRouter port with uuid: %s', vmi_uuid)
-        except Exception, e:
+        except Exception as e:
             logger.error('There was a problem with vRouter API Client: %s', e)
 
     def disable_port(self, vmi_uuid):
         try:
             self.vrouter_api.disable_port(vmi_uuid)
             logger.info('Disabled vRouter port with uuid: %s', vmi_uuid)
-        except Exception, e:
+        except Exception as e:
             logger.error('There was a problem with vRouter API Client: %s', e)
 
     def read_port(self, vmi_uuid):
@@ -715,7 +715,7 @@ class VRouterAPIClient(object):
                 port_properties = json.loads(response.content)
                 logger.info('Read vRouter port with uuid: %s, port properties: %s', vmi_uuid, port_properties)
                 return port_properties
-        except Exception, e:
+        except Exception as e:
             logger.error('There was a problem with vRouter API Client: %s', e)
         logger.info('Unable to read vRouter port with uuid: %s', vmi_uuid)
         return None
