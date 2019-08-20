@@ -1,3 +1,5 @@
+from __future__ import division
+from past.utils import old_div
 from vnc_api.vnc_api import IdPermsType
 
 EVENTS_TO_OBSERVE = [
@@ -46,7 +48,7 @@ ID_PERMS = IdPermsType(creator=ID_PERMS_CREATOR, enable=True)
 
 SET_VLAN_ID_RETRY_LIMIT = 2
 WAIT_FOR_PORT_RETRY_TIME = 1  # 1s
-WAIT_FOR_PORT_RETRY_LIMIT = int(30/WAIT_FOR_PORT_RETRY_TIME)  # Timeout after 30s
+WAIT_FOR_PORT_RETRY_LIMIT = int(old_div(30,WAIT_FOR_PORT_RETRY_TIME))  # Timeout after 30s
 
 WAIT_FOR_UPDATE_TIMEOUT = 60
 SUPERVISOR_TIMEOUT = 80

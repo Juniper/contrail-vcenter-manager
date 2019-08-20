@@ -1,3 +1,4 @@
+from builtins import next
 from mock import Mock
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 
@@ -75,7 +76,7 @@ def assert_vm_model_state(vm_model, uuid=None, name=None, has_ports=None,
         assert vm_model.tools_running == tools_running
     if has_ports is None:
         has_ports = {}
-    for mac_address, portgroup_key in has_ports.items():
+    for mac_address, portgroup_key in list(has_ports.items()):
         assert mac_address in [port.mac_address for port in vm_model.ports]
         assert next(port.portgroup_key for port in vm_model.ports if port.mac_address == mac_address) == portgroup_key
 

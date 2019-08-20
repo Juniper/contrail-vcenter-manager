@@ -1,3 +1,4 @@
+from builtins import object
 import logging
 
 from cvm.constants import EVENTS_TO_OBSERVE, WAIT_FOR_UPDATE_TIMEOUT
