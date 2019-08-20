@@ -1,3 +1,4 @@
+from builtins import object
 import logging
 
 from cvm.constants import VMFS
@@ -32,7 +33,7 @@ class Database(object):
             logger.info('Saved Virtual Machine Interface model for %s', obj.display_name)
 
     def get_all_vm_models(self):
-        return self.vm_models.values()
+        return list(self.vm_models.values())
 
     def get_vm_model_by_uuid(self, uuid):
         vm_model = self.vm_models.get(uuid, None)
@@ -42,7 +43,7 @@ class Database(object):
 
     def get_vm_model_by_name(self, name):
         try:
-            return [vm_model for vm_model in self.vm_models.values() if vm_model.name == name][0]
+            return [vm_model for vm_model in list(self.vm_models.values()) if vm_model.name == name][0]
         except IndexError:
             logger.info('Could not find VM model with name %s.', name)
             return self._get_vm_model_by_old_name(name)
@@ -52,7 +53,7 @@ class Database(object):
         # Renaming yVM-test-gtiltsxwws to /vmfs/volumes/23c13506-c7f8ba2b/yVM-test-gtiltsxwws/yVM-test-gtiltsxwws.vmx
         # Detected event: <class 'pyVmomi.VmomiSupport.vim.event.VmRemovedEvent'> for VM: yVM-test-gtiltsxwws
         logger.info('Looking for VM model with old name: %s', old_name)
-        for vm_model in self.vm_models.values():
+        for vm_model in list(self.vm_models.values()):
             if VMFS in vm_model.name and '{0}/{0}'.format(old_name) in vm_model.name:
                 return vm_model
         logger.info('Could not find VM model with old name %s.', old_name)
@@ -66,25 +67,25 @@ class Database(object):
 
     def get_vn_model_by_uuid(self, uuid):
         try:
-            return [vn_model for vn_model in self.vn_models.values() if vn_model.uuid == uuid][0]
+            return [vn_model for vn_model in list(self.vn_models.values()) if vn_model.uuid == uuid][0]
         except IndexError:
             logger.info('Could not find VN model with UUID %s.', uuid)
             return None
 
     def get_all_vn_models(self):
-        return self.vn_models.values()
+        return list(self.vn_models.values())
 
     def get_all_vmi_models(self):
-        return self.vmi_models.values()
+        return list(self.vmi_models.values())
 
     def get_vmi_model_by_uuid(self, uuid):
         return self.vmi_models.get(uuid, None)
 
     def get_vmi_models_by_vm_uuid(self, uuid):
-        return [vmi_model for vmi_model in self.vmi_models.values() if vmi_model.vm_model.uuid == uuid]
+        return [vmi_model for vmi_model in list(self.vmi_models.values()) if vmi_model.vm_model.uuid == uuid]
 
     def get_vmi_models_by_vn_uuid(self, uuid):
-        return [vmi_model for vmi_model in self.vmi_models.values() if vmi_model.vn_model.uuid == uuid]
+        return [vmi_model for vmi_model in list(self.vmi_models.values()) if vmi_model.vn_model.uuid == uuid]
 
     def delete_vm_model(self, uid):
         try:

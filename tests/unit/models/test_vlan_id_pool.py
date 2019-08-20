@@ -1,3 +1,4 @@
+from builtins import range
 import pytest
 
 
@@ -24,7 +25,7 @@ def test_get_first_available(vlan_id_pool):
 
 
 def test_no_available(vlan_id_pool):
-    for i in xrange(4096):
+    for i in range(4096):
         vlan_id_pool.reserve(i)
 
     with pytest.raises(Exception):
