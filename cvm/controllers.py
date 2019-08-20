@@ -1,7 +1,9 @@
+from builtins import object
 import logging
 from abc import ABCMeta, abstractmethod
 
 from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
+from future.utils import with_metaclass
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +49,7 @@ class UpdateHandler(object):
                         handler.handle_change(object_update.obj, property_change)
 
 
-class AbstractChangeHandler(object):
-    __metaclass__ = ABCMeta
-
+class AbstractChangeHandler(with_metaclass(ABCMeta, object)):
     def handle_change(self, obj, property_change):
         name = getattr(property_change, 'name', None)
         value = getattr(property_change, 'val', None)
@@ -103,8 +103,7 @@ class AbstractChangeHandler(object):
         return False
 
 
-class AbstractEventHandler(AbstractChangeHandler):
-    __metaclass__ = ABCMeta
+class AbstractEventHandler(with_metaclass(ABCMeta, AbstractChangeHandler)):
     PROPERTY_NAME = 'latestPage'
 
     def _handle_change(self, obj, value):

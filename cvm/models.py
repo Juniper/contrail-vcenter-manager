@@ -1,3 +1,6 @@
+from builtins import str
+from builtins import range
+from builtins import object
 import logging
 import uuid
 from collections import deque
@@ -240,7 +243,7 @@ class VirtualMachineInterfaceModel(object):
 
 class VlanIdPool(object):
     def __init__(self, start, end):
-        self._available_ids = deque(xrange(start, end + 1))
+        self._available_ids = deque(range(start, end + 1))
 
     def reserve(self, vlan_id):
         try:
