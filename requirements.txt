@@ -14,3 +14,7 @@ PyYAML==3.12
 requests==2.18.4
 six==1.11.0
 urllib3==1.22
+future==0.16.0
+configparser==3.8.1
+
+

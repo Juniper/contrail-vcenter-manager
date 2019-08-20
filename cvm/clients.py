@@ -1,3 +1,6 @@
+from builtins import str
+from builtins import next
+from builtins import object
 import atexit
 import itertools
 import json

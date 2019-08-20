@@ -1,3 +1,7 @@
+from builtins import str
+from builtins import next
+from builtins import range
+from builtins import object
 import ipaddress
 import logging
 import time
@@ -339,13 +343,13 @@ class VirtualMachineService(Service):
         vm_model.update_interfaces(vmware_vm)
         new_vmi_models = {vmi_model.uuid: vmi_model for vmi_model in vm_model.vmi_models}
 
-        for uuid, new_vmi_model in new_vmi_models.items():
+        for uuid, new_vmi_model in list(new_vmi_models.items()):
             old_vmi_model = old_vmi_models.pop(uuid, None)
             if old_vmi_model is not None:
                 new_vmi_model.vn_model = old_vmi_model.vn_model
             self._database.vmis_to_update.append(new_vmi_model)
 
-        self._database.vmis_to_delete += old_vmi_models.values()
+        self._database.vmis_to_delete += list(old_vmi_models.values())
 
     def update_power_state(self, vmware_vm, power_state):
         vm_model = self._database.get_vm_model_by_uuid(vmware_vm.config.instanceUuid)
@@ -559,7 +563,7 @@ class VlanIdService(object):
         port_key = vmi_model.vcenter_port.port_key
         vm_name = vmi_model.vm_model.name
         logger.info('Waiting for VM %s interface connected to port %s...', vm_name, port_key)
-        for _ in xrange(WAIT_FOR_PORT_RETRY_LIMIT):
+        for _ in range(WAIT_FOR_PORT_RETRY_LIMIT):
             try:
                 device = next(device for device
                               in vmi_model.vm_model.vmware_vm.config.hardware.device
@@ -581,7 +585,7 @@ class VlanIdService(object):
     def _wait_for_proxy_host(self, vmi_model):
         port_key = vmi_model.vcenter_port.port_key
         logger.info('Waiting for port %s proxyHost...', port_key)
-        for _ in xrange(WAIT_FOR_PORT_RETRY_LIMIT):
+        for _ in range(WAIT_FOR_PORT_RETRY_LIMIT):
             try:
                 dv_port = self._vcenter_api_client.fetch_port_from_dvs(port_key)
                 port_host_uuid = dv_port.proxyHost.hardware.systemInfo.uuid
