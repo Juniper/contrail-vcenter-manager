@@ -572,10 +572,17 @@ class VNCAPIClient(object):
 
     def _read_instance_ip(self, vmi_model):
         vmi_vnc = self.read_vmi(vmi_model.uuid)
-        ip_back_refs = vmi_vnc.get_instance_ip_back_refs()
-        if not ip_back_refs:
-            return None
-        ip_uuid = ip_back_refs[0]['uuid']
+        ip_back_refs = vmi_vnc.get_instance_ip_back_refs() or ()
+        for ip_ref in ip_back_refs:
+            ip_uuid = ip_ref["uuid"]
+            instance_ip = self._read_instance_ip_by_uuid(ip_uuid)
+            if instance_ip is None or instance_ip.id_perms is None:
+                continue
+            if instance_ip.id_perms.creator == ID_PERMS_CREATOR:
+                return instance_ip
+        return None
+
+    def _read_instance_ip_by_uuid(self, ip_uuid):
         try:
             return self.vnc_lib.instance_ip_read(id=ip_uuid)
         except NoIdError:

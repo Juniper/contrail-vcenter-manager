@@ -79,3 +79,12 @@ def test_get_vmi_uuids_by_vm_uuid(vnc_api_client, vnc_lib, vnc_vm):
     vmi_uuids = vnc_api_client.get_vmi_uuids_by_vm_uuid(vnc_vm.uuid)
 
     assert vmi_uuids == ['vmi-uuid']
+
+
+def test_read_instance_ip(vnc_api_client, vnc_lib, vmi_model, vnc_vmi_1, instance_ip, vnf_instance_ip):
+    vnc_lib.virtual_machine_interface_read.return_value = vnc_vmi_1
+    vnc_lib.instance_ip_read.side_effect = [vnf_instance_ip, instance_ip]
+
+    read_instance_ip = vnc_api_client._read_instance_ip(vmi_model)
+
+    assert read_instance_ip == instance_ip
