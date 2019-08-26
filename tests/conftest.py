@@ -88,6 +88,21 @@ def instance_ip(vnc_vmi, vnc_vn_1, vnc_vm):
 
 
 @pytest.fixture()
+def vnf_instance_ip(vnc_vmi):
+    ip_name = 'vnf-instance-ip-name'
+    ip_uuid = 'vnf-instance-ip-uuid'
+    ip = vnc_api.InstanceIp(
+        name=ip_uuid,
+        display_name=ip_name,
+        id_perms=ID_PERMS,
+    )
+    ip.set_instance_ip_address('0.255.255.239')
+    ip.set_uuid(ip_uuid)
+    ip.set_virtual_machine_interface(vnc_vmi)
+    return ip
+
+
+@pytest.fixture()
 def vn_model_1(vnc_vn_1):
     dpg = Mock()
     dpg.key = 'dvportgroup-1'
