@@ -14,4 +14,10 @@ setup(
     zip_safe=False,
     long_description="Contrail vCenter Manager",
     install_requires=requirements('requirements.txt'),
+    entry_points = {        
+        'console_scripts' : [
+            'contrail-vcenter-manager = cvm:server_main',
+        ],
+    },
+
 )
