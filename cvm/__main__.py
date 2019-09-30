@@ -5,9 +5,9 @@ import logging
 import random
 import socket
 import sys
-
-import gevent
 import yaml
+import gevent
+
 from cfgm_common.uve.nodeinfo.ttypes import NodeStatus, NodeStatusUVE
 from pysandesh.connection_info import ConnectionState
 from pysandesh.sandesh_base import Sandesh, SandeshConfig
@@ -199,7 +199,7 @@ def main(args):
     gevent.joinall(greenlets, raise_error=True)
 
 
-if __name__ == '__main__':
+def server_main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", action="store", dest="config_file",
                         default='/etc/contrail/contrail-vcenter-manager/config.yaml')
@@ -213,3 +213,7 @@ if __name__ == '__main__':
         logger = logging.getLogger('cvm')
         logger.critical('', exc_info=True)
         raise
+
+
+if __name__ == '__main__':
+    server_main()
