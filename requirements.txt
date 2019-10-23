@@ -13,6 +13,6 @@ pyvmomi==6.5.0.2017.5.post1
 PyYAML==3.12
 requests==2.18.4
 six==1.11.0
-urllib3==1.22
+urllib3==1.24.2
 future
 
