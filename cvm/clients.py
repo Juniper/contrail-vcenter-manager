@@ -17,7 +17,11 @@ from pyVmomi import vim, vmodl  # pylint: disable=no-name-in-module
 from vnc_api import vnc_api
 from vnc_api.exceptions import NoIdError, RefsExistError
 
-from contrail_vrouter_api.vrouter_api import ContrailVRouterApi
+try:
+    from contrail_vrouter_api.vrouter_api import ContrailVRouterApi
+except ImportError:
+    from mock import Mock
+    ContrailVRouterApi = Mock()
 from cvm.constants import (ID_PERMS_CREATOR, VM_PROPERTY_FILTERS, VNC_ROOT_DOMAIN,
                            VNC_VCENTER_DEFAULT_SG, VNC_VCENTER_DEFAULT_SG_FQN,
                            VNC_VCENTER_IPAM, VNC_VCENTER_IPAM_FQN,

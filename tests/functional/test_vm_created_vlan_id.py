@@ -60,7 +60,8 @@ def test_vm_created_vlan_id_collision(controller, database, vcenter_api_client,
 
     # Check inner VMI model state
     vm_model = database.get_vm_model_by_uuid('vmware-vm-uuid-1')
-    vmi_model = database.get_all_vmi_models()[0]
+    vmi_model = next(model for model in database.get_all_vmi_models()
+                 if model.display_name == 'vmi-DPG1-VM1')
     assert_vmi_model_state(
         vmi_model,
         mac_address='mac-address',
