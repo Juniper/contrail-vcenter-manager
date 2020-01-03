@@ -117,7 +117,8 @@ class VirtualMachineInterfaceService(Service):
             pass
 
     def _update_ip_address(self, vmi_model, ip_address):
-        if not isinstance(ipaddress.ip_address(ip_address.decode('utf-8')), ipaddress.IPv4Address):
+        if not isinstance(ipaddress.ip_address(str(ip_address)),
+                          ipaddress.IPv4Address):
             return
         if vmi_model.is_ip_address_changed(ip_address):
             logger.info('Attempting to update %s IP address to: %s', vmi_model, ip_address)

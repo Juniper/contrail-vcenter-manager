@@ -14,6 +14,7 @@ def test_external_ipam(controller, database, vnc_api_client, vrouter_api_client,
     controller.handle_update(nic_info_update)
 
     # IP address is updated
+    vmi_model = database.get_all_vmi_models()[0]
     assert vmi_model.ip_address == '192.168.100.5'
     assert vmi_model.vnc_instance_ip.instance_ip_address == '192.168.100.5'
     assert vnc_api_client.create_and_read_instance_ip.call_args[0][0] is vmi_model
