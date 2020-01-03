@@ -226,11 +226,11 @@ class VirtualMachineInterfaceModel(object):
 
     @staticmethod
     def construct_instance_ip_uuid(name):
-        return str(uuid.uuid3(uuid.NAMESPACE_DNS, name.encode('utf-8')))
+        return str(uuid.uuid3(uuid.NAMESPACE_DNS, name))
 
     @staticmethod
     def get_uuid(mac_address):
-        return str(uuid.uuid3(uuid.NAMESPACE_DNS, mac_address.encode('utf-8')))
+        return str(uuid.uuid3(uuid.NAMESPACE_DNS, mac_address))
 
     def __repr__(self):
         if self.vnc_instance_ip is not None:

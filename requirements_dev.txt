@@ -1,14 +1,2 @@
 -r requirements.txt
-astroid==1.6.1
-backports.functools-lru-cache==1.5
-configparser==3.5.0
-enum34==1.1.6
-future==0.16.0
-futures==3.2.0
-git-pylint-commit-hook==2.3.0
-pylint==1.8.2
-singledispatch==3.4.0.3
-wrapt==1.10.11
-isort==4.3.4
-futures==3.2.0
 pytest==3.5.1

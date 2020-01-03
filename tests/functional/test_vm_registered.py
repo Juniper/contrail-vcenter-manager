@@ -20,7 +20,8 @@ def test_vmotion_vlan_unavailable(controller, database, vcenter_api_client, vm_r
     controller.handle_update(vm_registered_update)
 
     # Check if VLAN ID has been changed
-    vmi_model = database.get_all_vmi_models()[0]
+    vmi_model = next(model for model in database.get_all_vmi_models()
+                 if model.display_name == 'vmi-DPG1-VM1')
     vcenter_api_client.set_vlan_id.assert_called_once_with(vmi_model.vcenter_port)
 
     # Check inner VMI model state
@@ -53,7 +54,8 @@ def test_vmotion_vlan_available(controller, database, vcenter_api_client, vm_reg
     controller.handle_update(vm_registered_update)
 
     # Check if VLAN ID has been changed
-    vmi_model = database.get_all_vmi_models()[0]
+    vmi_model = next(model for model in database.get_all_vmi_models()
+                 if model.display_name == 'vmi-DPG1-VM1')
     vcenter_api_client.set_vlan_id.assert_not_called()
 
     # Check inner VMI model state
