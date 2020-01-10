@@ -1,0 +1,5 @@
+- project:
+    name: Juniper/contrail-vcenter-manager
+    templates:
+      - build-container
+      - unittests
