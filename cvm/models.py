@@ -1,9 +1,9 @@
 from builtins import str
 from builtins import range
 from builtins import object
+from collections import deque
 import logging
 import uuid
-from collections import deque
 
 from pyVmomi import vim  # pylint: disable=no-name-in-module
 from vnc_api.vnc_api import (InstanceIp, MacAddressesType, VirtualMachine,
