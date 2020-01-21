@@ -104,7 +104,7 @@ class VirtualMachineInterfaceService(Service):
         self._database.ports_to_update.append(vmi_model)
 
     def update_nic(self, nic_info):
-        vmi_model = self._database.get_vmi_model_by_uuid(VirtualMachineInterfaceModel.get_uuid(nic_info.macAddress))
+        vmi_model = self._database.get_vmi_model_by_uuid(VirtualMachineInterfaceModel.create_uuid(nic_info.macAddress))
         if not vmi_model:
             return
         if not vmi_model.vn_model.vnc_vn.external_ipam:

@@ -1,4 +1,3 @@
-from builtins import str
 from builtins import range
 from builtins import object
 import logging
@@ -149,7 +148,7 @@ class VirtualMachineInterfaceModel(object):
 
     @property
     def uuid(self):
-        return self.get_uuid(self.vcenter_port.mac_address)
+        return self.create_uuid(self.vcenter_port.mac_address)
 
     @property
     def ip_address(self):
@@ -199,7 +198,7 @@ class VirtualMachineInterfaceModel(object):
         logger.info('Constructing Instance IP for Interface %s', self.display_name)
 
         instance_ip_name = 'ip-' + self.vn_model.name + '-' + self.vm_model.name
-        instance_ip_uuid = self.construct_instance_ip_uuid(instance_ip_name)
+        instance_ip_uuid = self.create_uuid(instance_ip_name)
 
         instance_ip = InstanceIp(
             name=instance_ip_uuid,
@@ -225,12 +224,8 @@ class VirtualMachineInterfaceModel(object):
                 and (self.ip_address or not self.vn_model.has_external_ipam))
 
     @staticmethod
-    def construct_instance_ip_uuid(name):
-        return str(uuid.uuid3(uuid.NAMESPACE_DNS, name))
-
-    @staticmethod
-    def get_uuid(mac_address):
-        return str(uuid.uuid3(uuid.NAMESPACE_DNS, mac_address))
+    def create_uuid(name):
+        return str(uuid.uuid3(uuid.NAMESPACE_DNS, str(name)))
 
     def __repr__(self):
         if self.vnc_instance_ip is not None:

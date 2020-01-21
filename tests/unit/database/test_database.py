@@ -59,7 +59,7 @@ def test_delete_vn_model(database, vn_model_1):
 def test_get_vmi_model_by_uuid(database, vmi_model):
     database.save(vmi_model)
 
-    uuid = VirtualMachineInterfaceModel.get_uuid('mac-address')
+    uuid = VirtualMachineInterfaceModel.create_uuid('mac-address')
     result = database.get_vmi_model_by_uuid(uuid)
 
     assert result is vmi_model
@@ -69,7 +69,7 @@ def test_get_vmi_model_by_uuid(database, vmi_model):
 def test_delete_vmi_model(database, vmi_model):
     database.save(vmi_model)
 
-    uuid = VirtualMachineInterfaceModel.get_uuid('mac-address')
+    uuid = VirtualMachineInterfaceModel.create_uuid('mac-address')
     database.delete_vmi_model(uuid)
 
     assert database.get_vmi_model_by_uuid(uuid) is None

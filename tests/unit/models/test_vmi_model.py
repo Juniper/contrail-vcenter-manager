@@ -27,7 +27,7 @@ def test_construct_instance_ip(vmi_model, project, security_group):
 
     assert instance_ip.instance_ip_address is None
     assert instance_ip.virtual_machine_interface_refs[0]['uuid'] == vmi_model.uuid
-    expected_uuid = VirtualMachineInterfaceModel.construct_instance_ip_uuid(instance_ip.display_name)
+    expected_uuid = VirtualMachineInterfaceModel.create_uuid(instance_ip.display_name)
     assert instance_ip.uuid == expected_uuid
 
 
@@ -39,3 +39,14 @@ def test_update_ip_address(vmi_model):
     assert check1 is True
     assert check2 is False
     assert vmi_model.ip_address == '192.168.100.5'
+
+
+def test_create_uuid():
+    mac_str = 'mac-address'
+    mac_unicode = u'mac-address'
+
+    uuid_str = VirtualMachineInterfaceModel.create_uuid(mac_str)
+    uuid_unicode = VirtualMachineInterfaceModel.create_uuid(mac_unicode)
+
+    assert uuid_str == '2f269404-b466-3cc7-8817-d9ee99f63187'
+    assert uuid_unicode == '2f269404-b466-3cc7-8817-d9ee99f63187'
