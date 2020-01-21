@@ -65,7 +65,7 @@ def vnc_vmi(project, vnc_vm, vnc_vn_1):
 @pytest.fixture()
 def instance_ip(vnc_vmi, vnc_vn_1, vnc_vm):
     ip_name = 'ip-' + vnc_vn_1.name + '-' + vnc_vm.name
-    ip_uuid = VirtualMachineInterfaceModel.construct_instance_ip_uuid(ip_name)
+    ip_uuid = VirtualMachineInterfaceModel.create_uuid(ip_name)
 
     ip = vnc_api.InstanceIp(
         name=ip_uuid,
