@@ -2,8 +2,8 @@ from builtins import str
 from builtins import next
 from builtins import object
 import atexit
-import itertools
 import json
+import itertools
 import logging
 import random
 import os
